@@ -59,7 +59,7 @@ class MedicalMicrobiologyTutor:
                 return (
                     f"Before providing a differential diagnosis, you should gather more information. "
                     f"{readiness['message']}\n\n"
-                    f"Missing information: \n- " + "\n- ".join(readiness["missing_information"])
+                  #  f"Missing information: \n- " + "\n- ".join(readiness["missing_information"])
                 )
             self.case_presenter.differential_given = True
             self.differential_given = True

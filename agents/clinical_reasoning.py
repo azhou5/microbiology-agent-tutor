@@ -2,7 +2,7 @@ from typing import List, Dict
 from .base_agent import BaseAgent
 
 class ClinicalReasoningAgent(BaseAgent):
-    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.7):
+    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.3):
         super().__init__(model_name, temperature)
         self.system_prompt = """You are an expert medical microbiology educator evaluating student clinical reasoning.
         Assess their diagnostic conclusions and provide constructive feedback."""

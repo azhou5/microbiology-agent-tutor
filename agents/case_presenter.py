@@ -82,7 +82,6 @@ class CasePresenterAgent(BaseAgent):
         
         And the student's differential diagnosis:
         {differential}
-        
         Provide constructive feedback on their differential diagnosis. Consider:
         1. Are the proposed conditions reasonable given the symptoms?
         2. Are there any important conditions they missed?

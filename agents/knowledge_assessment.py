@@ -2,7 +2,7 @@ from typing import List, Dict
 from .base_agent import BaseAgent
 
 class KnowledgeAssessmentAgent(BaseAgent):
-    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.5):
+    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.3):
         super().__init__(model_name, temperature)
         self.system_prompt = """You are an expert medical microbiology educator specializing in testing and reinforcing 
         student knowledge about specific organisms. Your role is to ask targeted questions about key microbiological 
@@ -11,13 +11,13 @@ class KnowledgeAssessmentAgent(BaseAgent):
     
     def generate_targeted_questions(self, organism: str) -> List[str]:
         """Generate targeted questions about a specific organism."""
-        question_prompt = f"""Generate 3-5 targeted questions about {organism} that assess understanding of:
+        question_prompt = f"""Generate 3 targeted questions about {organism} that assess understanding of:
         1. Key virulence factors and pathogenesis
         2. Treatment approaches and antimicrobial susceptibility
         3. Epidemiology and prevention
         
         Format each question to be specific and concise, as it will
-        be given directly to the student."""
+        be given directly to the student. """
         
         response = self.generate_response(self.system_prompt, question_prompt)
         return [q.strip() for q in response.split('\n') if '?' in q]
