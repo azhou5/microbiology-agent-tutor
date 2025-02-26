@@ -1,11 +1,32 @@
 from typing import Dict, Optional
-from agentlite.agents import BaseAgent as AgentLiteBaseAgent
+from custom_agent_wrapper import CustomAgentWrapper
 from agentlite.llm.agent_llms import BaseLLM, get_llm_backend
 from agentlite.llm.LLMConfig import LLMConfig
 from agentlite.actions import BaseAction
 from agentlite.actions.InnerActions import ThinkAction, FinishAction
 from agentlite.commons import TaskPackage, AgentAct
-from .case_generator import CaseGeneratorAgent
+from .case_generator_RAG import CaseGeneratorRAGAgent
+import os
+from langchain.chat_models import AzureChatOpenAI
+from langchain.schema import HumanMessage, SystemMessage
+from shared_definitions import TutorStage  # Import the stage enum from shared_definitions
+
+# Helper function to create Azure OpenAI LLM instance
+def get_azure_llm(deployment_name=None, temperature=0.1):
+    """Create and return an Azure OpenAI LLM instance with the specified parameters."""
+    if not deployment_name:
+        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not deployment_name:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+    
+    return AzureChatOpenAI(
+        openai_api_type="azure",
+        openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        deployment_name=deployment_name,
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        temperature=temperature
+    )
 
 class PresentCaseAction(BaseAction):
     def __init__(self):
@@ -15,27 +36,17 @@ class PresentCaseAction(BaseAction):
             params_doc={"case": "The case data to present"}
         )
         # Initialize Azure OpenAI
-        from langchain.chat_models import AzureChatOpenAI
-        import os
-        
-        self.llm = AzureChatOpenAI(
-            openai_api_type="azure",
-            openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.1
-        )
+        self.llm = get_azure_llm("gpt-4o-mini")
     
     def __call__(self, **kwargs) -> str:
         case = kwargs.get("case", {})
         if not case:
-            return {"error": "No valid case provided"}
+            return {"error": "No valid case provided", "agent": "case_presenter"}
         
         # Get the unstructured case text
         case_text = case.get("case_text", "")
         if not case_text:
-            return {"error": "No case text provided"}
+            return {"error": "No case text provided", "agent": "case_presenter"}
         
         # Create a prompt for the LLM to generate the initial presentation
         prompt = f"""Here is a clinical case:
@@ -46,14 +57,103 @@ Focus on the patient's demographics and chief complaint.
 Use this exact format, nothing else: "A [age] year old [sex] presents with [chief complaint]." """
         
         # Get the one-liner from LLM
-        from langchain.schema import HumanMessage
         messages = [HumanMessage(content=prompt)]
-        response = self.llm.invoke(messages).content
+        response = self.llm.invoke(messages)
         
         return {
-            "case_presentation": response.strip(),
-            "case_text": case_text
+            "case_presentation": response.content.strip(),
+            "full_case": {"case_text": case_text},
+            "case_text": case_text,
+            "agent": "case_presenter"
         }
+
+class PhysicalExamAction(BaseAction):
+    def __init__(self):
+        super().__init__(
+            action_name="PhysicalExam",
+            action_desc="Provide physical examination findings based on the student's specific request",
+            params_doc={
+                "exam_request": "The specific physical exam request from the student",
+                "case_details": "Full case information"
+            }
+        )
+        # Initialize Azure OpenAI
+        self.llm = get_azure_llm("gpt-4o-mini")
+    
+    def __call__(self, **kwargs) -> str:
+        exam_request = kwargs.get("exam_request", "")
+        case_details = kwargs.get("case_details", {})
+        
+        # Get the case text
+        case_text = case_details.get("case_text", "")
+        if not case_text:
+            return {"error": "No case details available", "agent": "case_presenter"}
+        
+        system_prompt = """You are an expert physician conducting a physical examination on a patient.
+        Based on the case details and the specific examination request from the medical student,
+        provide realistic and clinically appropriate physical exam findings.
+        
+        Your response should:
+        1. Be concise and focused on the specific exam requested
+        2. Include both positive and negative findings as appropriate
+        3. Use proper medical terminology
+        4. Be consistent with the underlying pathology in the case
+        5. Format your response as if you (the physician) are directly telling the student what you observe
+        
+        For example:
+        - For lung exam: "On auscultation, there are crackles in the right lower lobe with decreased breath sounds. No wheezing is appreciated."
+        - For abdominal exam: "The abdomen is soft and non-tender. No hepatosplenomegaly. Normal bowel sounds."
+        
+        Keep your response brief and focused on objective findings."""
+        
+        main_prompt = f"""Case Details:
+{case_text}
+
+Student's Physical Exam Request:
+{exam_request}
+
+Provide appropriate physical examination findings for this specific request, consistent with the underlying pathology."""
+        
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=main_prompt)
+        ]
+        
+        response = self.llm.invoke(messages)
+        
+        # Add the examined area to revealed info
+        exam_category = self._categorize_exam_request(exam_request)
+        
+        return {
+            "response": response.content.strip(),
+            "exam_type": exam_category,
+            "agent": "case_presenter"
+        }
+    
+    def _categorize_exam_request(self, request):
+        """Categorize the exam request into a standard category for tracking."""
+        request_lower = request.lower()
+        
+        if any(term in request_lower for term in ["lung", "chest", "breath", "respiratory", "auscultation"]):
+            return "respiratory_exam"
+        elif any(term in request_lower for term in ["heart", "cardiac", "pulse", "cardiovascular"]):
+            return "cardiac_exam"
+        elif any(term in request_lower for term in ["abdomen", "belly", "stomach", "bowel"]):
+            return "abdominal_exam"
+        elif any(term in request_lower for term in ["neuro", "neurological", "mental", "consciousness"]):
+            return "neurological_exam"
+        elif any(term in request_lower for term in ["skin", "rash", "lesion"]):
+            return "skin_exam"
+        elif any(term in request_lower for term in ["lymph", "node", "spleen", "liver"]):
+            return "lymphatic_exam"
+        elif any(term in request_lower for term in ["ear", "nose", "throat", "mouth"]):
+            return "ent_exam"
+        elif any(term in request_lower for term in ["eye", "vision", "pupil"]):
+            return "eye_exam"
+        elif any(term in request_lower for term in ["musculoskeletal", "joint", "muscle", "bone"]):
+            return "musculoskeletal_exam"
+        else:
+            return "general_physical_exam"
 
 class AssessReadinessAction(BaseAction):
     def __init__(self):
@@ -67,17 +167,7 @@ class AssessReadinessAction(BaseAction):
             }
         )
         # Initialize Azure OpenAI
-        from langchain.chat_models import AzureChatOpenAI
-        import os
-        
-        self.llm = AzureChatOpenAI(
-            openai_api_type="azure",
-            openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.1
-        )
+        self.llm = get_azure_llm("gpt-4o-mini")
     
     def __call__(self, **kwargs) -> str:
         conversation_history = kwargs.get("conversation_history", [])
@@ -93,29 +183,25 @@ class AssessReadinessAction(BaseAction):
         system_prompt = """You are an experienced attending physician evaluating whether a medical student or resident 
         has gathered sufficient information to formulate a reasonable differential diagnosis. Consider:
 
-        1. Key elements needed for any differential:
-           - Chief complaint and its characteristics
-           - Relevant associated symptoms
-           - Basic vital signs
-           - Pertinent physical exam findings
-           - Key epidemiological factors
-        
-        2. Clinical reasoning principles:
-           - Pattern recognition
-           - Epidemiological risk factors
-           - Key discriminating features
-           - Red flag symptoms/signs
         
         Evaluate if enough critical information has been gathered to generate a meaningful differential diagnosis.
         Consider both breadth and depth of information gathering.
+        You will receive the case details and the information that has been revealed so far.
         
-        Respond in this format:
+        You must respond with ONLY a JSON object in this exact format:
         {
-            "ready": true/false,
-            "message": "Your explanation",
-            "missing_critical_info": ["list", "of", "critical", "missing", "elements"] (if not ready)
+            "ready": false,
+            "message": "Explanation of what information is still needed",
+            "missing_critical_info": ["list", "of", "critical", "missing", "elements"]
         }
-        """
+        
+        OR if ready:
+        {
+            "ready": true,
+            "message": "Explanation of why sufficient information has been gathered"
+        }
+
+        Do not include any other text outside the JSON object."""
         
         main_prompt = f"""Case Details:
 {case_details.get('case_text', '')}
@@ -126,11 +212,93 @@ Information Gathered So Far:
 Categories of Information Revealed:
 {', '.join(revealed_info) if revealed_info else 'None'}
 
-Based on this information, assess if sufficient information has been gathered to formulate a reasonable differential diagnosis.
+Based on this information, assess if sufficient information has been gathered to formulate a reasonable differential diagnosis. Consider what
+diseases would be on your differential at this point. If it is reasonably narrow, the student is ready, but if the student didn't gather information 
+to narrow it down, they are not ready. 
 Consider what a well-trained physician would need to generate a meaningful differential.
 """
         
-        from langchain.schema import HumanMessage, SystemMessage
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=main_prompt)
+        ]
+        
+        response = self.llm.invoke(messages)
+        
+        try:
+            import json
+            # Strip any potential whitespace or extra text
+            response_text = response.content.strip()
+            # Find the first { and last } to extract just the JSON
+            start = response_text.find('{')
+            end = response_text.rfind('}') + 1
+            if start >= 0 and end > start:
+                json_str = response_text[start:end]
+                evaluation = json.loads(json_str)
+                return {
+                    "ready": evaluation.get("ready", False),
+                    "message": evaluation.get("message", "Please continue gathering key clinical information."),
+                    "missing_info": evaluation.get("missing_critical_info", []) if not evaluation.get("ready", False) else None
+                }
+            raise ValueError("No valid JSON found in response")
+        except Exception as e:
+            print(f"Error parsing readiness evaluation: {str(e)}")  # Debug log
+            print(f"Response content: {response.content}")  # Debug log
+            return {
+                "ready": False,
+                "message": "Please continue gathering key clinical information about the patient's symptoms, vital signs, and relevant history."
+            }
+
+class EvaluateDifferentialAction(BaseAction):
+    def __init__(self):
+        super().__init__(
+            action_name="EvaluateDifferential",
+            action_desc="Evaluate student's differential diagnosis",
+            params_doc={
+                "case_details": "Full case information",
+                "student_differential": "Student's differential diagnosis"
+            }
+        )
+        # Initialize Azure OpenAI
+        self.llm = get_azure_llm()
+    
+    def __call__(self, **kwargs) -> str:
+        student_differential = kwargs.get("student_differential", "")
+        case_details = kwargs.get("case_details", {})
+        
+        system_prompt = """You are an expert medical educator evaluating a student's differential diagnosis.
+        Consider:
+        1. Appropriateness of proposed organisms/conditions
+        2. Use of clinical findings to support reasoning
+        3. Consideration of epidemiological factors
+        4. Pattern recognition and syndrome identification
+        
+        Provide feedback that:
+        1. Acknowledges good reasoning
+        2. Identifies gaps or missed pathogens
+        3. Guides further diagnostic workup
+        4. Reinforces key clinical principles
+        
+        Format your response as:
+        {
+            "feedback": "Detailed feedback message",
+            "is_appropriate": true/false,
+            "missing_pathogens": ["list", "of", "missed", "organisms"],
+            "suggested_tests": ["list", "of", "appropriate", "tests"]
+        }"""
+        
+        main_prompt = f"""Case Details:
+{case_details.get('case_text', '')}
+
+Student's Differential:
+{student_differential}
+
+Evaluate their differential diagnosis, considering:
+1. Clinical presentation
+2. Epidemiological factors
+3. Pattern recognition
+4. Key discriminating features"""
+
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=main_prompt)
@@ -142,227 +310,318 @@ Consider what a well-trained physician would need to generate a meaningful diffe
             import json
             evaluation = json.loads(response.content)
             return {
-                "ready": evaluation["ready"],
-                "message": evaluation["message"]
+                "feedback": evaluation["feedback"],
+                "is_appropriate": evaluation["is_appropriate"],
+                "agent": "case_presenter"
             }
         except:
-            # Fallback if JSON parsing fails
             return {
-                "ready": False,
-                "message": "Unable to properly evaluate readiness. Please continue gathering key clinical information."
+                "feedback": response.content,
+                "is_appropriate": True,
+                "agent": "case_presenter"
             }
 
-class EvaluateQuestionAction(BaseAction):
+class EvaluateFinalDiagnosisAction(BaseAction):
     def __init__(self):
         super().__init__(
-            action_name="EvaluateQuestion",
-            action_desc="Evaluate and respond to student's question about the case",
+            action_name="EvaluateFinalDiagnosis",
+            action_desc="Evaluate student's final diagnosis",
             params_doc={
-                "question": "Student's question", 
-                "case_details": "Current case details",
-                "conversation_history": "List of previous interactions",
-                "revealed_info": "Set of information categories already revealed"
+                "case_details": "Full case information",
+                "student_diagnosis": "Student's final diagnosis",
+                "previous_differential": "Student's previous differential diagnosis"
             }
         )
-        # Initialize Azure OpenAI for main responses
-        from langchain.chat_models import AzureChatOpenAI
-        import os
-        
-        self.llm = AzureChatOpenAI(
-            openai_api_type="azure",
-            openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.1
-        )
-        
-        # Initialize GPT-4 mini for diagnostic question checking
-        self.diagnostic_checker = AzureChatOpenAI(
-            openai_api_type="azure",
-            openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),  # Use your GPT-4 mini deployment
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.0  # Keep temperature low for consistent classification
-        )
-    
-    def is_diagnostic_question(self, question: str) -> bool:
-        """Use LLM to determine if the question is asking for diagnostic information."""
-        from langchain.schema import HumanMessage, SystemMessage
-        
-        system_prompt = """You are a medical education expert who determines if questions are asking for diagnostic information.
-        Diagnostic information includes:
-        1. Laboratory test results
-        2. Imaging studies (X-rays, CT, MRI, etc.)
-        3. Microbiology results (cultures, gram stains, etc.)
-        4. Other diagnostic procedures
-        
-        Respond with ONLY 'true' if the question is asking for diagnostic information, or 'false' if it is not.
-        Do not provide any other text in your response."""
-        
-        prompt = f"""Question: "{question}"
-        Is this question asking for diagnostic information (lab results, imaging, cultures, etc.)?
-        Remember to respond with ONLY 'true' or 'false'."""
-        
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=prompt)
-        ]
-        
-        response = self.diagnostic_checker.invoke(messages).content.lower().strip()
-        return response == 'true'
+        # Initialize Azure OpenAI
+        self.llm = get_azure_llm(temperature=0.3)
     
     def __call__(self, **kwargs) -> str:
-        question = kwargs.get("question", "").lower()
         case_details = kwargs.get("case_details", {})
-        differential_given = kwargs.get("differential_given", False)
-        conversation_history = kwargs.get("conversation_history", [])
-        revealed_info = kwargs.get("revealed_info", set())
+        student_diagnosis = kwargs.get("student_diagnosis", "")
+        previous_differential = kwargs.get("previous_differential", "")
         
-        # Check if this is a diagnostic question using LLM
-        if self.is_diagnostic_question(question) and not differential_given:
-            return {
-                "response": """I notice you're asking about diagnostic information. In clinical practice, it's important to form an initial differential diagnosis based on the history and physical examination before ordering tests. This helps us:
-                1. Focus on the most relevant diagnostic tests
-                2. Avoid unnecessary testing
-                3. Develop strong clinical reasoning skills
-                
-                We can move to diagnostic tests after you provide your differential diagnosis.""",
-                "revealed_category": None
-            }
+        system_prompt = """You are an expert medical educator evaluating a student's final diagnosis.
+        Consider:
+        1. Match with clinical presentation
+        2. Support from laboratory findings
+        3. Use of diagnostic data
+        4. Clinical reasoning process
         
-        # Create the system prompt
-        system_prompt = """You are an expert medical microbiology tutor. Your role is to present clinical cases and 
-        guide students through the diagnostic process in specific phases:
-        1. Initial information gathering (history and physical examination) - minimum 3 questions
-        2. Differential diagnosis with feedback and discussion
-        3. Laboratory/diagnostic testing to refine differential
-        4. Final diagnosis
+        Provide feedback that:
+        1. Evaluates diagnostic accuracy
+        2. Explains supporting/refuting evidence
+        3. Highlights learning points
+        4. Reinforces diagnostic principles
         
-        Format your responses concisely and clearly, as they will be read directly by the student.
-        Present information progressively, revealing only what is asked.
-        Don't give too much information to the student or suggest what to ask next.   
-        Do not reveal laboratory or diagnostic test results until after a differential diagnosis is provided.
+        Format your response as:
+        {
+            "feedback": "Detailed feedback message",
+            "is_correct": true/false,
+            "organism": "identified pathogen",
+            "key_learning_points": ["list", "of", "important", "points"]
+        }"""
         
-        Current case state:
-        - Information revealed so far: {revealed_categories}
-        - Differential diagnosis given: {differential_status}
-        """
-        
-        # Create the conversation context
-        conversation_context = "\n".join([
-            f"Student: {interaction['question']}\nTutor: {interaction['response']}"
-            for interaction in conversation_history[-3:]  # Include last 3 interactions for context
-        ])
-        
-        # Create the main prompt
-        prompt = f"""Case Details:
+        main_prompt = f"""Case Details:
 {case_details.get('case_text', '')}
 
-Conversation History:
-{conversation_context}
+Previous Differential:
+{previous_differential}
 
-Current Question: {question}
+Final Diagnosis:
+{student_diagnosis}
 
-Please respond to the student's question following these rules:
-1. If they're asking about labs/tests before giving a differential diagnosis, redirect them to provide a differential first
-2. Only reveal information that is specifically asked about
-3. If they've given a differential diagnosis, you can reveal lab results if requested
-4. Format your response concisely and clearly
-5. If they need more information gathering, suggest specific areas they should ask about
-Don't give too much information to the student or suggest what to ask next.   
+Evaluate their final diagnosis, considering:
+1. Clinical presentation
+2. Laboratory findings
+3. Diagnostic reasoning
+4. Key supporting features
 
-Your response should be natural and educational, but avoid revealing information not specifically requested."""
+IMPORTANT: If the diagnosis is correct, make sure to extract and return the specific organism name in the "organism" field.
+For example, if the student says "This is Streptococcus pneumoniae pneumonia", the organism should be "Streptococcus pneumoniae".
+"""
 
-        from langchain.schema import HumanMessage, SystemMessage
         messages = [
-            SystemMessage(content=system_prompt.format(
-                revealed_categories=", ".join(revealed_info) if revealed_info else "None",
-                differential_status="Yes" if differential_given else "No"
-            )),
-            HumanMessage(content=prompt)
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=main_prompt)
         ]
         
         response = self.llm.invoke(messages)
         
-        # Determine what category of information was revealed
-        revealed_category = None
-        if any(word in question for word in ["lab", "test", "xray", "ct", "mri", "culture"]) and differential_given:
-            revealed_category = "labs"
-        elif any(word in question for word in ["symptom", "complain", "feel", "pain", "fever", "cough"]):
-            revealed_category = "symptoms"
-        elif any(word in question for word in ["exam", "vital", "temperature", "temp", "bp", "pulse", "breathing"]):
-            revealed_category = "physical_exam"
-        elif any(word in question for word in ["exposure", "contact", "travel", "risk", "epidemiology", "sick", "outbreak"]):
-            revealed_category = "epidemiology"
-        elif "history" in question or "medical" in question or "past" in question:
-            revealed_category = "medical_history"
+        try:
+            import json
+            evaluation = json.loads(response.content)
             
-        return {
-            "response": response.content,
-            "revealed_category": revealed_category
-        }
+            # Extract organism from the student's diagnosis if not provided in the evaluation
+            if evaluation.get("is_correct", False) and not evaluation.get("organism"):
+                # Try to extract organism from student diagnosis
+                import re
+                # Look for common organism patterns
+                organism_patterns = [
+                    r"(?i)(streptococcus|staphylococcus|neisseria|escherichia|klebsiella|pseudomonas|haemophilus|mycobacterium|candida|aspergillus|pneumocystis|legionella|bordetella|listeria|salmonella|shigella|clostridium|bacteroides|enterococcus|proteus|serratia|acinetobacter|stenotrophomonas|burkholderia|moraxella|corynebacterium|actinomyces|nocardia|rhodococcus|mycoplasma|chlamydia|rickettsia|coxiella|bartonella|borrelia|treponema|leptospira|brucella|francisella|yersinia|vibrio|campylobacter|helicobacter|gardnerella|prevotella|fusobacterium|peptostreptococcus|propionibacterium|bacillus|enterobacter|citrobacter|morganella|providencia|hafnia|edwardsiella|ewingella|kluyvera|rahnella|yokenella|cedecea|tatumella|plesiomonas|aeromonas|chryseobacterium|elizabethkingia|flavobacterium|sphingobacterium|chryseomonas|flavimonas|ralstonia|achromobacter|alcaligenes|bordetella|comamonas|delftia|methylobacterium|ochrobactrum|oligella|psychrobacter|roseomonas|sphingomonas|weeksella|kingella|cardiobacterium|eikenella|capnocytophaga|dysgonomonas|suttonella|streptobacillus|pasteurella|mannheimia|actinobacillus|aggregatibacter|haemophilus|histophilus|mannheimia|pasteurella|abiotrophia|aerococcus|alloiococcus|dolosicoccus|dolosigranulum|facklamia|gemella|globicatella|helcococcus|ignavigranum|lactococcus|leuconostoc|pediococcus|tetragenococcus|vagococcus|weissella)\s+([a-z]+)",
+                    r"(?i)(e\.\s*coli|c\.\s*diff|s\.\s*aureus|s\.\s*pneumoniae|h\.\s*influenzae|n\.\s*meningitidis|m\.\s*tuberculosis|p\.\s*aeruginosa|k\.\s*pneumoniae)"
+                ]
+                
+                for pattern in organism_patterns:
+                    match = re.search(pattern, student_diagnosis)
+                    if match:
+                        if match.group(1).lower() in ["e.", "c.", "s.", "h.", "n.", "m.", "p.", "k."]:
+                            # Handle abbreviated forms
+                            evaluation["organism"] = match.group(0)
+                        else:
+                            # Handle full genus + species
+                            evaluation["organism"] = f"{match.group(1)} {match.group(2)}"
+                        break
+                
+                # If still no organism, use a more general approach
+                if not evaluation.get("organism"):
+                    # Extract organism from case text
+                    case_text = case_details.get('case_text', '')
+                    if "Organism" in case_text:
+                        organism_section = case_text.split("Organism")[1].split("\n\n")[0].strip()
+                        evaluation["organism"] = organism_section
+            
+            return {
+                "feedback": evaluation["feedback"],
+                "is_correct": evaluation["is_correct"],
+                "organism": evaluation.get("organism", "Unknown organism"),
+                "agent": "case_presenter"
+            }
+        except Exception as e:
+            print(f"Error parsing diagnosis evaluation: {str(e)}")
+            # Try to extract organism from student diagnosis
+            import re
+            organism = "Unknown organism"
+            
+            # Look for common organism patterns
+            organism_patterns = [
+                r"(?i)(streptococcus|staphylococcus|neisseria|escherichia|klebsiella|pseudomonas|haemophilus|mycobacterium|candida|aspergillus|pneumocystis|legionella|bordetella|listeria|salmonella|shigella|clostridium|bacteroides|enterococcus|proteus|serratia|acinetobacter|stenotrophomonas|burkholderia|moraxella|corynebacterium|actinomyces|nocardia|rhodococcus|mycoplasma|chlamydia|rickettsia|coxiella|bartonella|borrelia|treponema|leptospira|brucella|francisella|yersinia|vibrio|campylobacter|helicobacter|gardnerella|prevotella|fusobacterium|peptostreptococcus|propionibacterium|bacillus|enterobacter|citrobacter|morganella|providencia|hafnia|edwardsiella|ewingella|kluyvera|rahnella|yokenella|cedecea|tatumella|plesiomonas|aeromonas|chryseobacterium|elizabethkingia|flavobacterium|sphingobacterium|chryseomonas|flavimonas|ralstonia|achromobacter|alcaligenes|bordetella|comamonas|delftia|methylobacterium|ochrobactrum|oligella|psychrobacter|roseomonas|sphingomonas|weeksella|kingella|cardiobacterium|eikenella|capnocytophaga|dysgonomonas|suttonella|streptobacillus|pasteurella|mannheimia|actinobacillus|aggregatibacter|haemophilus|histophilus|mannheimia|pasteurella|abiotrophia|aerococcus|alloiococcus|dolosicoccus|dolosigranulum|facklamia|gemella|globicatella|helcococcus|ignavigranum|lactococcus|leuconostoc|pediococcus|tetragenococcus|vagococcus|weissella)\s+([a-z]+)",
+                r"(?i)(e\.\s*coli|c\.\s*diff|s\.\s*aureus|s\.\s*pneumoniae|h\.\s*influenzae|n\.\s*meningitidis|m\.\s*tuberculosis|p\.\s*aeruginosa|k\.\s*pneumoniae)"
+            ]
+            
+            for pattern in organism_patterns:
+                match = re.search(pattern, student_diagnosis)
+                if match:
+                    if match.group(1).lower() in ["e.", "c.", "s.", "h.", "n.", "m.", "p.", "k."]:
+                        # Handle abbreviated forms
+                        organism = match.group(0)
+                    else:
+                        # Handle full genus + species
+                        organism = f"{match.group(1)} {match.group(2)}"
+                    break
+            
+            # If still no organism, extract from case text
+            if organism == "Unknown organism":
+                case_text = case_details.get('case_text', '')
+                if "Organism" in case_text:
+                    organism_section = case_text.split("Organism")[1].split("\n\n")[0].strip()
+                    organism = organism_section
+            
+            return {
+                "feedback": response.content,
+                "is_correct": True,
+                "organism": organism,
+                "agent": "case_presenter"
+            }
 
-class CasePresenterAgent(AgentLiteBaseAgent):
-    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.3):
+class CasePresenterAgent(CustomAgentWrapper):
+    def __init__(self, model_name: str = None, temperature: float = 0.3):
         # Initialize LLM configuration
-        llm_config = LLMConfig({"llm_name": model_name, "temperature": temperature})
+        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not deployment_name:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+            
+        llm_config = LLMConfig({
+            "llm_name": deployment_name,
+            "temperature": temperature,
+            "api_type": "azure"
+        })
         llm = get_llm_backend(llm_config)
-        
-        # Initialize the case generator
-        self.case_generator = CaseGeneratorAgent(model_name=model_name, temperature=temperature)
         
         # Initialize custom actions
         actions = [
             PresentCaseAction(),
+            PhysicalExamAction(),  # Add the new physical exam action
             AssessReadinessAction(),
-            EvaluateQuestionAction(),
+            EvaluateDifferentialAction(),
+            EvaluateFinalDiagnosisAction(),
             ThinkAction(),
             FinishAction()
         ]
         
         super().__init__(
             name="case_presenter",
-            role="""I am an expert medical case presenter. I:
-            1. Present clinical cases progressively
-            2. Evaluate student questions and reveal appropriate information
-            3. Track what information has been revealed
-            4. Assess readiness for differential diagnosis""",
+            role="""I am an expert medical case presenter and clinical reasoning coach. I:
+            1. Present clinical cases and guide information gathering
+            2. Provide physical examination findings when requested
+            3. Assess readiness for differential diagnosis
+            4. Evaluate differential diagnoses and clinical reasoning
+            5. Assess final diagnoses and provide feedback
+            6. Track case progression and information revealed
+            
+            I maintain a structured educational approach:
+            1. Require thorough information gathering before differential
+            2. Guide test selection based on differential
+            3. Ensure evidence-based final diagnoses
+            4. Emphasize learning from the diagnostic process""",
             llm=llm,
             actions=actions,
             reasoning_type="react"
         )
         
         self.current_case = None
-        self.revealed_info = set()  # Track what information has been revealed
+        self.revealed_info = set()
         self.differential_given = False
+        self.current_differential = None
         self.diagnostic_tests_revealed = False
-        self.conversation_history = []  # Track conversation history
+        self.conversation_history = []
+        self.current_stage = TutorStage.PRE_DIFFERENTIAL
     
-    def __call__(self, task: TaskPackage) -> str:
-        """Handle case generation, presentation, and student questions using LLM-driven responses."""
+    def determine_action(self, task: TaskPackage) -> BaseAction:
+        """Determine which action to use based on the task instruction."""
         instruction = task.instruction.lower()
         
-        # Handle initial case presentation explicitly
-        if instruction == "present initial case":
-            action = PresentCaseAction()
-            # Get case from task context if it exists, otherwise use current_case
+        # Use a smaller model for action determination
+        determine_action_llm = get_azure_llm("gpt-4o-mini")
+        
+        # Create a prompt for the LLM to help determine the appropriate action
+        system_prompt = """You are an expert medical case presenter helping to determine which action to take based on a student's input.
+        Available actions are:
+        1. PresentCase - For presenting initial case information
+        2. PhysicalExam - For providing physical examination findings when the student asks for specific exam components
+        3. AssessReadiness - For checking if student has gathered enough info for differential
+        4. EvaluateDifferential - For evaluating a proposed differential diagnosis
+        5. EvaluateFinalDiagnosis - For evaluating a final diagnosis
+        
+        PresentCase is only used when the case is just started, to give the initial one-liner.
+
+        PhysicalExam is used when the student asks for specific physical examination findings, such as:
+        - "What do you hear when you listen to the lungs?"
+        - "Can you check the patient's abdomen?"
+        - "What do the vital signs show?"
+        - "Are there any skin findings?"
+        - "What do you see in the throat?"
+        
+        AssessReadiness is used to check if the student has gathered enough information to give a differential diagnosis.
+
+        EvaluateDifferential is used to evaluate a proposed differential diagnosis.
+
+        EvaluateFinalDiagnosis is used to evaluate a final diagnosis (after the differential).
+        
+        Respond with ONLY the action name, nothing else."""
+        
+        # Get the context from the task
+        context = f"""Task instruction: {instruction}
+        Current state:
+        - Differential given: {self.differential_given}
+        - Information revealed: {', '.join(self.revealed_info) if self.revealed_info else 'None'}
+        """
+        
+        # Use LLM to determine action
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=context)
+        ]
+        
+        response = determine_action_llm.invoke(messages)
+        action_name = response.content.strip()
+        
+        # Map the action name to the actual action
+        for action in self.actions:
+            if action.action_name == action_name:
+                return action
+            
+        # Default to EvaluateDifferential if no clear match
+        return next(action for action in self.actions if isinstance(action, EvaluateDifferentialAction))
+    
+    def __call__(self, task: TaskPackage) -> str:
+        """Handle case presentation, clinical reasoning, and diagnostic evaluation."""
+        # Determine which action to use
+        action = self.determine_action(task)
+        
+        # Handle each action type
+        if isinstance(action, PresentCaseAction):
             case_data = getattr(task, 'context', {}).get('case', {}) or self.current_case
             result = action(case=case_data)
             if isinstance(result, dict):
-                self.current_case = result.get("full_case", {})
+                if result.get("full_case"):
+                    self.current_case = result.get("full_case")
+                elif result.get("case_text"):
+                    self.current_case = {"case_text": result.get("case_text")}
+                
                 response = result.get("case_presentation", "A patient presents for evaluation.")
                 self.conversation_history.append({
-                    "question": "present initial case",
+                    "question": task.instruction,
                     "response": response
                 })
-                return response
+                return {
+                    "response": response,
+                    "agent": "case_presenter"
+                }
             return str(result)
         
-        # Handle readiness check
-        if instruction == "ready for differential":
-            action = AssessReadinessAction()
+        elif isinstance(action, PhysicalExamAction):
+            result = action(
+                exam_request=task.instruction,
+                case_details=self.current_case
+            )
+            if isinstance(result, dict):
+                # Add the exam type to revealed info
+                exam_type = result.get("exam_type")
+                if exam_type:
+                    self.revealed_info.add(exam_type)
+                
+                response = result.get("response", "No significant findings.")
+                self.conversation_history.append({
+                    "question": task.instruction,
+                    "response": response
+                })
+                return {
+                    "response": response,
+                    "agent": "case_presenter"
+                }
+            return str(result)
+        
+        elif isinstance(action, AssessReadinessAction):
             result = action(
                 conversation_history=self.conversation_history,
                 case_details=self.current_case,
@@ -370,39 +629,69 @@ class CasePresenterAgent(AgentLiteBaseAgent):
             )
             response = result.get("message") if isinstance(result, dict) else str(result)
             self.conversation_history.append({
-                "question": instruction,
-                "response": response
-            })
-            return response
-        
-        # For all other queries, treat as a question about the case
-        action = EvaluateQuestionAction()
-        result = action(
-            question=task.instruction,
-            case_details=self.current_case,
-            stage="post_differential" if self.differential_given else "initial",
-            differential_given=self.differential_given,
-            conversation_history=self.conversation_history,
-            revealed_info=self.revealed_info
-        )
-        
-        # Update revealed info if applicable
-        if isinstance(result, dict):
-            if result.get("revealed_category"):
-                self.revealed_info.add(result["revealed_category"])
-            response = result.get("response", str(result))
-            self.conversation_history.append({
                 "question": task.instruction,
                 "response": response
             })
             return response
         
-        return str(result)
+        elif isinstance(action, EvaluateDifferentialAction):
+            self.current_differential = task.instruction
+            result = action(
+                student_differential=task.instruction,
+                case_details=self.current_case
+            )
+            if isinstance(result, dict) and result.get("is_appropriate", False):
+                self.differential_given = True
+                self.current_stage = TutorStage.POST_DIFFERENTIAL
+            response = result.get("feedback", str(result))
+            self.conversation_history.append({
+                "question": task.instruction,
+                "response": response
+            })
+            return response
+            
+        elif isinstance(action, EvaluateFinalDiagnosisAction):
+            result = action(
+                student_diagnosis=task.instruction,
+                case_details=self.current_case,
+                previous_differential=self.current_differential
+            )
+            if isinstance(result, dict) and result.get("is_correct", False):
+                self.current_stage = TutorStage.KNOWLEDGE_ASSESSMENT
+            
+            # Extract response and organism
+            response = result.get("feedback", str(result))
+            organism = result.get("organism", "Unknown organism")
+            is_correct = result.get("is_correct", False)
+            
+            self.conversation_history.append({
+                "question": task.instruction,
+                "response": response
+            })
+            
+            # Return the full result including organism if correct
+            if is_correct:
+                return {
+                    "response": response,
+                    "is_correct": True,
+                    "organism": organism,
+                    "agent": "case_presenter"
+                }
+            else:
+                return {
+                    "response": response,
+                    "agent": "case_presenter"
+                }
+        
+        # For any other action type, just execute it
+        return str(action(task=task.instruction))
     
     def reset(self):
         """Reset the agent state."""
         self.current_case = None
         self.revealed_info = set()
         self.differential_given = False
+        self.current_differential = None
         self.diagnostic_tests_revealed = False
-        self.conversation_history = []  # Reset conversation history
+        self.conversation_history = []
+        self.current_stage = TutorStage.PRE_DIFFERENTIAL

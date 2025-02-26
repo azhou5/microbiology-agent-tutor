@@ -5,7 +5,7 @@ from langchain.schema import SystemMessage, HumanMessage, AIMessage
 import os
 from dotenv import load_dotenv
 import json
-from agentlite.agents import BaseAgent as AgentLiteBaseAgent
+from custom_agent_wrapper import CustomAgentWrapper
 from agentlite.actions import BaseAction
 from agentlite.actions.InnerActions import ThinkAction, FinishAction
 from agentlite.commons import TaskPackage
@@ -17,7 +17,7 @@ load_dotenv()
 if not os.getenv("AZURE_OPENAI_API_KEY") or not os.getenv("AZURE_OPENAI_ENDPOINT"):
     raise ValueError("Missing required Azure OpenAI environment variables")
 
-class BaseAgent(AgentLiteBaseAgent):
+class BaseAgent(CustomAgentWrapper):
     def __init__(self, model_name: str = "gpt-4", temperature: float = 0.3):
         # Initialize Azure OpenAI through LangChain
         self.llm = AzureChatOpenAI(

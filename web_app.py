@@ -40,42 +40,74 @@ tutors = {}
 async def home(request: Request):
     return templates.TemplateResponse("chat.html", {"request": request})
 
-def process_response(response: Union[str, dict]) -> str:
-    """Process response from AgentLite to ensure it's in string format."""
-    print(f"Processing response: {response}")  # Add logging
-    if isinstance(response, dict):
-        # Handle case presentation
-        if "case_presentation" in response:
-            return response["case_presentation"]
-        # Handle error messages
-        if "error" in response:
-            return f"Error: {response['error']}"
-        # Handle feedback
-        if "feedback" in response:
-            return response["feedback"]
-        # Handle other dictionary responses
-        return json.dumps(response)
-    return str(response)
-
-async def stream_response(response_text: str) -> AsyncGenerator[str, None]:
-    """Stream a response text chunk by chunk."""
+def process_response(response):
+    """Process the response and add appropriate speaker labels."""
     try:
-        # Clean and process the response text
-        response_text = process_response(response_text)
+        # Log the response for debugging
+        print(f"Processing response: {response}")
         
-        # Split response into reasonable chunks (e.g., by sentences or fixed length)
-        chunks = response_text.split('. ')
-        for chunk in chunks:
-            if chunk:
-                # Add period back if it was removed by split
-                chunk = chunk + ('.' if not chunk.endswith('.') else '')
-                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-                await asyncio.sleep(0.1)  # Add a small delay between chunks
-        yield "data: [DONE]\n\n"
+        if isinstance(response, dict):
+            # Handle case presentation
+            if "case_presentation" in response:
+                return f"Doctor: {response['case_presentation']}"
+            
+            # Handle error messages
+            if "error" in response:
+                return f"Tutor: Error: {response['error']}"
+            
+            # Handle feedback
+            if "feedback" in response:
+                return f"Tutor: {response['feedback']}"
+            
+            # Handle responses with agent and response fields
+            if "response" in response and "agent" in response:
+                agent = response["agent"]
+                content = response["response"]
+                
+                if agent == "patient":
+                    return f"Patient: {content}"
+                elif agent == "case_presenter":
+                    return f"Doctor: {content}"
+                elif agent == "clinical_reasoning":
+                    return f"Tutor: {content}"
+                elif agent == "knowledge_assessment":
+                    return f"Tutor: {content}"
+            
+            # If no specific handling, convert dict to string
+            return f"Tutor: {json.dumps(response)}"
+            
+        elif isinstance(response, str):
+            # Default to Tutor for string responses
+            return f"Tutor: {response}"
+        else:
+            # Convert any other type to string with Tutor prefix
+            return f"Tutor: {str(response)}"
+            
     except Exception as e:
-        error_msg = f"Error streaming response: {str(e)}\n{traceback.format_exc()}"
-        yield f"data: {json.dumps({'error': error_msg})}\n\n"
-        yield "data: [DONE]\n\n"
+        print(f"Error processing response: {str(e)}")
+        return f"Tutor: Error processing response: {str(e)}"
+
+def stream_response(response):
+    """Stream the response while maintaining speaker labels."""
+    if isinstance(response, dict):
+        agent = response.get("agent", "")
+        content = response.get("response", "")
+        
+        prefix = ""
+        if agent == "patient":
+            prefix = "Patient: "
+        elif agent == "case_presenter":
+            prefix = "Doctor: "
+        elif agent == "knowledge_assessment":
+            prefix = "Tutor: "
+            
+        yield prefix
+        for chunk in content:
+            yield chunk
+    else:
+        yield "Tutor: "
+        for chunk in str(response):
+            yield chunk
 
 @app.post("/start_case")
 async def start_case(request: Request):
@@ -94,15 +126,30 @@ async def start_case(request: Request):
         # Log the response for debugging
         print(f"Initial case response: {initial_case}")
         
+        async def generate_events():
+            try:
+                # Process the response
+                processed_response = process_response(initial_case)
+                # Send the processed response as a data event
+                yield f"data: {json.dumps({'chunk': processed_response})}\n\n"
+                # Send the completion event
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                error_msg = f"Error streaming response: {str(e)}"
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+                yield "data: [DONE]\n\n"
+        
         return StreamingResponse(
-            stream_response(initial_case),
+            generate_events(),
             media_type="text/event-stream"
         )
     except Exception as e:
         error_msg = f"Error starting case: {str(e)}\n{traceback.format_exc()}"
-        print(error_msg)  # Add logging
+        async def error_event():
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            yield "data: [DONE]\n\n"
         return StreamingResponse(
-            stream_response(error_msg),
+            error_event(),
             media_type="text/event-stream"
         )
 
@@ -111,16 +158,24 @@ async def chat(request: Request, message: str = Form(...), session_id: str = For
     try:
         tutor = tutors.get(session_id)
         if not tutor:
+            async def session_error():
+                error_msg = "Session not found. Please start a new case."
+                yield f"data: {json.dumps({'chunk': f'Tutor: {error_msg}'})}\n\n"
+                yield "data: [DONE]\n\n"
             return StreamingResponse(
-                stream_response("Session not found. Please start a new case."),
+                session_error(),
                 media_type="text/event-stream"
             )
         
         # Handle special commands
         if message.lower().strip() == "new case":
             initial_case = tutor.start_new_case()
+            async def new_case_events():
+                processed_response = process_response(initial_case)
+                yield f"data: {json.dumps({'chunk': processed_response})}\n\n"
+                yield "data: [DONE]\n\n"
             return StreamingResponse(
-                stream_response(initial_case),
+                new_case_events(),
                 media_type="text/event-stream"
             )
         
@@ -133,14 +188,37 @@ async def chat(request: Request, message: str = Form(...), session_id: str = For
         # Let the manager agent handle the routing
         response = tutor(task)
         
+        # Log the response for debugging
+        print(f"Raw response from tutor: {response}")
+        
+        async def generate_events():
+            try:
+                # Process the response
+                processed_response = process_response(response)
+                print(f"Processed response: {processed_response}")  # Debug log
+                # Send the processed response as a data event
+                yield f"data: {json.dumps({'chunk': processed_response})}\n\n"
+                # Send the completion event
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                error_msg = f"Error streaming response: {str(e)}"
+                print(f"Error in generate_events: {error_msg}")  # Debug log
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+                yield "data: [DONE]\n\n"
+        
         return StreamingResponse(
-            stream_response(response),
+            generate_events(),
             media_type="text/event-stream"
         )
+        
     except Exception as e:
         error_msg = f"Error processing message: {str(e)}\n{traceback.format_exc()}"
+        print(f"Error in chat endpoint: {error_msg}")  # Debug log
+        async def error_event():
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            yield "data: [DONE]\n\n"
         return StreamingResponse(
-            stream_response(error_msg),
+            error_event(),
             media_type="text/event-stream"
         )
 
@@ -150,13 +228,21 @@ async def reset(request: Request, session_id: str = Form(...)):
         tutor = tutors.get(session_id)
         if tutor:
             tutor.reset()
+        async def reset_events():
+            message = "Session reset. Click 'Start New Case' to begin."
+            yield f"data: {json.dumps({'chunk': f'Tutor: {message}'})}\n\n"
+            yield "data: [DONE]\n\n"
         return StreamingResponse(
-            stream_response("Session reset. Click 'Start New Case' to begin."),
+            reset_events(),
             media_type="text/event-stream"
         )
     except Exception as e:
         error_msg = f"Error resetting session: {str(e)}\n{traceback.format_exc()}"
+        print(f"Error in reset endpoint: {error_msg}")  # Debug log
+        async def error_event():
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            yield "data: [DONE]\n\n"
         return StreamingResponse(
-            stream_response(error_msg),
+            error_event(),
             media_type="text/event-stream"
         )
