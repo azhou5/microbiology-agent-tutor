@@ -10,7 +10,9 @@ import json
 import asyncio
 from typing import AsyncGenerator, Union
 import traceback
-os.chdir('/Users/andrewzhou/Documents/Clinical Research/Medical_Microbiology_Tutor/Workspace/microbiology_agent_tutor')
+
+os.chdir('/Users/riccardoconci/Library/Mobile Documents/com~apple~CloudDocs/HQ_2024/Projects/2024_Harvard_AIM/Research/MicroTutor/microbiology-agent-tutor')
+
 # Load environment variables
 load_dotenv()
 
@@ -87,6 +89,66 @@ def process_response(response):
         print(f"Error processing response: {str(e)}")
         return f"Tutor: Error processing response: {str(e)}"
 
+def extract_revealed_info(response, tutor_instance):
+    """Extract revealed information from the response and tutor state."""
+    revealed_info = {
+        "history": {},
+        "exam": {},
+        "labs": {}
+    }
+    
+    try:
+        print("Extracting revealed info...")
+        
+        # Extract exam type if present in the response
+        exam_type = None
+        if isinstance(response, dict):
+            if "exam_type" in response:
+                exam_type = response["exam_type"]
+                print(f"Found exam_type in response: {exam_type}")
+                
+        # Get revealed info from the case presenter agent
+        if hasattr(tutor_instance, 'case_presenter'):
+            # Add exam categories
+            if hasattr(tutor_instance.case_presenter, 'revealed_info'):
+                print(f"Case presenter revealed_info: {tutor_instance.case_presenter.revealed_info}")
+                for category in tutor_instance.case_presenter.revealed_info:
+                    if category.endswith('_exam'):
+                        revealed_info["exam"][category] = "Examined"
+                        print(f"Added exam category: {category}")
+            
+            # Add conversation history items to appropriate categories
+            if hasattr(tutor_instance.case_presenter, 'conversation_history'):
+                print(f"Processing conversation history with {len(tutor_instance.case_presenter.conversation_history)} items")
+                for item in tutor_instance.case_presenter.conversation_history:
+                    question = item.get('question', '').lower()
+                    response_text = item.get('response', '')
+                    
+                    print(f"Processing question: '{question}'")
+                    
+                    # Categorize based on question content
+                    if any(term in question for term in ['symptom', 'feel', 'pain', 'history', 'when did', 'how long', 'duration', 'started', 'begin', 'onset', 'since when']):
+                        key = question[:30] + '...' if len(question) > 30 else question
+                        revealed_info["history"][key] = response_text[:50] + '...' if len(response_text) > 50 else response_text
+                        print(f"Added history item: {key}")
+                    elif any(term in question for term in ['test', 'lab', 'xray', 'ct', 'mri', 'culture', 'blood', 'imaging', 'diagnostic']):
+                        key = question[:30] + '...' if len(question) > 30 else question
+                        revealed_info["labs"][key] = response_text[:50] + '...' if len(response_text) > 50 else response_text
+                        print(f"Added labs item: {key}")
+        
+        # Add the current exam_type if found
+        if exam_type:
+            revealed_info["exam"][exam_type] = "Examined"
+            print(f"Added current exam_type: {exam_type}")
+            
+        # Print the final revealed info for debugging
+        print(f"Final revealed_info: {revealed_info}")
+            
+        return revealed_info
+    except Exception as e:
+        print(f"Error extracting revealed info: {str(e)}")
+        return revealed_info
+
 def stream_response(response):
     """Stream the response while maintaining speaker labels."""
     if isinstance(response, dict):
@@ -126,12 +188,20 @@ async def start_case(request: Request):
         # Log the response for debugging
         print(f"Initial case response: {initial_case}")
         
+        # Extract any revealed information
+        revealed_info = extract_revealed_info(initial_case, tutor)
+        
         async def generate_events():
             try:
                 # Process the response
                 processed_response = process_response(initial_case)
+                # Combine response with revealed info
+                response_data = {
+                    'chunk': processed_response,
+                    'revealed_info': revealed_info
+                }
                 # Send the processed response as a data event
-                yield f"data: {json.dumps({'chunk': processed_response})}\n\n"
+                yield f"data: {json.dumps(response_data)}\n\n"
                 # Send the completion event
                 yield "data: [DONE]\n\n"
             except Exception as e:
@@ -170,9 +240,16 @@ async def chat(request: Request, message: str = Form(...), session_id: str = For
         # Handle special commands
         if message.lower().strip() == "new case":
             initial_case = tutor.start_new_case()
+            # Extract any revealed information
+            revealed_info = extract_revealed_info(initial_case, tutor)
+            
             async def new_case_events():
                 processed_response = process_response(initial_case)
-                yield f"data: {json.dumps({'chunk': processed_response})}\n\n"
+                response_data = {
+                    'chunk': processed_response,
+                    'revealed_info': revealed_info
+                }
+                yield f"data: {json.dumps(response_data)}\n\n"
                 yield "data: [DONE]\n\n"
             return StreamingResponse(
                 new_case_events(),
@@ -189,15 +266,29 @@ async def chat(request: Request, message: str = Form(...), session_id: str = For
         response = tutor(task)
         
         # Log the response for debugging
-        print(f"Raw response from tutor: {response}")
+        #print(f"Raw response from tutor: {response}")
+        
+        # Extract revealed information
+        revealed_info = extract_revealed_info(response, tutor)
         
         async def generate_events():
             try:
                 # Process the response
                 processed_response = process_response(response)
                 print(f"Processed response: {processed_response}")  # Debug log
+                
+                # Combine response with revealed info
+                response_data = {
+                    'chunk': processed_response,
+                    'revealed_info': revealed_info
+                }
+                
+                # Add exam_type if it exists in the response
+                if isinstance(response, dict) and "exam_type" in response:
+                    response_data["exam_type"] = response["exam_type"]
+                
                 # Send the processed response as a data event
-                yield f"data: {json.dumps({'chunk': processed_response})}\n\n"
+                yield f"data: {json.dumps(response_data)}\n\n"
                 # Send the completion event
                 yield "data: [DONE]\n\n"
             except Exception as e:

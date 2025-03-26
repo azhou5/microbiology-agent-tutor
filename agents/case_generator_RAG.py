@@ -171,21 +171,28 @@ class CaseGeneratorRAGAgent(BaseAgent):
 
 Case
 """
-        # Add patient info (which now includes chief complaint)
+        # Add all sections in sequence
+        sections_to_combine = []
+        
+        # Add patient info (which includes chief complaint)
         if self.case_sections["patient_info"]:
-            combined_text += self.case_sections["patient_info"] + "\n\n"
+            sections_to_combine.append(self.case_sections["patient_info"])
         
         # Add history_and_exam
         if self.case_sections["history_and_exam"]:
-            combined_text += self.case_sections["history_and_exam"] + "\n\n"
+            sections_to_combine.append(self.case_sections["history_and_exam"])
         
         # Add diagnostics
         if self.case_sections["diagnostics"]:
-            combined_text += self.case_sections["diagnostics"] + "\n\n"
+            sections_to_combine.append(self.case_sections["diagnostics"])
         
         # Add diagnosis_and_treatment
         if self.case_sections["diagnosis_and_treatment"]:
-            combined_text += self.case_sections["diagnosis_and_treatment"] + "\n\n"
+            sections_to_combine.append(self.case_sections["diagnosis_and_treatment"])
+        
+        # Combine all sections with proper paragraph breaks
+        if sections_to_combine:
+            combined_text += "\n\n".join(sections_to_combine) + "\n\n"
         
         # Add guiding questions
         combined_text += "Guiding Questions\n"
@@ -227,8 +234,15 @@ Case
     def _generate_history_and_exam(self) -> str:
         """Generate combined medical history and physical examination."""
         print("Generating combined history and physical examination...")
+        
+        # Get the patient info to ensure consistency
+        patient_info = self.case_sections.get("patient_info", "")
+        patient_reference = "the patient described previously" if patient_info else "a patient"
+        
         prompt = f"""
-        Generate a COMBINED medical history AND physical examination for a patient with {self.organism} infection.
+        Generate a COMBINED medical history AND physical examination for {patient_reference} with {self.organism} infection.
+        
+        {f"IMPORTANT: This is a continuation of the same patient case. The patient information so far is: {patient_info}" if patient_info else ""}
         
         PART 1: MEDICAL HISTORY
         Include past medical history, medications, allergies, social history, and any relevant epidemiological factors.
@@ -239,7 +253,7 @@ Case
         Make sure the findings are consistent with {self.organism} infection.
         
         Format as a cohesive narrative without headings, starting with the history and 
-        flowing naturally into the physical examination findings.
+        flowing naturally into the physical examination findings. Avoid beginning with phrases like "The patient is..." since this is a continuation.
         
         Example:
         "The patient has a history of alcoholic cirrhosis with two exacerbations in the past year. 
@@ -254,9 +268,17 @@ Case
     def _generate_diagnostics(self) -> str:
         """Generate combined laboratory, imaging, and microbiology findings."""
         print("Generating combined diagnostics (labs, imaging, microbiology)...")
+        
+        # Get previous sections to ensure consistency
+        patient_info = self.case_sections.get("patient_info", "")
+        history_exam = self.case_sections.get("history_and_exam", "")
+        previous_context = f"{patient_info}\n\n{history_exam}".strip()
+        
         prompt = f"""
         Generate COMBINED diagnostic findings including laboratory tests, imaging studies, and microbiology 
-        results for a patient with {self.organism} infection.
+        results for the patient with {self.organism} infection.
+        
+        {f"IMPORTANT: This is a continuation of the same patient case. The patient information so far is:\n{previous_context}" if previous_context else ""}
         
         PART 1: LABORATORY FINDINGS
         Include complete blood count, basic metabolic panel, inflammatory markers, and other relevant tests.
@@ -269,7 +291,7 @@ Case
         Include antimicrobial susceptibility results.
         
         Format as a cohesive narrative without headings, organizing the information logically from 
-        initial lab tests to imaging to microbiological confirmation.
+        initial lab tests to imaging to microbiological confirmation. Avoid beginning with phrases like "Laboratory studies for the patient" since this is a continuation.
         
         Example:
         "Laboratory studies reveal: WBC 15,000/μL with 85% neutrophils, Hgb 8 g/dL, platelets 250,000/μL, 
@@ -283,8 +305,17 @@ Case
     def _generate_diagnosis_and_treatment(self) -> str:
         """Generate combined diagnosis and treatment plan."""
         print("Generating combined diagnosis and treatment plan...")
+        
+        # Get all previous sections to ensure consistency
+        patient_info = self.case_sections.get("patient_info", "")
+        history_exam = self.case_sections.get("history_and_exam", "")
+        diagnostics = self.case_sections.get("diagnostics", "")
+        previous_context = f"{patient_info}\n\n{history_exam}\n\n{diagnostics}".strip()
+        
         prompt = f"""
-        Generate a COMBINED final diagnosis AND treatment plan for a patient with {self.organism} infection.
+        Generate a COMBINED final diagnosis AND treatment plan for the patient with {self.organism} infection.
+        
+        {f"IMPORTANT: This is a continuation of the same patient case. The patient information so far is:\n{previous_context}" if previous_context else ""}
         
         PART 1: DIAGNOSIS
         Clearly state that the patient has an infection caused by {self.organism}.
@@ -296,7 +327,7 @@ Case
         Include monitoring requirements and follow-up recommendations.
         
         Format as a cohesive narrative without headings, starting with the diagnosis and 
-        flowing naturally into the treatment plan.
+        flowing naturally into the treatment plan. Avoid beginning with phrases like "The patient is diagnosed with" since this is a continuation.
         
         Example:
         "The patient is diagnosed with community-acquired pneumonia caused by Streptococcus pneumoniae, 

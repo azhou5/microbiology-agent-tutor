@@ -94,7 +94,7 @@ Respond naturally as the patient, keeping in mind:
             revealed_category = "symptoms"
         elif any(word in question.lower() for word in ["exam", "check", "vital", "temperature", "pressure", "heart", "breathing"]):
             revealed_category = "physical_exam"
-        elif any(word in question.lower() for word in ["contact", "travel", "exposure", "others", "sick", "family", "work", "home"]):
+        elif any(word in question.lower() for word in ["contact", "travel", "exposure", "others", "sick", "family", "work", "home", "job", "occupation", "employ", "profession"]):
             revealed_category = "epidemiology"
         elif any(word in question.lower() for word in ["history", "medical", "past", "condition", "problem", "medication", "allergy"]):
             revealed_category = "medical_history"

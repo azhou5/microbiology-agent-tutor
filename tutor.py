@@ -147,6 +147,9 @@ class MedicalMicrobiologyTutor(ManagerAgent):
             7. When the student is unsure or needs guidance:
                - Route to the helper agent for contextual hints
             
+            8. When the student is in the middle of reasoning evaluation:
+               - Route ALL messages to the case_presenter until reasoning is complete
+            
             I maintain state through my actions to ensure proper flow.""",
             actions=[TutorStateAction(), ThinkAction(), AgentTrackingFinishAction()],
             TeamAgents=[self.case_presenter, self.case_generator, self.knowledge_assessment, self.patient, self.helper],
@@ -241,31 +244,79 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         ]
         self.add_example(task4, action_chain4)
 
-        # Example 5: Differential diagnosis attempt
-        task5 = TaskPackage(instruction="is it croup?")
+        # Example 5: Differential diagnosis without reasoning
+        task5 = TaskPackage(instruction="I think this is bacterial pneumonia, possibly caused by Streptococcus pneumoniae")
         action_chain5 = [
-            (AgentAct(name="Think", params={"response": "Student is providing a potential diagnosis. Route to case presenter for evaluation."}),
+            (AgentAct(name="Think", params={"response": "Student is providing a differential diagnosis. Need to ask for reasoning."}),
              "OK"),
-            (AgentAct(name="case_presenter", params={"Task": "is it croup?"}),
-             {"feedback": "I see you're considering croup. Let's think about this systematically. What specific symptoms and findings made you consider this diagnosis? Can you walk me through your reasoning?", "is_appropriate": False, "agent": "case_presenter"}),
-            (AgentAct(name="Finish", params={"response": {"response": "I see you're considering croup. Let's think about this systematically. What specific symptoms and findings made you consider this diagnosis? Can you walk me through your reasoning?", "agent": "case_presenter"}}),
+            (AgentAct(name="case_presenter", params={"Task": "I think this is bacterial pneumonia, possibly caused by Streptococcus pneumoniae"}),
+             {"response": "Why do you think this is the most likely diagnosis? What specific findings support your differential?", "agent": "case_presenter"}),
+            (AgentAct(name="Finish", params={"response": {"response": "Why do you think this is the most likely diagnosis? What specific findings support your differential?", "agent": "case_presenter"}}),
              "Task completed.")
         ]
         self.add_example(task5, action_chain5)
 
-        # Example 5a: More detailed differential diagnosis attempt
-        task5a = TaskPackage(instruction="Given the fever and cough, this could be bacterial pneumonia, possibly Streptococcus pneumoniae")
+        # Example 5a: Differential diagnosis WITH reasoning included
+        task5a = TaskPackage(instruction="I think this is bacterial pneumonia caused by Streptococcus pneumoniae because the patient has fever, productive cough, and focal crackles on auscultation")
         action_chain5a = [
-            (AgentAct(name="Think", params={"response": "Student is providing a detailed differential with reasoning. Route to case presenter for evaluation."}),
+            (AgentAct(name="Think", params={"response": "Student provided differential with reasoning included. Ask for additional factors."}),
              "OK"),
-            (AgentAct(name="case_presenter", params={"Task": "Given the fever and cough, this could be bacterial pneumonia, possibly Streptococcus pneumoniae"}),
-             {"feedback": "Good thinking! The combination of acute fever, productive cough, and focal findings supports your consideration of bacterial pneumonia. S. pneumoniae is indeed a common cause. Would you like to see the relevant diagnostic tests now?", "is_appropriate": True, "agent": "case_presenter"}),
-            (AgentAct(name="UpdateState", params={"state_update": "differential_given", "state_value": "true"}),
-             "State updated successfully"),
-            (AgentAct(name="Finish", params={"response": {"response": "Good thinking! The combination of acute fever, productive cough, and focal findings supports your consideration of bacterial pneumonia. S. pneumoniae is indeed a common cause. Would you like to see the relevant diagnostic tests now?", "agent": "case_presenter"}}),
+            (AgentAct(name="case_presenter", params={"Task": "I think this is bacterial pneumonia caused by Streptococcus pneumoniae because the patient has fever, productive cough, and focal crackles on auscultation"}),
+             {"response": "Any other clinical findings or epidemiological factors that support your differential?", "agent": "case_presenter"}),
+            (AgentAct(name="Finish", params={"response": {"response": "Any other clinical findings or epidemiological factors that support your differential?", "agent": "case_presenter"}}),
              "Task completed.")
         ]
         self.add_example(task5a, action_chain5a)
+
+        # Example 5b: Continue reasoning discussion
+        task5b = TaskPackage(instruction="S. pneumoniae is the most common cause of community-acquired pneumonia. The acute onset is typical for bacterial infection.")
+        action_chain5b = [
+            (AgentAct(name="Think", params={"response": "Student continuing reasoning discussion. Evaluate and guide reasoning."}),
+             "OK"),
+            (AgentAct(name="case_presenter", params={"Task": "S. pneumoniae is the most common cause of community-acquired pneumonia. The acute onset is typical for bacterial infection."}),
+             {"response": "Good thinking. You're right that S. pneumoniae is the most common cause of community-acquired pneumonia, and the acute onset does support a bacterial etiology. What about the pattern of lung involvement? How does that influence your differential between bacterial and viral causes?", "agent": "case_presenter"}),
+            (AgentAct(name="Finish", params={"response": {"response": "Good thinking. You're right that S. pneumoniae is the most common cause of community-acquired pneumonia, and the acute onset does support a bacterial etiology. What about the pattern of lung involvement? How does that influence your differential between bacterial and viral causes?", "agent": "case_presenter"}}),
+             "Task completed.")
+        ]
+        self.add_example(task5b, action_chain5b)
+
+        # Example 5c: Complete reasoning with good explanation
+        task5c = TaskPackage(instruction="The lobar consolidation pattern is more consistent with bacterial pneumonia, especially pneumococcal, while viral pneumonias typically have a more diffuse, interstitial pattern.")
+        action_chain5c = [
+            (AgentAct(name="Think", params={"response": "Student provided complete reasoning that demonstrates understanding. Accept and move forward."}),
+             "OK"),
+            (AgentAct(name="case_presenter", params={"Task": "The lobar consolidation pattern is more consistent with bacterial pneumonia, especially pneumococcal, while viral pneumonias typically have a more diffuse, interstitial pattern."}),
+             {"response": "Excellent clinical reasoning! You've correctly identified the key distinguishing patterns between bacterial and viral pneumonias. The lobar consolidation pattern you've noted is indeed characteristic of pneumococcal pneumonia, which aligns with your differential diagnosis. Would you like to see any diagnostic tests to confirm your suspicion?", "agent": "case_presenter"}),
+            (AgentAct(name="UpdateState", params={"state_update": "differential_given", "state_value": "true"}),
+             "State updated successfully"),
+            (AgentAct(name="Finish", params={"response": {"response": "Excellent clinical reasoning! You've correctly identified the key distinguishing patterns between bacterial and viral pneumonias. The lobar consolidation pattern you've noted is indeed characteristic of pneumococcal pneumonia, which aligns with your differential diagnosis. Would you like to see any diagnostic tests to confirm your suspicion?", "agent": "case_presenter"}}),
+             "Task completed.")
+        ]
+        self.add_example(task5c, action_chain5c)
+
+        # Example 5d: Incorrect reasoning
+        task5d = TaskPackage(instruction="I think this is Clostridium difficile because the patient has respiratory symptoms")
+        action_chain5d = [
+            (AgentAct(name="Think", params={"response": "Student has a misconception about C. difficile. Need to gently correct."}),
+             "OK"),
+            (AgentAct(name="case_presenter", params={"Task": "I think this is Clostridium difficile because the patient has respiratory symptoms"}),
+             {"response": "I notice you've mentioned Clostridium difficile as a cause of respiratory symptoms, but there seems to be a misconception here. C. difficile primarily causes gastrointestinal symptoms, particularly diarrhea and colitis. It doesn't typically cause respiratory symptoms. Which respiratory pathogens are you familiar with that might better explain the patient's presentation?", "agent": "case_presenter"}),
+            (AgentAct(name="Finish", params={"response": {"response": "I notice you've mentioned Clostridium difficile as a cause of respiratory symptoms, but there seems to be a misconception here. C. difficile primarily causes gastrointestinal symptoms, particularly diarrhea and colitis. It doesn't typically cause respiratory symptoms. Which respiratory pathogens are you familiar with that might better explain the patient's presentation?", "agent": "case_presenter"}}),
+             "Task completed.")
+        ]
+        self.add_example(task5d, action_chain5d)
+        
+        # Example 5e: Information challenge
+        task5e = TaskPackage(instruction="This could be influenza because the patient has a cough")
+        action_chain5e = [
+            (AgentAct(name="Think", params={"response": "Student reasoning is limited. Need to challenge with additional information."}),
+             "OK"),
+            (AgentAct(name="case_presenter", params={"Task": "This could be influenza because the patient has a cough"}),
+             {"response": "Influenza is certainly a consideration when a patient has a cough. However, what if I told you that the patient has focal crackles in the right lower lobe rather than diffuse findings, a high fever of 39°C, and a white blood cell count of 15,000 with neutrophil predominance? How might these additional findings influence your differential diagnosis?", "agent": "case_presenter"}),
+            (AgentAct(name="Finish", params={"response": {"response": "Influenza is certainly a consideration when a patient has a cough. However, what if I told you that the patient has focal crackles in the right lower lobe rather than diffuse findings, a high fever of 39°C, and a white blood cell count of 15,000 with neutrophil predominance? How might these additional findings influence your differential diagnosis?", "agent": "case_presenter"}}),
+             "Task completed.")
+        ]
+        self.add_example(task5e, action_chain5e)
 
         # Example 6: Help request
         task6 = TaskPackage(instruction="I'm not sure what to ask next")
@@ -339,6 +390,30 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         ]
         self.add_example(task8c, action_chain8c)
 
+        # Example 8d: Occupation/work question
+        task8d = TaskPackage(instruction="What kind of work do you do?")
+        action_chain8d = [
+            (AgentAct(name="Think", params={"response": "This is a question about the patient's occupation. Route to patient agent."}),
+             "OK"),
+            (AgentAct(name="patient", params={"Task": "What kind of work do you do?"}),
+             {"response": "I work as a nurse in a busy hospital. I've been there for about five years now, mostly in the emergency department.", "agent": "patient"}),
+            (AgentAct(name="Finish", params={"response": {"response": "I work as a nurse in a busy hospital. I've been there for about five years now, mostly in the emergency department.", "agent": "patient"}}),
+             "Task completed.")
+        ]
+        self.add_example(task8d, action_chain8d)
+        
+        # Example 8e: Work environment question
+        task8e = TaskPackage(instruction="Tell me about your work environment")
+        action_chain8e = [
+            (AgentAct(name="Think", params={"response": "This is a question about the patient's work environment. Route to patient agent."}),
+             "OK"),
+            (AgentAct(name="patient", params={"Task": "Tell me about your work environment"}),
+             {"response": "It's pretty hectic at the hospital. I work long shifts, and we're always short-staffed. We see all kinds of patients with different conditions, and sometimes I have to work overtime when things get really busy.", "agent": "patient"}),
+            (AgentAct(name="Finish", params={"response": {"response": "It's pretty hectic at the hospital. I work long shifts, and we're always short-staffed. We see all kinds of patients with different conditions, and sometimes I have to work overtime when things get really busy.", "agent": "patient"}}),
+             "Task completed.")
+        ]
+        self.add_example(task8e, action_chain8e)
+
         # Example 9: Final diagnosis
         task9 = TaskPackage(instruction="Based on all the findings, I believe this is S. pneumoniae pneumonia")
         action_chain9 = [
@@ -411,8 +486,63 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         response = self.llm.predict_messages(messages)
         return response.content
 
+    def _is_in_reasoning_evaluation(self):
+        """Check if case_presenter is currently awaiting reasoning responses."""
+        return hasattr(self.case_presenter, 'awaiting_reasoning') and self.case_presenter.awaiting_reasoning
+    
+    def _get_full_conversation_history(self):
+        """Get the combined conversation history from all agents."""
+        combined_history = []
+        
+        # Add case presenter history if available
+        if hasattr(self.case_presenter, 'conversation_history') and self.case_presenter.conversation_history:
+            for entry in self.case_presenter.conversation_history:
+                combined_history.append({
+                    "question": entry.get("question", ""),
+                    "response": entry.get("response", ""),
+                    "agent": "case_presenter"
+                })
+        
+        # Add patient history if available
+        if hasattr(self.patient, 'conversation_history') and self.patient.conversation_history:
+            for entry in self.patient.conversation_history:
+                combined_history.append({
+                    "question": entry.get("question", ""),
+                    "response": entry.get("response", ""),
+                    "agent": "patient"
+                })
+        
+        # Sort by some implicit order if needed
+        # This could be enhanced with timestamps if available
+        
+        return combined_history
+
     def __call__(self, task: TaskPackage) -> str:
         """Handle task requests by routing to appropriate agents."""
+        # Check if we're currently in reasoning evaluation mode
+        if self._is_in_reasoning_evaluation():
+            print(f"DEBUG - Tutor detected ongoing reasoning evaluation, routing to case_presenter")
+            
+            # Get the full conversation history
+            full_history = self._get_full_conversation_history()
+            
+            # If in reasoning evaluation, always route to case_presenter
+            response = self.case_presenter(TaskPackage(
+                instruction=task.instruction,
+                context={"full_conversation_history": full_history},
+                task_creator=self.id
+            ))
+            
+            # Preserve agent information in the response
+            if isinstance(response, dict) and "agent" in response:
+                return response
+            else:
+                return {
+                    "response": str(response),
+                    "agent": "case_presenter"
+                }
+        
+        # Regular routing for other scenarios
         # Create a task package for the manager agent
         task = TaskPackage(
             instruction=task.instruction,
@@ -463,8 +593,13 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         # Execute the action using the parent class method
         response = super()._execute_action(action)
         
+        # Check if we've received a patient response for a Think action
+        if action.name == "Think" and isinstance(response, str) and response == "OK":
+            # Keep the last agent as is, so we can continue the conversation flow
+            pass
+        
         # If this was a Finish action and we had an agent parameter or last_agent, add it to the response
-        if action.name == "Finish":
+        elif action.name == "Finish":
             if isinstance(response, str):
                 # Use the stored agent param or last_agent
                 agent = agent_param or self._last_agent or "tutor"
@@ -473,6 +608,11 @@ class MedicalMicrobiologyTutor(ManagerAgent):
                     "agent": agent
                 }
                 self._last_agent = None  # Reset after using
+        
+        # Check if the response is a dictionary from a specialized agent
+        if isinstance(response, dict) and "agent" in response:
+            # Update _last_agent based on the response
+            self._last_agent = response.get("agent")
             
         return response
 
@@ -498,3 +638,5 @@ class MedicalMicrobiologyTutor(ManagerAgent):
                 self._last_agent = None  # Reset after using
         
         return response 
+
+   
