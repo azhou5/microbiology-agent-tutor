@@ -144,6 +144,7 @@ class CaseGeneratorRAGAgent(BaseAgent):
         except Exception as e:
             print(f"Error in RAG case generation: {str(e)}")
             return self._fallback_case_generation()
+        
 
     def _reset_case_sections(self):
         """Reset all case sections to empty strings."""
@@ -206,10 +207,18 @@ Case
         combined_text += f"\nKey Concepts\n{key_concepts}"
         
         return combined_text
+    
+    def _format_continuation_note(self, previous_context: str) -> str:
+        return (
+            f"IMPORTANT: This is a continuation of the same patient case. "
+            f"The patient information so far is:\n{previous_context}"
+            if previous_context else ""
+        )
 
     def _generate_patient_info(self) -> str:
         """Generate patient demographic information and chief complaint."""
         print("Generating patient info and chief complaint...")
+
         prompt = f"""
         Generate patient demographic information AND chief complaint for a case involving {self.organism} infection.
         
@@ -238,11 +247,13 @@ Case
         # Get the patient info to ensure consistency
         patient_info = self.case_sections.get("patient_info", "")
         patient_reference = "the patient described previously" if patient_info else "a patient"
+        previous_context = f"{patient_info}\n\n" if patient_info else ""
+        continuation_note = self._format_continuation_note(previous_context)
         
         prompt = f"""
         Generate a COMBINED medical history AND physical examination for {patient_reference} with {self.organism} infection.
         
-        {f"IMPORTANT: This is a continuation of the same patient case. The patient information so far is: {patient_info}" if patient_info else ""}
+        {continuation_note}
         
         PART 1: MEDICAL HISTORY
         Include past medical history, medications, allergies, social history, and any relevant epidemiological factors.
@@ -318,11 +329,12 @@ Case
         history_exam = self.case_sections.get("history_and_exam", "")
         diagnostics = self.case_sections.get("diagnostics", "")
         previous_context = f"{patient_info}\n\n{history_exam}\n\n{diagnostics}".strip()
+        continuation_note = self._format_continuation_note(previous_context)
         
         prompt = f"""
         Generate a COMBINED final diagnosis AND treatment plan for the patient with {self.organism} infection.
         
-        {f"IMPORTANT: This is a continuation of the same patient case. The patient information so far is:\n{previous_context}" if previous_context else ""}
+        {continuation_note}
         
         PART 1: DIAGNOSIS
         Clearly state that the patient has an infection caused by {self.organism}.
