@@ -284,40 +284,34 @@ Case
         patient_info = self.case_sections.get("patient_info", "")
         history_exam = self.case_sections.get("history_and_exam", "")
         previous_context = f"{patient_info}\n\n{history_exam}".strip()
-
-        continuation_text = ""
-        if previous_context:
-            continuation_text = (
-                "IMPORTANT: This is a continuation of the same patient case. "
-                f"The patient information so far is:\n{previous_context}"
-            )
-
+        continuation_note = self._format_continuation_note(previous_context)
+        
         prompt = f"""
-    Generate COMBINED diagnostic findings including laboratory tests, imaging studies, and microbiology 
-    results for the patient with {self.organism} infection.
-
-    {continuation_text}
-
-    PART 1: LABORATORY FINDINGS
-    Include complete blood count, basic metabolic panel, inflammatory markers, and other relevant tests.
-
-    PART 2: IMAGING FINDINGS
-    Include relevant imaging studies such as X-rays, CT scans, or other appropriate imaging.
-
-    PART 3: MICROBIOLOGY FINDINGS
-    Include results of cultures, Gram stains, molecular tests that explicitly identify {self.organism}.
-    Include antimicrobial susceptibility results.
-
-    Format as a cohesive narrative without headings, organizing the information logically from 
-    initial lab tests to imaging to microbiological confirmation. Avoid beginning with phrases like "Laboratory studies for the patient" since this is a continuation.
-
-    Example:
-    "Laboratory studies reveal: WBC 15,000/μL with 85% neutrophils, Hgb 8 g/dL, platelets 250,000/μL, 
-    and elevated C-reactive protein at 15 mg/dL. Chest X-ray shows lobar consolidation in the right 
-    lower lobe with a small pleural effusion. Sputum Gram stain shows numerous neutrophils and 
-    gram-positive diplococci. Cultures from both sputum and blood (2/2 sets) grow Streptococcus 
-    pneumoniae sensitive to penicillin, ceftriaxone, and levofloxacin."
-    """
+        Generate COMBINED diagnostic findings including laboratory tests, imaging studies, and microbiology 
+        results for the patient with {self.organism} infection.
+        
+        {continuation_note}
+        
+        PART 1: LABORATORY FINDINGS
+        Include complete blood count, basic metabolic panel, inflammatory markers, and other relevant tests.
+        
+        PART 2: IMAGING FINDINGS
+        Include relevant imaging studies such as X-rays, CT scans, or other appropriate imaging.
+        
+        PART 3: MICROBIOLOGY FINDINGS
+        Include results of cultures, Gram stains, molecular tests that explicitly identify {self.organism}.
+        Include antimicrobial susceptibility results.
+        
+        Format as a cohesive narrative without headings, organizing the information logically from 
+        initial lab tests to imaging to microbiological confirmation. Avoid beginning with phrases like "Laboratory studies for the patient" since this is a continuation.
+        
+        Example:
+        "Laboratory studies reveal: WBC 15,000/μL with 85% neutrophils, Hgb 8 g/dL, platelets 250,000/μL, 
+        and elevated C-reactive protein at 15 mg/dL. Chest X-ray shows lobar consolidation in the right 
+        lower lobe with a small pleural effusion. Sputum Gram stain shows numerous neutrophils and 
+        gram-positive diplococci. Cultures from both sputum and blood (2/2 sets) grow Streptococcus 
+        pneumoniae sensitive to penicillin, ceftriaxone, and levofloxacin."
+        """
         return self._generate_section("diagnostics", prompt)
 
     def _generate_diagnosis_and_treatment(self) -> str:
