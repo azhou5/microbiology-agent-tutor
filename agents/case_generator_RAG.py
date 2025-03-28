@@ -257,9 +257,9 @@ Case
         
         Example:
         "The patient has a history of alcoholic cirrhosis with two exacerbations in the past year. 
-        Current medications include fluticasone/salmeterol inhaler and lisinopril. He has a 30 pack-year 
+        Current medications include fluticasone-salmeterol inhaler and lisinopril. He has a 30 pack-year 
         smoking history. On examination, the patient appears acutely ill with temperature 103°F, 
-        blood pressure 100/60 mmHg, heart rate 120 bpm, respiratory rate 20 breaths per minute, 
+        blood pressure 100 over 60 mmHg, heart rate 120 bpm, respiratory rate 20 breaths per minute, 
         and oxygen saturation 93% on room air. Chest examination revealed bronchial breath sounds 
         and egophony on the right. His cough was productive of thick green sputum."
         """
@@ -273,33 +273,40 @@ Case
         patient_info = self.case_sections.get("patient_info", "")
         history_exam = self.case_sections.get("history_and_exam", "")
         previous_context = f"{patient_info}\n\n{history_exam}".strip()
-        
+
+        continuation_text = ""
+        if previous_context:
+            continuation_text = (
+                "IMPORTANT: This is a continuation of the same patient case. "
+                f"The patient information so far is:\n{previous_context}"
+            )
+
         prompt = f"""
-        Generate COMBINED diagnostic findings including laboratory tests, imaging studies, and microbiology 
-        results for the patient with {self.organism} infection.
-        
-        {f"IMPORTANT: This is a continuation of the same patient case. The patient information so far is:\n{previous_context}" if previous_context else ""}
-        
-        PART 1: LABORATORY FINDINGS
-        Include complete blood count, basic metabolic panel, inflammatory markers, and other relevant tests.
-        
-        PART 2: IMAGING FINDINGS
-        Include relevant imaging studies such as X-rays, CT scans, or other appropriate imaging.
-        
-        PART 3: MICROBIOLOGY FINDINGS
-        Include results of cultures, Gram stains, molecular tests that explicitly identify {self.organism}.
-        Include antimicrobial susceptibility results.
-        
-        Format as a cohesive narrative without headings, organizing the information logically from 
-        initial lab tests to imaging to microbiological confirmation. Avoid beginning with phrases like "Laboratory studies for the patient" since this is a continuation.
-        
-        Example:
-        "Laboratory studies reveal: WBC 15,000/μL with 85% neutrophils, Hgb 8 g/dL, platelets 250,000/μL, 
-        and elevated C-reactive protein at 15 mg/dL. Chest X-ray shows lobar consolidation in the right 
-        lower lobe with a small pleural effusion. Sputum Gram stain shows numerous neutrophils and 
-        gram-positive diplococci. Cultures from both sputum and blood (2/2 sets) grow Streptococcus 
-        pneumoniae sensitive to penicillin, ceftriaxone, and levofloxacin."
-        """
+    Generate COMBINED diagnostic findings including laboratory tests, imaging studies, and microbiology 
+    results for the patient with {self.organism} infection.
+
+    {continuation_text}
+
+    PART 1: LABORATORY FINDINGS
+    Include complete blood count, basic metabolic panel, inflammatory markers, and other relevant tests.
+
+    PART 2: IMAGING FINDINGS
+    Include relevant imaging studies such as X-rays, CT scans, or other appropriate imaging.
+
+    PART 3: MICROBIOLOGY FINDINGS
+    Include results of cultures, Gram stains, molecular tests that explicitly identify {self.organism}.
+    Include antimicrobial susceptibility results.
+
+    Format as a cohesive narrative without headings, organizing the information logically from 
+    initial lab tests to imaging to microbiological confirmation. Avoid beginning with phrases like "Laboratory studies for the patient" since this is a continuation.
+
+    Example:
+    "Laboratory studies reveal: WBC 15,000/μL with 85% neutrophils, Hgb 8 g/dL, platelets 250,000/μL, 
+    and elevated C-reactive protein at 15 mg/dL. Chest X-ray shows lobar consolidation in the right 
+    lower lobe with a small pleural effusion. Sputum Gram stain shows numerous neutrophils and 
+    gram-positive diplococci. Cultures from both sputum and blood (2/2 sets) grow Streptococcus 
+    pneumoniae sensitive to penicillin, ceftriaxone, and levofloxacin."
+    """
         return self._generate_section("diagnostics", prompt)
 
     def _generate_diagnosis_and_treatment(self) -> str:
@@ -446,7 +453,7 @@ Case
             print(f"Error in fallback case generation: {str(e)}")
             
             # Return a very basic fallback case if everything fails
-            return """A 45-year-old male presents with fever and productive cough for 3 days. Temperature is 38.5°C, blood pressure 120/80, heart rate 88, respiratory rate 20. Examination reveals crackles in the right lung base. Previously healthy, working as an office worker. Several coworkers have had similar symptoms. Laboratory studies show elevated white blood cell count with neutrophil predominance. Chest X-ray reveals right lower lobe infiltrate. Sputum culture grows Streptococcus pneumoniae."""
+            return """A 45-year-old male presents with fever and productive cough for 3 days. Temperature is 38.5°C, blood pressure 120 over 80, heart rate 88, respiratory rate 20. Examination reveals crackles in the right lung base. Previously healthy, working as an office worker. Several coworkers have had similar symptoms. Laboratory studies show elevated white blood cell count with neutrophil predominance. Chest X-ray reveals right lower lobe infiltrate. Sputum culture grows Streptococcus pneumoniae."""
 
     def _fallback_generate_section(self, prompt: str) -> str:
         """Generate a section using the standard LLM approach if RAG fails."""

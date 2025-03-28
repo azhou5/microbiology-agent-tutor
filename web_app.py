@@ -11,7 +11,7 @@ import asyncio
 from typing import AsyncGenerator, Union
 import traceback
 
-os.chdir('/Users/riccardoconci/Library/Mobile Documents/com~apple~CloudDocs/HQ_2024/Projects/2024_Harvard_AIM/Research/MicroTutor/microbiology-agent-tutor')
+os.chdir('/Users/sanjatkanjilal/My Drive/Research - Gdrive/Projects/Code/microbiology-agent-tutor')
 
 # Load environment variables
 load_dotenv()
