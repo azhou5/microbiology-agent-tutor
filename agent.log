@@ -1311,3 +1311,188 @@ Observation: {'response': 'Why do you think this is the most likely diagnosis? W
 	answer: {'response': 'Why do you think this is the most likely diagnosis? What specific findings support your differential?', 'agent': 'case_presenter'}
 ]
 ==========
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 0674b37c-6392-4fdc-a616-f028cffcab30
+	Instruction: do you have a case for me
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 0674b37c-6392-4fdc-a616-f028cffcab30====
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 80d57a04-61e9-4a5a-9297-696556adb698
+	Instruction: DDx: staph aureus
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 80d57a04-61e9-4a5a-9297-696556adb698====
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 80d57a04-61e9-4a5a-9297-696556adb698
+	Instruction: testing
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 80d57a04-61e9-4a5a-9297-696556adb698====
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 0d73489a-9cfc-40cb-a95b-357bafe81c6b
+	Instruction: when did it start?
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 0d73489a-9cfc-40cb-a95b-357bafe81c6b====
+Agent MedicalMicrobiologyTutor takes 0-step Action:
+{
+	name: Think
+	params: {'response': 'This is a history-gathering question about the onset of symptoms. Route to patient for response.'}
+}
+Observation: OK
+Agent MedicalMicrobiologyTutor takes 1-step Action:
+{
+	name: patient
+	params: {'Task': 'when did it start?'}
+}
+Observation: {'response': "It started about five days ago. I noticed my knee getting red and swollen, and it's been really painful ever since.", 'agent': 'patient'}
+Agent MedicalMicrobiologyTutor takes 2-step Action:
+{
+	name: Finish
+	params: {'response': {'response': "It started about five days ago. I noticed my knee getting red and swollen, and it's been really painful ever since.", 'agent': 'patient'}}
+}
+Observation: {'response': "It started about five days ago. I noticed my knee getting red and swollen, and it's been really painful ever since.", 'agent': 'patient'}
+=========MedicalMicrobiologyTutor finish execution. TaskPackage[ID:0d73489a-9cfc-40cb-a95b-357bafe81c6b] status:
+[
+	completion: completed
+	answer: {'response': "It started about five days ago. I noticed my knee getting red and swollen, and it's been really painful ever since.", 'agent': 'patient'}
+]
+==========
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 0d73489a-9cfc-40cb-a95b-357bafe81c6b
+	Instruction: did you fall?
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 0d73489a-9cfc-40cb-a95b-357bafe81c6b====
+Agent MedicalMicrobiologyTutor takes 0-step Action:
+{
+	name: Think
+	params: {'response': "This is a question about the patient's recent physical events or accidents. Route to patient agent for response."}
+}
+Observation: OK
+Agent MedicalMicrobiologyTutor takes 1-step Action:
+{
+	name: patient
+	params: {'Task': 'did you fall?'}
+}
+Observation: {'response': "No, I didn't fall. I just got a little scrape while I was gardening, but I didn't think much of it at the time.", 'agent': 'patient'}
+Agent MedicalMicrobiologyTutor takes 2-step Action:
+{
+	name: Finish
+	params: {'response': {'response': "No, I didn't fall. I just got a little scrape while I was gardening, but I didn't think much of it at the time.", 'agent': 'patient'}}
+}
+Observation: {'response': "No, I didn't fall. I just got a little scrape while I was gardening, but I didn't think much of it at the time.", 'agent': 'patient'}
+=========MedicalMicrobiologyTutor finish execution. TaskPackage[ID:0d73489a-9cfc-40cb-a95b-357bafe81c6b] status:
+[
+	completion: completed
+	answer: {'response': "No, I didn't fall. I just got a little scrape while I was gardening, but I didn't think much of it at the time.", 'agent': 'patient'}
+]
+==========
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 0d73489a-9cfc-40cb-a95b-357bafe81c6b
+	Instruction: what did you scrape your knee on?
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 0d73489a-9cfc-40cb-a95b-357bafe81c6b====
+Agent MedicalMicrobiologyTutor takes 0-step Action:
+{
+	name: Think
+	params: {'response': "This is a question about the patient's history related to an injury. Route to patient agent."}
+}
+Observation: OK
+Agent MedicalMicrobiologyTutor takes 1-step Action:
+{
+	name: patient
+	params: {'Task': 'what did you scrape your knee on?'}
+}
+Observation: {'response': "I scraped my knee on some bricks in the garden. I was moving around some plants and didn't notice it at first.", 'agent': 'patient'}
+Agent MedicalMicrobiologyTutor takes 2-step Action:
+{
+	name: Finish
+	params: {'response': {'response': "I scraped my knee on some bricks in the garden. I was moving around some plants and didn't notice it at first.", 'agent': 'patient'}}
+}
+Observation: {'response': "I scraped my knee on some bricks in the garden. I was moving around some plants and didn't notice it at first.", 'agent': 'patient'}
+=========MedicalMicrobiologyTutor finish execution. TaskPackage[ID:0d73489a-9cfc-40cb-a95b-357bafe81c6b] status:
+[
+	completion: completed
+	answer: {'response': "I scraped my knee on some bricks in the garden. I was moving around some plants and didn't notice it at first.", 'agent': 'patient'}
+]
+==========
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 0d73489a-9cfc-40cb-a95b-357bafe81c6b
+	Instruction: do see any fluid or drainage from the knee?
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 0d73489a-9cfc-40cb-a95b-357bafe81c6b====
+Agent MedicalMicrobiologyTutor takes 0-step Action:
+{
+	name: Think
+	params: {'response': 'This is a question about physical examination findings related to the knee. Route to case presenter for evaluation.'}
+}
+Observation: OK
+Agent MedicalMicrobiologyTutor takes 1-step Action:
+{
+	name: case_presenter
+	params: {'Task': 'do see any fluid or drainage from the knee?'}
+}
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 0d73489a-9cfc-40cb-a95b-357bafe81c6b
+	Instruction: do you have fever?
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 0d73489a-9cfc-40cb-a95b-357bafe81c6b====
+Agent MedicalMicrobiologyTutor takes 0-step Action:
+{
+	name: Think
+	params: {'response': 'This is a question about symptoms. Route to patient for response.'}
+}
+Observation: OK
+Agent MedicalMicrobiologyTutor takes 1-step Action:
+{
+	name: patient
+	params: {'Task': 'do you have fever?'}
+}
+Observation: {'response': "Yes, I've had a slight fever. It's been low-grade, but I've definitely felt a bit warmer than usual.", 'agent': 'patient'}
+Agent MedicalMicrobiologyTutor takes 2-step Action:
+{
+	name: Finish
+	params: {'response': {'response': "Yes, I've had a slight fever. It's been low-grade, but I've definitely felt a bit warmer than usual.", 'agent': 'patient'}}
+}
+Observation: {'response': "Yes, I've had a slight fever. It's been low-grade, but I've definitely felt a bit warmer than usual.", 'agent': 'patient'}
+=========MedicalMicrobiologyTutor finish execution. TaskPackage[ID:0d73489a-9cfc-40cb-a95b-357bafe81c6b] status:
+[
+	completion: completed
+	answer: {'response': "Yes, I've had a slight fever. It's been low-grade, but I've definitely felt a bit warmer than usual.", 'agent': 'patient'}
+]
+==========
+Agent MedicalMicrobiologyTutor receives the following TaskPackage:
+[
+	Task ID: 0d73489a-9cfc-40cb-a95b-357bafe81c6b
+	Instruction: DDx: gonorrhea, staph aureus, strep, rheumatoid disease
+]
+====MedicalMicrobiologyTutor starts execution on TaskPackage 0d73489a-9cfc-40cb-a95b-357bafe81c6b====
+Agent MedicalMicrobiologyTutor takes 0-step Action:
+{
+	name: Think
+	params: {'response': 'Student is providing a differential diagnosis. Need to ask for reasoning and evaluate the differential.'}
+}
+Observation: OK
+Agent MedicalMicrobiologyTutor takes 1-step Action:
+{
+	name: case_presenter
+	params: {'Task': 'DDx: gonorrhea, staph aureus, strep, rheumatoid disease'}
+}
+Observation: {'response': 'Why do you think this is the most likely diagnosis? What specific findings support your differential?', 'agent': 'case_presenter'}
+Agent MedicalMicrobiologyTutor takes 2-step Action:
+{
+	name: Finish
+	params: {'response': {'response': 'Why do you think this is the most likely diagnosis? What specific findings support your differential?', 'agent': 'case_presenter'}}
+}
+Observation: {'response': 'Why do you think this is the most likely diagnosis? What specific findings support your differential?', 'agent': 'case_presenter'}
+=========MedicalMicrobiologyTutor finish execution. TaskPackage[ID:0d73489a-9cfc-40cb-a95b-357bafe81c6b] status:
+[
+	completion: completed
+	answer: {'response': 'Why do you think this is the most likely diagnosis? What specific findings support your differential?', 'agent': 'case_presenter'}
+]
+==========
