@@ -213,6 +213,10 @@
                         <div id="organism-badge" style="display: none; margin-top: 5px;" class="badge bg-primary">
                             Current organism: <span id="current-organism-badge"></span>
                         </div>
+                        <h2>Medical Microbiology Tutor</h2>
+                        <div id="organism-badge" style="display: none; margin-top: 5px;" class="badge bg-primary">
+                            Current organism: <span id="current-organism-badge"></span>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
@@ -373,8 +377,8 @@
             for (const [key, value] of Object.entries(revealedInfo.history)) {
                 console.log(`Adding history item: ${key} = ${value}`);
                 const li = document.createElement('li');
-                li.className = 'list-group-item history-item';
-                li.innerHTML = `<strong class="history-header">${key}</strong><div class="info-content">${value}</div>`;
+                li.className = 'list-group-item';
+                li.innerHTML = `<strong>${key}:</strong> ${value}`;
                 historyList.appendChild(li);
             }
 
@@ -384,8 +388,8 @@
             for (const [key, value] of Object.entries(revealedInfo.exam)) {
                 console.log(`Adding exam item: ${key} = ${value}`);
                 const li = document.createElement('li');
-                li.className = 'list-group-item exam-item';
-                li.innerHTML = `<strong class="exam-header">${key}</strong><div class="info-content">${value}</div>`;
+                li.className = 'list-group-item';
+                li.innerHTML = `<strong>${key}</strong>: ${value}`;
                 examList.appendChild(li);
             }
 
@@ -395,8 +399,8 @@
             for (const [key, value] of Object.entries(revealedInfo.labs)) {
                 console.log(`Adding labs item: ${key} = ${value}`);
                 const li = document.createElement('li');
-                li.className = 'list-group-item labs-item';
-                li.innerHTML = `<strong class="labs-header">${key}</strong><div class="info-content">${value}</div>`;
+                li.className = 'list-group-item';
+                li.innerHTML = `<strong>${key}:</strong> ${value}`;
                 labsList.appendChild(li);
             }
 
@@ -572,7 +576,6 @@
             let fullResponse = '';
             let timeoutCount = 0;
             let progressIndicator;
-            let isRandomCase = organism === "RANDOM_CASE";
             
             // Add a progress/waiting indicator
             function updateProgress() {
@@ -593,25 +596,8 @@
             // Start the progress indicator
             const progressInterval = setInterval(updateProgress, 1000);
             
-            // Handle 'start' event
-            eventSource.addEventListener('start', function(event) {
-                console.log("Received start event:", event.data);
-                if (currentMessageDiv) {
-                    currentMessageDiv.textContent = event.data;
-                }
-            });
-            
-            // Handle 'update' event
-            eventSource.addEventListener('update', function(event) {
-                console.log("Received update event:", event.data);
-                if (currentMessageDiv) {
-                    currentMessageDiv.textContent = event.data;
-                }
-            });
-            
-            // Handle 'complete' event
-            eventSource.addEventListener('complete', function(event) {
-                console.log("Received complete event:", event.data);
+            eventSource.onmessage = function (event) {
+                console.log("Received message:", event.data);
                 
                 // Clear the progress indicator
                 clearInterval(progressInterval);
@@ -619,96 +605,62 @@
                     progressIndicator.remove();
                 }
                 
+                if (event.data === '[DONE]') {
+                    eventSource.close();
+                    currentMessageDiv.classList.remove('streaming');
+                    setProcessing(false);
+                    return;
+                }
+
                 try {
                     const data = JSON.parse(event.data);
-                    console.log("Parsed complete data:", data);
-                    
-                    if (data.message) {
-                        currentMessageDiv.textContent = data.message;
+
+                    if (data.error) {
+                        currentMessageDiv.textContent = `Error: ${data.error}`;
+                        currentMessageDiv.classList.remove('streaming');
+                        eventSource.close();
+                        setProcessing(false);
+                        return;
                     }
-                    
-                    // Store session ID if provided
-                    if (data.session_id) {
-                        sessionId = data.session_id;
-                        console.log("Set session ID to:", sessionId);
+
+                    if (data.chunk) {
+                        // Update the response text
+                        fullResponse = data.chunk;
+                        currentMessageDiv.textContent = fullResponse;
                     }
-                    
+
                     // Update revealed info if provided
                     if (data.revealed_info) {
                         updateRevealedInfo(data.revealed_info);
                     }
-                    
-                    // Handle random case
-                    if (data.is_random_case === true) {
-                        hideOrganismBadge();
-                    } else if (data.organism) {
+
+                    // Update organism if provided
+                    if (data.organism) {
                         currentOrganism = data.organism;
-                        showOrganismBadge(data.organism);
                         updateRevealedInfoUI();
                     }
-                    
-                    // Enable user input
-                    currentMessageDiv.classList.remove('streaming');
-                    enableUserInput();
                 } catch (error) {
-                    console.error("Error parsing complete event data:", error, event.data);
+                    console.error("Error parsing event data:", error, event.data);
                     currentMessageDiv.textContent = "Error: Failed to parse server response.";
+                    eventSource.close();
                     setProcessing(false);
                 }
-                
-                // Close the EventSource
-                eventSource.close();
-            });
-            
-            // Handle 'error' event
-            eventSource.addEventListener('error', function(event) {
-                console.error("Received error event:", event);
-                
+            };
+
+            eventSource.onerror = function (error) {
                 // Clear the progress indicator
                 clearInterval(progressInterval);
                 if (progressIndicator) {
                     progressIndicator.remove();
                 }
                 
-                // Try to extract error message from event data
-                let errorMsg = "Error getting response from server";
-                if (event.data) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        errorMsg = data.error || errorMsg;
-                    } catch (e) {
-                        // If parsing fails, use the event data directly
-                        errorMsg = event.data || errorMsg;
-                    }
-                }
-                
-                // Display error message
-                if (currentMessageDiv) {
-                    currentMessageDiv.textContent = "Error: " + errorMsg;
-                    currentMessageDiv.classList.remove('streaming');
-                }
-                
-                setProcessing(false);
+                console.error("EventSource error:", error);
                 eventSource.close();
-            });
-            
-            // Add a general onerror handler as a fallback for any other errors
-            eventSource.onerror = function(error) {
-                console.error("EventSource general error:", error);
-                
-                // Clear the progress indicator
-                clearInterval(progressInterval);
-                if (progressIndicator) {
-                    progressIndicator.remove();
+                currentMessageDiv.classList.remove('streaming');
+                if (!fullResponse) {
+                    currentMessageDiv.textContent = "Error: Failed to get response from server. Please check that the server is running and try again.";
                 }
-                
-                if (currentMessageDiv) {
-                    currentMessageDiv.textContent = "Error: Connection to server failed. Please try again.";
-                    currentMessageDiv.classList.remove('streaming');
-                }
-                
                 setProcessing(false);
-                eventSource.close();
             };
             
             // Set timeout to close connection if no response
@@ -722,13 +674,13 @@
                 if (eventSource.readyState !== 2) { // 2 = CLOSED
                     console.log("Closing EventSource due to timeout");
                     eventSource.close();
-                    if (currentMessageDiv) {
+                    if (!fullResponse) {
                         currentMessageDiv.textContent = "Error: Request timed out. This might be due to a connection issue or the case generation taking too long. Please try again or choose a different organism.";
-                        currentMessageDiv.classList.remove('streaming');
                     }
+                    currentMessageDiv.classList.remove('streaming');
                     setProcessing(false);
                 }
-            }, 60000); // 60 second timeout
+            }, 60000); // 60 second timeout (increased from 30 seconds)
         }
 
         function resetSession() {
@@ -815,14 +767,8 @@
                 // Add loading message to chat container
                 const chatContainer = document.getElementById('chat-container');
                 const loadingDiv = document.createElement('div');
-                
-                // Hide the organism name if it's a random case
-                let displayText = organism === "RANDOM_CASE" ? 
-                    "Loading random case. This may take a moment..." :
-                    `Loading case for ${organism}. This may take a moment...`;
-                    
                 loadingDiv.className = 'message tutor-message';
-                loadingDiv.textContent = displayText;
+                loadingDiv.textContent = `Loading case for ${organism}. This may take a moment...`;
                 chatContainer.appendChild(loadingDiv);
                 
                 // If there's an organism in the URL, start a case with it
@@ -833,31 +779,6 @@
                 }, 100); // Small delay to ensure UI updates first
             }
         });
-
-        // Function to show the organism badge
-        function showOrganismBadge(organism) {
-            document.getElementById('organism-badge').style.display = 'inline-block';
-            document.getElementById('current-organism-badge').textContent = organism;
-        }
-
-        // Function to hide the organism badge
-        function hideOrganismBadge() {
-            document.getElementById('organism-badge').style.display = 'none';
-            document.getElementById('current-organism-badge').textContent = '';
-        }
-
-        // Add this new function after setProcessing
-        function enableUserInput() {
-            // Enable the input field and send button
-            document.getElementById('user-input').disabled = false;
-            document.getElementById('send-btn').disabled = false;
-            
-            // Focus on the input field for immediate typing
-            document.getElementById('user-input').focus();
-            
-            // Update UI state
-            setProcessing(false);
-        }
     </script>
 </body>
 

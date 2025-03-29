@@ -484,11 +484,8 @@ Last Response Type:
 Full Case Conversation:
 {full_case_with_current if full_case_with_current else "[No prior conversation recorded]"}
 
-Information Categories Gathered:
-{revealed_info_text}
-This part is crucial. This is the only information that the student has gathered. Please do not reference any information outside of this. 
-
-If the student has not gathered enough information to make the differential diagnosis in your judgement, you should tell them to gather more information. 
+Case-relevant information that the student has already gathered:
+{self.revealed_info}
 
 Based on this exchange, determine if the student's reasoning is complete and accurate enough to move forward, or if further questioning would be beneficial for their learning.
 If you need to probe further, don't give away the answers - ask questions that lead them to discover insights themselves.
