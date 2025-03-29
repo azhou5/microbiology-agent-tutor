@@ -9,7 +9,6 @@ from agentlite.commons import TaskPackage
 import json
 import asyncio
 from typing import AsyncGenerator, Union, List
-from typing import AsyncGenerator, Union, List
 import traceback
 from langchain.chat_models import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
@@ -55,36 +54,6 @@ AVAILABLE_ORGANISMS = [
     "candida albicans",
     "mycobacterium tuberculosis"
 ]
-
-# Initialize the summarization LLM once per application instance
-summarize_llm = None
-summarize_cache = {}
-
-def initialize_summarize_llm():
-    """Initialize the summarization LLM if needed."""
-    global summarize_llm
-    
-    if summarize_llm is not None:
-        return summarize_llm
-        
-    try:
-        summarize_llm = AzureChatOpenAI(
-            openai_api_type="azure",
-            openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.3,
-            model="gpt-4o-mini"  # Use the smaller model for efficiency
-        )
-        print("Initialized summarization LLM successfully")
-        return summarize_llm
-    except Exception as e:
-        print(f"Error initializing summarization LLM: {str(e)}")
-        return None
-
-# Initialize summarization LLM at startup
-initialize_summarize_llm()
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -161,15 +130,16 @@ def extract_revealed_info(response, tutor_instance):
     try:
         print("Extracting revealed info...")
         
-        # Only add initial guidance if no real information has been revealed yet
+        # Add a basic test entry to each category to ensure visibility
         if not hasattr(tutor_instance, '_revealed_info_initialized'):
-            print("Initializing revealed info with initial guidance")
+            print("Initializing revealed info with test entries")
             revealed_info["history"]["Start exploring"] = "Ask questions about symptoms, history, and exposures"
             revealed_info["exam"]["Physical examination"] = "Ask to examine specific body systems"
             revealed_info["labs"]["Diagnostic tests"] = "Request specific labs or tests when ready"
             tutor_instance._revealed_info_initialized = True
         
-        # Extract information from the current response
+        # Extract exam type if present in the response
+        exam_type = None
         if isinstance(response, dict):
             # Handle case presentation - only if it's the actual initial case info
             if "case_presentation" in response and "full_case" in response:
@@ -221,7 +191,27 @@ def extract_revealed_info(response, tutor_instance):
         
         # Get revealed info from the case presenter agent
         if hasattr(tutor_instance, 'case_presenter'):
-            # Process conversation history
+            # Add exam categories from revealed_info set
+            if hasattr(tutor_instance.case_presenter, 'revealed_info'):
+                print(f"Case presenter revealed_info: {tutor_instance.case_presenter.revealed_info}")
+                for category in tutor_instance.case_presenter.revealed_info:
+                    if category.endswith('_exam'):
+                        revealed_info["exam"][category] = "Examined"
+                        print(f"Added exam category: {category}")
+                    elif category in ["symptoms", "fever", "pain", "cough"]:
+                        revealed_info["history"][f"Asked about {category}"] = "Revealed"
+                        print(f"Added symptom category: {category}")
+                    elif category in ["epidemiology", "travel", "exposure", "contact"]:
+                        revealed_info["history"][f"Asked about {category}"] = "Revealed"
+                        print(f"Added epidemiology category: {category}")
+                    elif category in ["medical_history", "medications", "allergies"]:
+                        revealed_info["history"][f"Asked about {category}"] = "Revealed"
+                        print(f"Added medical history category: {category}")
+                    elif category in ["labs", "tests", "imaging", "blood", "culture"]:
+                        revealed_info["labs"][f"Asked about {category}"] = "Revealed"
+                        print(f"Added lab category: {category}")
+            
+            # Add conversation history items to appropriate categories
             if hasattr(tutor_instance.case_presenter, 'conversation_history'):
                 print(f"Processing case presenter conversation history with {len(tutor_instance.case_presenter.conversation_history)} items")
                 for item in tutor_instance.case_presenter.conversation_history:
@@ -242,25 +232,19 @@ def extract_revealed_info(response, tutor_instance):
                     
                     print(f"Processing Q&A: '{question}' -> '{response_text[:100]}...'")
                     
-                    # Categorize based on question content and ensure response has actual findings
-                    if any(term in question for term in ['symptom', 'feel', 'pain', 'history', 'when', 'how long', 'duration', 'start', 'begin', 'onset', 'since', 'fever', 'cough', 'chest', 'breath', 'headache', 'nausea', 'vomit', 'diarrhea', 'appetite', 'weight', 'fatigue', 'tired', 'weak', 'sweat', 'chills']):
-                        # Only add if response contains actual symptoms or history
-                        if any(term in response_text.lower() for term in ['day', 'week', 'month', 'ago', 'since', 'started', 'began', 'developed', 'noticed', 'experienced']):
-                            key = question[:50] + '...' if len(question) > 50 else question
-                            revealed_info["history"][key] = summarize_text(response_text)
-                            print(f"Added history item: {key}")
-                    elif any(term in question for term in ['test', 'lab', 'xray', 'x-ray', 'ct', 'mri', 'culture', 'blood', 'urine', 'csf', 'imaging', 'diagnostic', 'result']):
-                        # Only add if response contains actual values or results
-                        if any(term in response_text.lower() for term in ['result', 'show', 'reveal', 'found', 'positive', 'negative', 'elevated', 'normal', 'abnormal', 'mm', 'mg', 'dl', 'ml', '/']):
-                            key = question[:50] + '...' if len(question) > 50 else question
-                            revealed_info["labs"][key] = summarize_text(response_text)
-                            print(f"Added labs item: {key}")
-                    elif any(term in question for term in ['exam', 'check', 'look', 'auscultate', 'palpate', 'percuss', 'observe', 'vital', 'temperature', 'pulse', 'pressure', 'listen', 'heart', 'lung', 'abdomen', 'neuro', 'skin', 'lymph', 'neck', 'head', 'eye', 'ear', 'nose', 'throat', 'mouth', 'extremity', 'reflex']):
-                        # Only add if response contains actual physical findings
-                        if any(term in response_text.lower() for term in ['auscultation', 'palpation', 'percussion', 'tenderness', 'rales', 'crackles', 'wheezes', 'murmur', 'rhythm', 'sound', 'reflex', 'strength', 'sensation', 'range', 'motion']):
-                            key = question[:50] + '...' if len(question) > 50 else question
-                            revealed_info["exam"][key] = summarize_text(response_text)
-                            print(f"Added exam item: {key}")
+                    # Improved question categorization logic
+                    if any(term in question for term in ['symptom', 'feel', 'pain', 'history', 'when did', 'how long', 'duration', 'started', 'begin', 'onset', 'since when', 'fever', 'cough', 'chest', 'breathing', 'headache']):
+                        key = question[:30] + '...' if len(question) > 30 else question
+                        revealed_info["history"][key] = response_text[:50] + '...' if len(response_text) > 50 else response_text
+                        print(f"Added history item: {key}")
+                    elif any(term in question for term in ['test', 'lab', 'xray', 'ct', 'mri', 'culture', 'blood', 'imaging', 'diagnostic']):
+                        key = question[:30] + '...' if len(question) > 30 else question
+                        revealed_info["labs"][key] = response_text[:50] + '...' if len(response_text) > 50 else response_text
+                        print(f"Added labs item: {key}")
+                    elif any(term in question for term in ['exam', 'check', 'look', 'auscultate', 'palpate', 'observe', 'vital', 'temperature', 'pulse', 'pressure', 'listen']):
+                        key = question[:30] + '...' if len(question) > 30 else question
+                        revealed_info["exam"][key] = response_text[:50] + '...' if len(response_text) > 50 else response_text
+                        print(f"Added exam item: {key}")
         
         # Check if we also have a patient agent with conversation history
         if hasattr(tutor_instance, 'patient') and hasattr(tutor_instance.patient, 'conversation_history'):
@@ -269,45 +253,19 @@ def extract_revealed_info(response, tutor_instance):
                 question = item.get('question', '').lower()
                 response_text = item.get('response', '')
                 
-                if not response_text or len(response_text) < 10:  # Skip very short responses
-                    continue
-                    
-                # Skip responses that are clearly not case-specific information
-                if any(phrase in response_text.lower() for phrase in [
-                    "i don't know", "i'm not sure", "you'd have to ask", 
-                    "i can't remember", "maybe you should", "what do you mean",
-                    "could you explain", "i don't understand"
-                ]):
-                    continue
-                    
-                print(f"Processing patient Q&A: '{question}' -> '{response_text[:100]}...'")
+                print(f"Processing patient question: '{question}'")
                 
-                # Create a unique key based on the question
-                key = f"Patient: {question[:50] + '...' if len(question) > 50 else question}"
-                
-                # Only add if this exact response isn't already in history
-                summarized_response = summarize_text(response_text)
-                if not any(summarized_response == value for value in revealed_info["history"].values()):
-                    # Add to history by default, since almost all patient responses are about history
-                    revealed_info["history"][key] = summarized_response
+                # Similar categorization as above
+                if any(term in question for term in ['symptom', 'feel', 'pain', 'history', 'when did', 'how long', 'duration', 'started', 'begin', 'onset', 'since when']):
+                    key = question[:30] + '...' if len(question) > 30 else question
+                    revealed_info["history"][key] = response_text[:50] + '...' if len(response_text) > 50 else response_text
                     print(f"Added patient history item: {key}")
-                    
-                    # Optional: Check if this contains any lab values that should also go in labs section
-                    if any(term in response_text.lower() for term in ['test', 'positive', 'negative', 'blood', 'urine', 'result', 'culture']):
-                        if any(term in response_text.lower() for term in ['result', 'show', 'reveal', 'found', 'positive', 'negative', 'elevated', 'normal', 'abnormal', 'mm', 'mg', 'dl', 'ml', '/']):
-                            lab_key = f"Patient labs: {question[:40] + '...' if len(question) > 40 else question}"
-                            revealed_info["labs"][lab_key] = summarized_response
-                            print(f"Added patient response to labs section: {lab_key}")
         
-        # Remove the initial guidance messages if we have actual information
-        if (revealed_info["history"] or revealed_info["exam"] or revealed_info["labs"]) and hasattr(tutor_instance, '_revealed_info_initialized'):
-            if "Start exploring" in revealed_info["history"] and len(revealed_info["history"]) > 1:
-                del revealed_info["history"]["Start exploring"]
-            if "Physical examination" in revealed_info["exam"] and len(revealed_info["exam"]) > 1:
-                del revealed_info["exam"]["Physical examination"]
-            if "Diagnostic tests" in revealed_info["labs"] and len(revealed_info["labs"]) > 1:
-                del revealed_info["labs"]["Diagnostic tests"]
-        
+        # Add the current exam_type if found
+        if exam_type:
+            revealed_info["exam"][exam_type] = "Examined"
+            print(f"Added current exam_type: {exam_type}")
+            
         # Print the final revealed info for debugging
         print(f"Final revealed_info: {revealed_info}")
             
@@ -342,64 +300,64 @@ def stream_response(response):
 @app.post("/start_case")
 async def start_case(request: Request, organism: str = Form(None)):
     try:
-        if not organism:
-            # Redirect to the organism selection page if no organism is specified
-            return templates.TemplateResponse("organism_selection.html", {
-                "request": request,
-                "organisms": AVAILABLE_ORGANISMS
-            })
+        # First try to get the organism from the form data
+        form_data = await request.form()
+        organism_param = organism or form_data.get("organism")
+        
+        # If still not found, try to get from query params
+        if not organism_param:
+            query_params = request.query_params
+            organism_param = query_params.get("organism")
             
-        # Check if this is a random case request
-        is_random_case = False
-        if organism == "RANDOM_CASE":
-            # Select a random organism
-            organism = random.choice(AVAILABLE_ORGANISMS)
-            is_random_case = True
-            print(f"Selected random organism: {organism}")
+        # Validate the organism
+        if not organism_param:
+            raise ValueError("Please specify an organism")
+            
+        cleaned_organism = organism_param.strip().lower()
+            
+        # Create a new tutor instance
+        tutor = MedicalMicrobiologyTutor()
+        session_id = "test_session"  # In a real app, generate unique session IDs
+        tutors[session_id] = tutor
         
-        # Generate a unique session ID
-        session_id = f"session_{os.urandom(8).hex()}"
-        print(f"Created new session ID: {session_id}")
+        # Get the initial case with the specified organism
+        initial_case = tutor.start_new_case(organism=cleaned_organism)
         
-        # Initialize a tutor instance
-        tutors[session_id] = MedicalMicrobiologyTutor()
+        # Ensure we have a response to stream
+        if not initial_case:
+            initial_case = f"Error: No case was generated for {cleaned_organism}. Please try again."
         
-        # Generate a new case for the specified organism
-        tutor = tutors[session_id]
-        print(f"Starting case generation for organism: {organism} (random: {is_random_case})")
+        # Log the response for debugging
+        print(f"Initial case response: {initial_case}")
         
-        # Generate the case
+        # Extract any revealed information
+        try:
+            revealed_info = extract_revealed_info(initial_case, tutor)
+            # Ensure we have initial values
+            if not revealed_info.get("history") and not revealed_info.get("exam") and not revealed_info.get("labs"):
+                revealed_info["history"] = {"Start exploring": "Ask questions about symptoms, history, and exposures"}
+                revealed_info["exam"] = {"Physical examination": "Ask to examine specific body systems"}
+                revealed_info["labs"] = {"Diagnostic tests": "Request specific labs or tests when ready"}
+                print("Added initial values to empty revealed_info")
+        except Exception as e:
+            print(f"Error extracting revealed info: {str(e)}")
+            print(traceback.format_exc())
+            # Initialize with default values
+            revealed_info = {
+                "history": {"Start exploring": "Ask questions about symptoms, history, and exposures"},
+                "exam": {"Physical examination": "Ask to examine specific body systems"},
+                "labs": {"Diagnostic tests": "Request specific labs or tests when ready"}
+            }
+        
         async def generate_events():
             try:
-                # Initial event
-                print(f"Sending start event for {organism}")
-                yield f"event: start\ndata: Starting case generation for {'' if is_random_case else organism}...\n\n"
-                await asyncio.sleep(0.1)
-                
-                # Indicate that case generation has started
-                print(f"Sending update event for {organism}")
-                yield f"event: update\ndata: Generating case...\n\n"
-                
-                # Start the case for the specified organism
-                print(f"Calling tutor.start_new_case with organism: {organism}")
-                response = tutor.start_new_case(organism)
-                print(f"Case generated successfully for {organism}, response type: {type(response)}")
-                
-                # Format the response for the frontend
-                formatted_response = process_response(response)
-                print(f"Formatted response (first 100 chars): {formatted_response[:100]}...")
-                
-                # Get revealed info for side panel
-                revealed_info = extract_revealed_info(response, tutor)
-                print(f"Extracted revealed info for side panel with {len(revealed_info.get('history', {}))} history items")
-                
-                # Create a response payload with the case info
-                payload = {
-                    "message": formatted_response,
-                    "session_id": session_id,
-                    "status": "success",
-                    "is_random_case": is_random_case,
-                    "revealed_info": revealed_info
+                # Process the response
+                processed_response = process_response(initial_case)
+                # Combine response with revealed info
+                response_data = {
+                    'chunk': processed_response,
+                    'revealed_info': revealed_info,
+                    'organism': cleaned_organism
                 }
                 
                 # Send the full response payload
@@ -523,6 +481,102 @@ async def start_case_get(request: Request, organism: str = None):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/start_case")
+async def start_case_get(request: Request, organism: str = None):
+    try:
+        # Get organism from query params
+        organism_param = organism or request.query_params.get("organism")
+            
+        # Validate the organism
+        if not organism_param:
+            raise ValueError("Please specify an organism")
+            
+        cleaned_organism = organism_param.strip().lower()
+        print(f"Starting case generation for organism: {cleaned_organism}")
+            
+        # Create a new tutor instance
+        tutor = MedicalMicrobiologyTutor()
+        session_id = "test_session"  # In a real app, generate unique session IDs
+        tutors[session_id] = tutor
+        
+        # Get the initial case with the specified organism
+        try:
+            print(f"Calling tutor.start_new_case with organism: {cleaned_organism}")
+            initial_case = tutor.start_new_case(organism=cleaned_organism)
+            
+            # Check if we got a valid response
+            if not initial_case:
+                print(f"No case was generated for {cleaned_organism}, using default message")
+                initial_case = f"A new case involving {cleaned_organism} has been started. What would you like to know about the patient?"
+        except Exception as e:
+            print(f"Error in tutor.start_new_case: {str(e)}")
+            print(traceback.format_exc())
+            initial_case = f"Error generating case for {cleaned_organism}: {str(e)[:100]}... Let's try to continue with a basic case."
+        
+        # Log the response for debugging
+        print(f"Initial case response type: {type(initial_case)}")
+        if isinstance(initial_case, str):
+            print(f"Initial case response (first 100 chars): {initial_case[:100]}...")
+        elif isinstance(initial_case, dict):
+            print(f"Initial case response keys: {initial_case.keys()}")
+        
+        # Extract any revealed information
+        try:
+            revealed_info = extract_revealed_info(initial_case, tutor)
+            # Ensure we have initial values
+            if not revealed_info.get("history") and not revealed_info.get("exam") and not revealed_info.get("labs"):
+                revealed_info["history"] = {"Start exploring": "Ask questions about symptoms, history, and exposures"}
+                revealed_info["exam"] = {"Physical examination": "Ask to examine specific body systems"}
+                revealed_info["labs"] = {"Diagnostic tests": "Request specific labs or tests when ready"}
+                print("Added initial values to empty revealed_info")
+        except Exception as e:
+            print(f"Error extracting revealed info: {str(e)}")
+            print(traceback.format_exc())
+            # Initialize with default values
+            revealed_info = {
+                "history": {"Start exploring": "Ask questions about symptoms, history, and exposures"},
+                "exam": {"Physical examination": "Ask to examine specific body systems"},
+                "labs": {"Diagnostic tests": "Request specific labs or tests when ready"}
+            }
+        
+        async def generate_events():
+            try:
+                # Process the response
+                processed_response = process_response(initial_case)
+                print(f"Processed response (first 100 chars): {processed_response[:100]}...")
+                
+                # Combine response with revealed info
+                response_data = {
+                    'chunk': processed_response,
+                    'revealed_info': revealed_info,
+                    'organism': cleaned_organism
+                }
+                
+                # Send the processed response as a data event
+                yield f"data: {json.dumps(response_data)}\n\n"
+                # Send the completion event
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                error_msg = f"Error streaming response: {str(e)}"
+                print(f"Error in generate_events: {error_msg}")
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+                yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(
+            generate_events(),
+            media_type="text/event-stream"
+        )
+    except Exception as e:
+        error_msg = f"Error starting case: {str(e)}\n{traceback.format_exc()}"
+        print(f"Error in start_case_get: {error_msg}")
+        async def error_event():
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(
+            error_event(),
+            media_type="text/event-stream"
+        )
+
 @app.post("/chat")
 async def chat(request: Request, message: str = Form(...), session_id: str = Form(...)):
     try:
@@ -535,9 +589,6 @@ async def chat(request: Request, message: str = Form(...), session_id: str = For
                 "error": "Session not found. Please start a new case.",
                 "chunk": "Tutor: Session not found. Please start a new case."
             }
-        
-        # Store the last user message for context
-        tutor.last_user_message = message
         
         # Check if message contains a request for a new case with specific organism
         if message.lower().strip().startswith("new case"):
@@ -621,7 +672,7 @@ async def chat(request: Request, message: str = Form(...), session_id: str = For
                 # Add this exam info directly to revealed info
                 if exam_type and exam_response:
                     print(f"Adding physical exam info directly from response: {exam_type}")
-                    revealed_info["exam"][f"Examined {exam_type}"] = summarize_text(exam_response)
+                    revealed_info["exam"][f"Examined {exam_type}"] = exam_response[:50] + "..." if len(exam_response) > 50 else exam_response
         except Exception as e:
             print(f"Error processing response: {str(e)}")
             processed_response = f"Tutor: Error processing response: {str(e)}"
@@ -699,9 +750,6 @@ async def chat_alt(request: Request):
                 "chunk": "Tutor: Session not found. Please start a new case."
             }
         
-        # Store the last user message for context
-        tutor.last_user_message = message
-        
         # Check if message contains a request for a new case with specific organism
         if message.lower().strip().startswith("new case"):
             print("Processing new case request")
@@ -784,7 +832,7 @@ async def chat_alt(request: Request):
                 # Add this exam info directly to revealed info
                 if exam_type and exam_response:
                     print(f"Adding physical exam info directly from response: {exam_type}")
-                    revealed_info["exam"][f"Examined {exam_type}"] = summarize_text(exam_response)
+                    revealed_info["exam"][f"Examined {exam_type}"] = exam_response[:50] + "..." if len(exam_response) > 50 else exam_response
         except Exception as e:
             print(f"Error processing response: {str(e)}")
             processed_response = f"Tutor: Error processing response: {str(e)}"
@@ -841,63 +889,3 @@ async def reset_alt(request: Request):
             "error": error_msg,
             "chunk": "Tutor: Error resetting session. Please try again."
         }
-
-def summarize_text(text, max_length=100):
-    """Summarize text using GPT-4o mini if it's longer than max_length."""
-    global summarize_cache
-    
-    if not text or len(text) <= max_length:
-        return text
-    
-    # Check cache first
-    if text in summarize_cache:
-        return summarize_cache[text]
-    
-    # Get LLM
-    llm = initialize_summarize_llm()
-    if llm is None:
-        return text[:max_length] + "..."
-    
-    try:
-        # Create prompt for summarization
-        messages = [
-            SystemMessage(content="""You are a medical information summarizer for a clinical teaching application.
-            Your task is to summarize detailed medical information into concise, clinically useful summaries.
-            
-            Guidelines:
-            1. ALWAYS preserve specific numbers (vital signs, lab values, etc.)
-            2. ALWAYS preserve specific findings (rales, murmurs, rashes, etc.)
-            3. ALWAYS preserve timing information (onset, duration, frequency)
-            4. ALWAYS preserve anatomical locations
-            5. ALWAYS preserve pertinent negatives
-            6. Use proper medical terminology
-            7. Keep your summary to 1-2 short, factual sentences
-            8. Focus on objective findings over subjective interpretations
-            
-            Examples:
-            Input: "The patient reports a fever that started 3 days ago, reaching 39.2°C at its highest. They also note a productive cough with yellow sputum, and chest pain that worsens with deep breathing. They deny any hemoptysis or night sweats."
-            Output: "Fever of 39.2°C for 3 days with productive yellow sputum and pleuritic chest pain; no hemoptysis or night sweats."
-            
-            Input: "On examination of the chest, there are crackles in the right lower lobe with decreased breath sounds. No wheezing is appreciated. Tactile fremitus is increased in the affected area. The left lung is clear to auscultation."
-            Output: "Right lower lobe crackles with decreased breath sounds and increased tactile fremitus; left lung clear."
-            
-            Input: "Labs show WBC 15.2, neutrophils 85%, bands 8%. CRP is elevated at 85. Blood cultures are pending. Procalcitonin is 2.4."
-            Output: "WBC 15.2 (85% neutrophils, 8% bands), CRP 85, procalcitonin 2.4; cultures pending."
-            """),
-            HumanMessage(content=f"Summarize this medical information, preserving all specific clinical details: {text}")
-        ]
-        
-        # Get summary
-        response = llm.invoke(messages)
-        summary = response.content.strip()
-        
-        print(f"Summarized text from {len(text)} chars to {len(summary)} chars")
-        
-        # Cache the result
-        summarize_cache[text] = summary
-        
-        return summary
-    except Exception as e:
-        print(f"Error summarizing text: {str(e)}")
-        # Fall back to truncation if summarization fails
-        return text[:max_length] + "..."

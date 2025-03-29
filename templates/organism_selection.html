@@ -41,6 +41,7 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+<<<<<<< HEAD
         
         .random-case-btn {
             display: block;
@@ -60,6 +61,8 @@
         .random-case-btn:hover {
             background-color: #3e8e41;
         }
+=======
+>>>>>>> 5206f79 (acutally pushed)
     </style>
 </head>
 <body>
@@ -70,9 +73,12 @@
             <p>Select an organism for your clinical case study, or enter a custom one:</p>
         </div>
         
+<<<<<<< HEAD
         <!-- Random Case Button -->
         <button class="random-case-btn" onclick="selectRandomOrganism()">Choose Random Case</button>
         
+=======
+>>>>>>> 5206f79 (acutally pushed)
         <div class="organism-list">
             {% for organism in organisms %}
             <div class="organism-card" onclick="selectOrganism('{{ organism }}')">
@@ -102,6 +108,7 @@
             document.getElementById('selectedOrganism').value = organism;
         }
         
+<<<<<<< HEAD
         function selectRandomOrganism() {
             // Set a special value to indicate random organism selection
             document.getElementById('selectedOrganism').value = "RANDOM_CASE";
@@ -109,6 +116,8 @@
             document.getElementById('caseForm').dispatchEvent(new Event('submit'));
         }
         
+=======
+>>>>>>> 5206f79 (acutally pushed)
         function showLoading() {
             document.getElementById('loadingOverlay').style.display = 'flex';
             document.getElementById('startBtn').disabled = true;
