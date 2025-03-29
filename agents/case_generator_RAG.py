@@ -18,7 +18,7 @@ class CaseGeneratorRAGAgent(BaseAgent):
         
         # Default organism if none is specified
         self.organism = os.getenv("DEFAULT_ORGANISM", "staphylococcus")
-        self.collection = f"{self.organism}_collection"
+        self.collection = "union_collection"
         
         # System prompt for case generation
         self.system_prompt = """You are an expert medical microbiologist specializing in creating realistic clinical cases.
@@ -29,10 +29,17 @@ class CaseGeneratorRAGAgent(BaseAgent):
         self.embeddings = AzureOpenAIEmbeddings(model="text-embedding-3-large")
         print(os.getenv("QDRANT_URL"))
         # Initialize Qdrant client
-        self.qdrant_client = QdrantClient(
-            url=os.getenv("QDRANT_URL"),
-            api_key=os.getenv("QDRANT_API_KEY"),
-        )
+        try:
+            self.qdrant_client = QdrantClient(
+                url=os.getenv("QDRANT_URL"),
+                api_key=os.getenv("QDRANT_API_KEY"),
+                timeout=60  # Increase timeout to 60 seconds
+            )
+            print("Successfully initialized Qdrant client")
+        except Exception as e:
+            print(f"Error initializing Qdrant client: {str(e)}")
+            print("Will use fallback generation when needed")
+            self.qdrant_client = None
         
         # Initialize RAG-specific LLM
         self.rag_llm = AzureChatOpenAI(
@@ -82,8 +89,10 @@ class CaseGeneratorRAGAgent(BaseAgent):
             parts = instruction.lower().split("organism:")
             if len(parts) > 1:
                 self.organism = parts[1].strip()
-                self.collection = f"{self.organism}_collection"
+                # Keep collection name fixed as "union_collection"
+                self.collection = "union_collection"
                 self.output_dir = f"outputs/{self.organism}_case_study"
+                print(f"Using organism: {self.organism} with collection: {self.collection}")
         
         # Generate the case using RAG
         case_text = self.generate_case()
@@ -106,41 +115,104 @@ class CaseGeneratorRAGAgent(BaseAgent):
         self.qdrant_call_count = 0
         
         try:
+            # Check if Qdrant client is available, if not use fallback
+            if self.qdrant_client is None:
+                print("No Qdrant client available, using fallback case generation")
+                return self._fallback_case_generation()
+            
+            print("Attempting to generate case with RAG...")
+            # Try to get at least one RAG context to validate the connection
+            test_context = self._get_rag_context(f"Information about {self.organism}")
+            
+            # If we couldn't get any context, use fallback
+            if not test_context or len(test_context.strip()) < 20:
+                print("Could not retrieve sufficient context, using fallback case generation")
+                return self._fallback_case_generation()
+            
+            print("Successfully retrieved test context, proceeding with RAG case generation")
             print("Generating condensed sections of the case...")
-            # Generate condensed sections of the case
-            self._generate_patient_info()  # Includes patient info and chief complaint
-            self._generate_history_and_exam()  # Combined history and physical exam
-            self._generate_diagnostics()  # Combined labs, imaging, and microbiology
-            self._generate_diagnosis_and_treatment()  # Combined diagnosis and treatment
             
-            # Generate guiding questions for each section
-            for section_name in self.case_sections:
-                if self.case_sections[section_name]:
-                    self._generate_guiding_questions(section_name)
-            
-            print("Combining all sections into a complete case...")
-            case_text = self._combine_case_sections()
-            print("Case combined successfully.")
-            
-            # Save the case to a file if output directory is set
-            self._save_to_file("case.txt", case_text)
-            
-            # Save individual sections
-            for section_name, section_content in self.case_sections.items():
-                if section_content:
-                    self._save_to_file(f"{section_name}.txt", section_content)
-            
-            # Save guiding questions for each section
-            for section_name, questions in self.guiding_questions.items():
-                if questions:
-                    questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
-                    self._save_to_file(f"{section_name}_questions.txt", questions_text)
-            
-            print("Logging Qdrant API call statistics...")
-            stats = self.get_qdrant_call_stats()
-            print(f"Qdrant API call statistics: {stats}")
-            
-            return case_text
+            try:
+                # Generate condensed sections of the case with timeouts for each section
+                timeout_occurred = False
+                
+                # Simple timeout function using a thread and exception
+                def generate_with_timeout(func, timeout_seconds=40):
+                    import threading
+                    import _thread
+                    result = [None]
+                    exception = [None]
+                    
+                    def target():
+                        try:
+                            result[0] = func()
+                        except Exception as e:
+                            exception[0] = e
+                    
+                    thread = threading.Thread(target=target)
+                    thread.daemon = True
+                    thread.start()
+                    thread.join(timeout_seconds)
+                    
+                    if thread.is_alive():
+                        _thread.interrupt_main()
+                        return None, TimeoutError("Function timed out")
+                    
+                    if exception[0]:
+                        return None, exception[0]
+                        
+                    return result[0], None
+                
+                # Try to generate each section with timeout
+                for generator_func, section_name in [
+                    (self._generate_patient_info, "patient_info"),
+                    (self._generate_history_and_exam, "history_and_exam"),
+                    (self._generate_diagnostics, "diagnostics"),
+                    (self._generate_diagnosis_and_treatment, "diagnosis_and_treatment")
+                ]:
+                    print(f"Generating {section_name}...")
+                    result, error = generate_with_timeout(generator_func)
+                    
+                    if error:
+                        print(f"Error or timeout in {section_name} generation: {error}")
+                        timeout_occurred = True
+                        break
+                
+                if timeout_occurred:
+                    print("Section generation timed out, using fallback")
+                    return self._fallback_case_generation()
+                
+                # Generate guiding questions for each section
+                for section_name in self.case_sections:
+                    if self.case_sections[section_name]:
+                        self._generate_guiding_questions(section_name)
+                
+                print("Combining all sections into a complete case...")
+                case_text = self._combine_case_sections()
+                print("Case combined successfully.")
+                
+                # Save the case to a file if output directory is set
+                self._save_to_file("case.txt", case_text)
+                
+                # Save individual sections
+                for section_name, section_content in self.case_sections.items():
+                    if section_content:
+                        self._save_to_file(f"{section_name}.txt", section_content)
+                
+                # Save guiding questions for each section
+                for section_name, questions in self.guiding_questions.items():
+                    if questions:
+                        questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
+                        self._save_to_file(f"{section_name}_questions.txt", questions_text)
+                
+                print("Logging Qdrant API call statistics...")
+                stats = self.get_qdrant_call_stats()
+                print(f"Qdrant API call statistics: {stats}")
+                
+                return case_text
+            except Exception as e:
+                print(f"Error in generating RAG case sections: {str(e)}")
+                return self._fallback_case_generation()
         except Exception as e:
             print(f"Error in RAG case generation: {str(e)}")
             return self._fallback_case_generation()
@@ -394,24 +466,39 @@ Case
     def _get_rag_context(self, query: str) -> str:
         print(f"Retrieving RAG context for query: {query}...")
         try:
+            # If no Qdrant client, return empty context
+            if self.qdrant_client is None:
+                print("No Qdrant client available, returning empty context")
+                return ""
+                
             # Increment the call counter
             self.qdrant_call_count += 1
             
-            embedded_query = self.embeddings.embed_query(query)
+            # Try to get embeddings, with error handling
+            try:
+                embedded_query = self.embeddings.embed_query(query)
+            except Exception as e:
+                print(f"Error embedding query: {str(e)}")
+                return ""
             
-            # Retrieve top matches in Qdrant database
-            search_results = self.qdrant_client.search(
-                collection_name=self.collection,
-                query_vector=embedded_query,
-                limit=5,  # Number of results
-                with_payload=True
-            )
-            
-            context = ""
-            for item in search_results:
-                context += item.payload.get('text', '')
-            
-            return context
+            # Retrieve top matches in Qdrant database, with timeout handling
+            try:
+                search_results = self.qdrant_client.search(
+                    collection_name=self.collection,
+                    query_vector=embedded_query,
+                    limit=5,  # Number of results
+                    with_payload=True,
+                    timeout=30  # 30 second timeout for the search
+                )
+                
+                context = ""
+                for item in search_results:
+                    context += item.payload.get('text', '')
+                
+                return context
+            except Exception as e:
+                print(f"Error searching Qdrant: {str(e)}")
+                return ""
         except Exception as e:
             print(f"Error retrieving RAG context: {str(e)}")
             return ""
@@ -434,32 +521,38 @@ Case
         self.context_cache = {}
         
         try:
-            # Generate each section without RAG
-            self.case_sections["patient_info"] = self._fallback_generate_section(
-                "Generate patient demographic information AND chief complaint for a clinical case involving a microbial infection."
-            )
-            self.case_sections["history_and_exam"] = self._fallback_generate_section(
-                "Generate COMBINED medical history AND physical examination for a patient with a microbial infection."
-            )
-            self.case_sections["diagnostics"] = self._fallback_generate_section(
-                "Generate COMBINED laboratory, imaging, and microbiology findings for a patient with a microbial infection."
-            )
-            self.case_sections["diagnosis_and_treatment"] = self._fallback_generate_section(
-                "Generate COMBINED diagnosis AND treatment plan for a patient with a microbial infection."
-            )
+            print(f"Generating fallback case for {self.organism}")
             
-            # Generate fallback guiding questions for each section
-            for section_name in self.case_sections:
-                if self.case_sections[section_name]:
-                    self._fallback_generate_guiding_questions(section_name)
+            # Create a direct prompt that doesn't require RAG
+            fallback_prompt = f"""
+            Create a detailed, medically accurate clinical case involving {self.organism} infection.
             
-            # Combine all sections into a complete case
-            return self._combine_case_sections()
+            The case should include:
+            1. Patient demographics and chief complaint
+            2. History of present illness and physical examination findings
+            3. Relevant laboratory, imaging, and microbiology results 
+            4. Diagnosis and treatment
+            
+            Make sure the case includes typical risk factors, signs, symptoms, and laboratory findings for {self.organism} infection.
+            Format the case in sections with clear clinical presentation and progression.
+            """
+            
+            # Generate a complete case using the LLM directly
+            complete_case = self.llm_layer(fallback_prompt)
+            
+            # Add it to the patient_info section as a placeholder
+            self.case_sections["patient_info"] = complete_case
+            
+            # Generate fallback guiding questions
+            self._fallback_generate_guiding_questions("patient_info")
+            
+            # Return the complete case
+            return complete_case
         except Exception as e:
             print(f"Error in fallback case generation: {str(e)}")
             
             # Return a very basic fallback case if everything fails
-            return """A 45-year-old male presents with fever and productive cough for 3 days. Temperature is 38.5°C, blood pressure 120/80, heart rate 88, respiratory rate 20. Examination reveals crackles in the right lung base. Previously healthy, working as an office worker. Several coworkers have had similar symptoms. Laboratory studies show elevated white blood cell count with neutrophil predominance. Chest X-ray reveals right lower lobe infiltrate. Sputum culture grows Streptococcus pneumoniae."""
+            return f"""A 45-year-old patient presents with symptoms consistent with {self.organism} infection. The patient has relevant risk factors for this infection and typical clinical manifestations. Laboratory studies confirm the presence of {self.organism}. Treatment with appropriate antimicrobials has been initiated."""
 
     def _fallback_generate_section(self, prompt: str) -> str:
         """Generate a section using the standard LLM approach if RAG fails."""

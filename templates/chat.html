@@ -131,13 +131,15 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header text-center">
-                        <h2>HST040 Tutor</h2>
+                        <h2>Medical Microbiology Tutor</h2>
+                        <div id="organism-badge" style="display: none; margin-top: 5px;" class="badge bg-primary">
+                            Current organism: <span id="current-organism-badge"></span>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
                             <div class="col">
-                                <button class="btn btn-primary" onclick="startNewCase()" id="start-case-btn">Start New
-                                    Case</button>
+                                <button class="btn btn-primary" onclick="location.href='/organisms'" id="start-case-btn">Select Organism</button>
                                 <button class="btn btn-secondary" onclick="resetSession()" id="reset-btn">Reset
                                     Session</button>
                             </div>
@@ -228,6 +230,7 @@
             exam: {},
             labs: {}
         };
+        let currentOrganism = null;
 
         function setProcessing(processing) {
             isProcessing = processing;
@@ -248,305 +251,452 @@
         }
 
         function addMessage(message, isUser = false) {
-            if (isUser) {
-                const messageDiv = createMessageDiv(true);
-                messageDiv.textContent = message;
-            } else {
-                currentMessageDiv = createMessageDiv(false);
-                currentMessageDiv.textContent = '';
-                const cursor = document.createElement('span');
-                cursor.className = 'cursor';
-                currentMessageDiv.appendChild(cursor);
-            }
+            const messageDiv = createMessageDiv(isUser);
+            messageDiv.classList.remove('streaming');
+            messageDiv.textContent = message;
+            return messageDiv;
         }
 
-        function appendToMessage(chunk) {
-            if (currentMessageDiv) {
-                // Remove the cursor
-                const cursor = currentMessageDiv.querySelector('.cursor');
-                if (cursor) {
-                    cursor.remove();
-                }
-
-                // Append new text
-                currentMessageDiv.textContent += chunk;
-
-                // Add cursor back
-                const newCursor = document.createElement('span');
-                newCursor.className = 'cursor';
-                currentMessageDiv.appendChild(newCursor);
-
-                // Scroll to bottom
-                const chatContainer = document.getElementById('chat-container');
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            }
-        }
-
-        function finishMessage() {
-            if (currentMessageDiv) {
-                currentMessageDiv.classList.remove('streaming');
-                const cursor = currentMessageDiv.querySelector('.cursor');
-                if (cursor) {
-                    cursor.remove();
-                }
-                currentMessageDiv = null;
-            }
-        }
-
-        function updateRevealedInfo(data) {
-            // Check if there's revealed info in the response
-            if (data && data.revealed_info) {
-                const info = data.revealed_info;
-
-                // Update history items
-                if (info.history) {
-                    for (const key in info.history) {
-                        if (!revealedInfo.history[key]) {
-                            revealedInfo.history[key] = info.history[key];
-                            addInfoItem('history', key, info.history[key]);
-                        }
-                    }
-                }
-
-                // Update exam items
-                if (info.exam) {
-                    for (const key in info.exam) {
-                        if (!revealedInfo.exam[key]) {
-                            revealedInfo.exam[key] = info.exam[key];
-                            addInfoItem('exam', key, info.exam[key]);
-                        }
-                    }
-                }
-
-                // Update lab items
-                if (info.labs) {
-                    for (const key in info.labs) {
-                        if (!revealedInfo.labs[key]) {
-                            revealedInfo.labs[key] = info.labs[key];
-                            addInfoItem('labs', key, info.labs[key]);
-                        }
-                    }
-                }
-
-                // Also check for exam_type in the response which may indicate new exam info
-                if (data.exam_type && !revealedInfo.exam[data.exam_type]) {
-                    const examDescription = formatExamType(data.exam_type);
-                    revealedInfo.exam[data.exam_type] = data.response || "Performed";
-                    addInfoItem('exam', data.exam_type, examDescription);
-                }
-            }
-        }
-
-        function formatExamType(examType) {
-            // Convert exam_type like "respiratory_exam" to "Respiratory Exam"
-            return examType
-                .split('_')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(' ');
-        }
-
-        function addInfoItem(category, key, value) {
-            const listId = `${category}-info`;
-            const list = document.getElementById(listId);
-
-            // Create a unique ID for this item
-            const itemId = `info-${category}-${Date.now()}`;
-
-            // Generate a short version of the key (question)
-            let shortKey = key;
-            if (key.length > 25) {
-                const keyWords = key.split(' ');
-                // Keep first few words that fit within ~25 chars
-                shortKey = '';
-                for (let i = 0; i < keyWords.length; i++) {
-                    if ((shortKey + keyWords[i]).length < 25) {
-                        shortKey += (i > 0 ? ' ' : '') + keyWords[i];
-                    } else {
-                        shortKey += '...';
-                        break;
-                    }
-                }
-            }
-
-            // Create the list item with collapsible details
-            const item = document.createElement('li');
-            item.className = 'list-group-item p-2';
-            item.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <strong class="text-primary">${formatExamType(shortKey)}</strong>
-                    <button class="btn btn-sm btn-outline-secondary" 
-                            type="button" 
-                            data-bs-toggle="collapse" 
-                            data-bs-target="#${itemId}" 
-                            aria-expanded="false">
-                        Details
-                    </button>
-                </div>
-                <div class="collapse mt-2" id="${itemId}">
-                    <div class="card card-body p-2 bg-light">
-                        <strong>Question:</strong> ${key}
-                        <strong class="mt-1">Response:</strong> ${value}
-                    </div>
-                </div>
-            `;
-
-            // Add to the list
-            list.appendChild(item);
-        }
-
-        async function processStream(response) {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            try {
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = line.slice(5);
-                            if (data === '[DONE]') {
-                                finishMessage();
-                                continue;
-                            }
-
-                            try {
-                                const parsed = JSON.parse(data);
-                                if (parsed.error) {
-                                    appendToMessage(`Error: ${parsed.error}`);
-                                } else if (parsed.chunk) {
-                                    appendToMessage(parsed.chunk);
-                                    // Check for revealed info in the response
-                                    updateRevealedInfo(parsed);
-                                }
-                            } catch (e) {
-                                console.error('Failed to parse SSE data:', e);
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Stream reading failed:', error);
-                appendToMessage('\nError: Failed to read response');
-            } finally {
-                finishMessage();
-                setProcessing(false);
-            }
-        }
-
-        async function startNewCase() {
-            if (isProcessing) return;
-            setProcessing(true);
-
-            // Reset revealed info
-            revealedInfo = {
-                history: {},
-                exam: {},
-                labs: {}
-            };
-            document.getElementById('history-info').innerHTML = '';
-            document.getElementById('exam-info').innerHTML = '';
-            document.getElementById('labs-info').innerHTML = '';
-
-            try {
-                const response = await fetch('/start_case', {
-                    method: 'POST',
-                });
-
-                if (!response.ok) throw new Error('Network response was not ok');
-
-                addMessage(null, false);
-                await processStream(response);
-                sessionId = 'test_session';  // In a real app, get this from the response
-            } catch (error) {
-                console.error('Error:', error);
-                addMessage("Error starting new case. Please try again.", false);
-                setProcessing(false);
-            }
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('user-input');
-            const message = input.value.trim();
-            if (!message || isProcessing) return;
-
-            if (!sessionId) {
-                addMessage("Please start a new case first!", false);
+        function updateRevealedInfo(newInfo) {
+            if (!newInfo) {
+                console.log("updateRevealedInfo called with no data");
                 return;
             }
 
-            addMessage(message, true);
-            input.value = '';
-            setProcessing(true);
+            console.log("Updating revealed info with:", newInfo);
 
-            const formData = new FormData();
-            formData.append('message', message);
-            formData.append('session_id', sessionId);
+            // Merge new info with existing info
+            if (newInfo.history) {
+                console.log("Merging history info:", newInfo.history);
+                revealedInfo.history = { ...revealedInfo.history, ...newInfo.history };
+            }
+            if (newInfo.exam) {
+                console.log("Merging exam info:", newInfo.exam);
+                revealedInfo.exam = { ...revealedInfo.exam, ...newInfo.exam };
+            }
+            if (newInfo.labs) {
+                console.log("Merging labs info:", newInfo.labs);
+                revealedInfo.labs = { ...revealedInfo.labs, ...newInfo.labs };
+            }
 
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    body: formData
-                });
+            // Log the updated info
+            console.log("Updated revealed info:", revealedInfo);
 
-                if (!response.ok) throw new Error('Network response was not ok');
+            // Update the UI
+            updateRevealedInfoUI();
+        }
 
-                addMessage(null, false);
-                await processStream(response);
-            } catch (error) {
-                console.error('Error:', error);
-                addMessage("Error processing message. Please try again.", false);
-                setProcessing(false);
+        function updateRevealedInfoUI() {
+            console.log("Updating revealed info UI with:", revealedInfo);
+            
+            // Update history info
+            const historyList = document.getElementById('history-info');
+            historyList.innerHTML = '';
+            for (const [key, value] of Object.entries(revealedInfo.history)) {
+                console.log(`Adding history item: ${key} = ${value}`);
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.innerHTML = `<strong>${key}:</strong> ${value}`;
+                historyList.appendChild(li);
+            }
+
+            // Update exam info
+            const examList = document.getElementById('exam-info');
+            examList.innerHTML = '';
+            for (const [key, value] of Object.entries(revealedInfo.exam)) {
+                console.log(`Adding exam item: ${key} = ${value}`);
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.innerHTML = `<strong>${key}</strong>: ${value}`;
+                examList.appendChild(li);
+            }
+
+            // Update labs info
+            const labsList = document.getElementById('labs-info');
+            labsList.innerHTML = '';
+            for (const [key, value] of Object.entries(revealedInfo.labs)) {
+                console.log(`Adding labs item: ${key} = ${value}`);
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.innerHTML = `<strong>${key}:</strong> ${value}`;
+                labsList.appendChild(li);
+            }
+
+            // If an organism is set, display it
+            if (currentOrganism) {
+                // Update the badge
+                const organismBadge = document.getElementById('organism-badge');
+                const currentOrganismBadge = document.getElementById('current-organism-badge');
+                
+                organismBadge.style.display = 'inline-block';
+                currentOrganismBadge.textContent = currentOrganism;
+                
+                // Check if organism element already exists
+                let organismElement = document.getElementById('current-organism');
+                if (!organismElement) {
+                    // Create a new element for the organism
+                    const revealedInfoDiv = document.getElementById('revealed-info');
+                    const heading = document.createElement('h5');
+                    heading.className = 'mt-3';
+                    heading.textContent = 'Current Organism';
+                    revealedInfoDiv.appendChild(heading);
+                    
+                    organismElement = document.createElement('p');
+                    organismElement.id = 'current-organism';
+                    organismElement.className = 'text-center fw-bold text-primary';
+                    revealedInfoDiv.appendChild(organismElement);
+                }
+                
+                // Update the organism text
+                organismElement.textContent = currentOrganism;
+            } else {
+                // Hide the badge if no organism
+                const organismBadge = document.getElementById('organism-badge');
+                organismBadge.style.display = 'none';
             }
         }
 
-        async function resetSession() {
-            if (!sessionId || isProcessing) return;
+        function sendMessage() {
+            const userInput = document.getElementById('user-input');
+            const message = userInput.value.trim();
+            if (!message || isProcessing) return;
+
+            // Clear the input field
+            userInput.value = '';
+
+            // Add user message to chat
+            addMessage(message, true);
+
+            // Set processing state
             setProcessing(true);
 
-            // Reset revealed info
-            revealedInfo = {
-                history: {},
-                exam: {},
-                labs: {}
-            };
-            document.getElementById('history-info').innerHTML = '';
-            document.getElementById('exam-info').innerHTML = '';
-            document.getElementById('labs-info').innerHTML = '';
-
-            const formData = new FormData();
-            formData.append('session_id', sessionId);
-
-            try {
-                const response = await fetch('/reset', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) throw new Error('Network response was not ok');
-
-                addMessage(null, false);
-                await processStream(response);
-                sessionId = null;
-            } catch (error) {
-                console.error('Error:', error);
-                addMessage("Error resetting session. Please try again.", false);
-                setProcessing(false);
-            }
+            // Create a new event source for the response
+            processUserMessage(message);
         }
 
         function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey && !isProcessing) {
+            if (event.key === 'Enter') {
                 sendMessage();
             }
         }
+
+        function processUserMessage(message) {
+            // Create a new event source for the response
+            if (!sessionId) {
+                // If no session exists, create one
+                sessionId = "test_session"; // In a real app, generate a unique session ID
+            }
+
+            // Check if the message is a new case request
+            if (message.toLowerCase().startsWith('new case')) {
+                // Extract organism if specified
+                let organism = null;
+                if (message.toLowerCase().includes('with')) {
+                    const parts = message.toLowerCase().split('with');
+                    if (parts.length > 1 && parts[1].trim()) {
+                        organism = parts[1].trim();
+                    }
+                }
+                
+                // If organism specified, use it, otherwise direct to organism selection page
+                if (organism) {
+                    currentMessageDiv = createMessageDiv();
+                    fetchWithOrganism(organism);
+                } else {
+                    window.location.href = '/organisms';
+                    return;
+                }
+            } else {
+                // Regular message processing
+                currentMessageDiv = createMessageDiv();
+                
+                // Add progress indicator for chat
+                let timeoutCount = 0;
+                let progressIndicator;
+                
+                function updateProgress() {
+                    timeoutCount++;
+                    if (currentMessageDiv) {
+                        if (!progressIndicator) {
+                            progressIndicator = document.createElement('div');
+                            progressIndicator.className = 'progress-indicator';
+                            progressIndicator.style.fontStyle = 'italic';
+                            progressIndicator.style.marginTop = '10px';
+                            progressIndicator.style.color = '#666';
+                            currentMessageDiv.parentNode.insertBefore(progressIndicator, currentMessageDiv.nextSibling);
+                        }
+                        progressIndicator.textContent = `Thinking${'.'.repeat(timeoutCount % 4)}`;
+                    }
+                }
+                
+                // Start the progress indicator
+                const progressInterval = setInterval(updateProgress, 1000);
+
+                // Use the new GET endpoint instead of POST with form data
+                fetch(`/chat_alt?message=${encodeURIComponent(message)}&session_id=${sessionId}`, {
+                    method: 'GET'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Clear the progress indicator
+                    clearInterval(progressInterval);
+                    if (progressIndicator) {
+                        progressIndicator.remove();
+                    }
+                    
+                    console.log("Chat response data:", data);
+                    
+                    if (data.error) {
+                        currentMessageDiv.textContent = `Error: ${data.error}`;
+                    } else if (data.chunk) {
+                        // Update the response text
+                        currentMessageDiv.textContent = data.chunk;
+                        
+                        // Update revealed info if provided
+                        if (data.revealed_info) {
+                            updateRevealedInfo(data.revealed_info);
+                        }
+                        
+                        // Update organism if provided
+                        if (data.organism) {
+                            currentOrganism = data.organism;
+                            updateRevealedInfoUI();
+                        }
+                    } else {
+                        // Fallback response if no chunk is provided
+                        currentMessageDiv.textContent = "The tutor did not provide a response. Please try again.";
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // Clear the progress indicator
+                    clearInterval(progressInterval);
+                    if (progressIndicator) {
+                        progressIndicator.remove();
+                    }
+                    currentMessageDiv.textContent = "Error: Failed to get response from server. Please check your connection and try again.";
+                })
+                .finally(() => {
+                    // Remove streaming class and set processing to false
+                    currentMessageDiv.classList.remove('streaming');
+                    setProcessing(false);
+                });
+            }
+        }
+
+        function fetchWithOrganism(organism) {
+            const eventSource = new EventSource(`/start_case?organism=${encodeURIComponent(organism)}`);
+            let fullResponse = '';
+            let timeoutCount = 0;
+            let progressIndicator;
+            
+            // Add a progress/waiting indicator
+            function updateProgress() {
+                timeoutCount++;
+                if (currentMessageDiv) {
+                    if (!progressIndicator) {
+                        progressIndicator = document.createElement('div');
+                        progressIndicator.className = 'progress-indicator';
+                        progressIndicator.style.fontStyle = 'italic';
+                        progressIndicator.style.marginTop = '10px';
+                        progressIndicator.style.color = '#666';
+                        currentMessageDiv.parentNode.insertBefore(progressIndicator, currentMessageDiv.nextSibling);
+                    }
+                    progressIndicator.textContent = `Generating case${'.'.repeat(timeoutCount % 4)}`;
+                }
+            }
+            
+            // Start the progress indicator
+            const progressInterval = setInterval(updateProgress, 1000);
+            
+            eventSource.onmessage = function (event) {
+                console.log("Received message:", event.data);
+                
+                // Clear the progress indicator
+                clearInterval(progressInterval);
+                if (progressIndicator) {
+                    progressIndicator.remove();
+                }
+                
+                if (event.data === '[DONE]') {
+                    eventSource.close();
+                    currentMessageDiv.classList.remove('streaming');
+                    setProcessing(false);
+                    return;
+                }
+
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.error) {
+                        currentMessageDiv.textContent = `Error: ${data.error}`;
+                        currentMessageDiv.classList.remove('streaming');
+                        eventSource.close();
+                        setProcessing(false);
+                        return;
+                    }
+
+                    if (data.chunk) {
+                        // Update the response text
+                        fullResponse = data.chunk;
+                        currentMessageDiv.textContent = fullResponse;
+                    }
+
+                    // Update revealed info if provided
+                    if (data.revealed_info) {
+                        updateRevealedInfo(data.revealed_info);
+                    }
+
+                    // Update organism if provided
+                    if (data.organism) {
+                        currentOrganism = data.organism;
+                        updateRevealedInfoUI();
+                    }
+                } catch (error) {
+                    console.error("Error parsing event data:", error, event.data);
+                    currentMessageDiv.textContent = "Error: Failed to parse server response.";
+                    eventSource.close();
+                    setProcessing(false);
+                }
+            };
+
+            eventSource.onerror = function (error) {
+                // Clear the progress indicator
+                clearInterval(progressInterval);
+                if (progressIndicator) {
+                    progressIndicator.remove();
+                }
+                
+                console.error("EventSource error:", error);
+                eventSource.close();
+                currentMessageDiv.classList.remove('streaming');
+                if (!fullResponse) {
+                    currentMessageDiv.textContent = "Error: Failed to get response from server. Please check that the server is running and try again.";
+                }
+                setProcessing(false);
+            };
+            
+            // Set timeout to close connection if no response
+            setTimeout(function() {
+                // Clear the progress indicator
+                clearInterval(progressInterval);
+                if (progressIndicator) {
+                    progressIndicator.remove();
+                }
+                
+                if (eventSource.readyState !== 2) { // 2 = CLOSED
+                    console.log("Closing EventSource due to timeout");
+                    eventSource.close();
+                    if (!fullResponse) {
+                        currentMessageDiv.textContent = "Error: Request timed out. This might be due to a connection issue or the case generation taking too long. Please try again or choose a different organism.";
+                    }
+                    currentMessageDiv.classList.remove('streaming');
+                    setProcessing(false);
+                }
+            }, 60000); // 60 second timeout (increased from 30 seconds)
+        }
+
+        function resetSession() {
+            if (isProcessing) return;
+
+            // Set processing state
+            setProcessing(true);
+
+            // Use URLSearchParams for proper form encoding
+            const formData = new URLSearchParams();
+            formData.append('session_id', sessionId);
+
+            // Try POST request first
+            fetch('/reset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: formData.toString(),
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        // If POST fails, try GET as fallback
+                        console.log("POST reset failed, trying GET...");
+                        return fetch(`/reset_alt?session_id=${sessionId}`);
+                    }
+                    return response;
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Reset response data:", data);
+                    
+                    // Clear the chat container
+                    document.getElementById('chat-container').innerHTML = '';
+                    document.getElementById('typing-indicator').style.display = 'none';
+
+                    // Reset revealed info
+                    revealedInfo = {
+                        history: {},
+                        exam: {},
+                        labs: {}
+                    };
+                    currentOrganism = null;
+                    updateRevealedInfoUI();
+                    
+                    // Hide the organism badge
+                    const organismBadge = document.getElementById('organism-badge');
+                    organismBadge.style.display = 'none';
+
+                    // Add system message
+                    if (data.chunk) {
+                        addMessage(data.chunk);
+                    } else {
+                        addMessage('Session reset. Click "Select Organism" to begin.');
+                    }
+
+                    // Unset processing state
+                    setProcessing(false);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    addMessage('Error resetting session. Please try again.');
+                    setProcessing(false);
+                });
+        }
+
+        // Function to extract URL parameters
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            const results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+
+        // Check if there's an organism parameter in the URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const organism = getUrlParameter('organism');
+            if (organism) {
+                // Add loading message to chat container
+                const chatContainer = document.getElementById('chat-container');
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'message tutor-message';
+                loadingDiv.textContent = `Loading case for ${organism}. This may take a moment...`;
+                chatContainer.appendChild(loadingDiv);
+                
+                // If there's an organism in the URL, start a case with it
+                setTimeout(() => {
+                    currentMessageDiv = createMessageDiv();
+                    setProcessing(true);
+                    fetchWithOrganism(organism);
+                }, 100); // Small delay to ensure UI updates first
+            }
+        });
     </script>
 </body>
 

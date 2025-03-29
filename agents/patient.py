@@ -26,6 +26,7 @@ class RespondToQuestionAction(BaseAction):
         # Initialize Azure OpenAI
         self.llm = AzureChatOpenAI(
             openai_api_type="azure",
+            model="gpt-4o",
             openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),

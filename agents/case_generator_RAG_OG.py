@@ -22,13 +22,12 @@ qdrant_client = QdrantClient(
 
 # Initialize LLM model for generating case
 llm = AzureChatOpenAI(
-    azure_deployment='gpt-35-turbo-16k',  # or your deployment
+    azure_deployment='gpt-4o',  # or your deployment
     api_version="2024-09-01-preview",  # or your api version
-    temperature=0,
     max_tokens=None,
     timeout=None,
     max_retries=2,
-    model="gpt-3.5-turbo",
+    model="gpt-4o",
 )
 
 # Set file path for outputs
@@ -56,7 +55,7 @@ def generate_case_section(input_text, file_suffix):
     
     # Retrieve top matches in Qdrant database
     search_results = qdrant_client.search(
-        collection_name=COLLECTION,
+        collection_name='union_collection',
         query_vector=embedded_query,
         limit=5,  # Number of results
         with_payload=True
