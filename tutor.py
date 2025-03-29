@@ -78,18 +78,26 @@ class MedicalMicrobiologyTutor(ManagerAgent):
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             deployment_name=deployment_name,
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=temperature,
+        
             streaming=True,
         )
         
         # Initialize specialized agents with the same deployment name
+        """
         self.case_presenter = CasePresenterAgent(model_name=deployment_name, temperature=temperature)
         self.case_generator = CaseGeneratorRAGAgent(model_name=deployment_name, temperature=temperature)
         self.knowledge_assessment = KnowledgeAssessmentAgent(model_name=deployment_name, temperature=temperature)
         self.patient = PatientAgent(model_name=deployment_name, temperature=temperature)
         self.helper = HelperAgent(model_name=deployment_name, temperature=temperature)
-        
-        # Initialize manager agent with specialized agents as team members
+        """
+
+
+        self.case_presenter = CasePresenterAgent(model_name=deployment_name)
+        self.case_generator = CaseGeneratorRAGAgent(model_name=deployment_name)
+        self.knowledge_assessment = KnowledgeAssessmentAgent(model_name=deployment_name)
+        self.patient = PatientAgent(model_name=deployment_name)
+        self.helper = HelperAgent(model_name=deployment_name)
+        # Initialize manager agenft with specialized agents as team members
         super().__init__( 
             llm=self.llm,
             name="MedicalMicrobiologyTutor",
@@ -428,42 +436,77 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         ]
         self.add_example(task9, action_chain9)
     
-    def start_new_case(self) -> str:
-        """Start a new case session by first generating a case, then having the case presenter provide a one-liner presentation."""
+    def start_new_case(self, organism: str = None) -> str:
+        """Start a new case session by first generating a case, then having the case presenter provide a one-liner presentation.
+        
+        Args:
+            organism: Optional organism name to use for the case. If None, a default organism will be used.
+        """
         # Reset the tutor state for the new case
         self.reset()
         
         try:
+            # Format the instruction with organism if provided
+            instruction = "Generate a new clinical case"
+            if organism:
+                instruction = f"Generate a new clinical case organism:{organism}"
+                print(f"Starting case generation for organism: {organism}")
+            
             # Generate the new case using the case generator
-            generator_response = self.case_generator(TaskPackage(
-                instruction="Generate a new clinical case",
-                task_creator=self.id
-            ))
+            try:
+                generator_response = self.case_generator(TaskPackage(
+                    instruction=instruction,
+                    task_creator=self.id
+                ))
+                
+                print(f"Generator response type: {type(generator_response)}")
+                if isinstance(generator_response, dict):
+                    print(f"Generator response keys: {generator_response.keys()}")
+            except Exception as e:
+                print(f"Error during case generation: {str(e)}")
+                # Provide a fallback case with the organism
+                if organism:
+                    return f"Patient with suspected {organism} infection presents for evaluation. The details of the case will be revealed as you ask questions."
+                else:
+                    return "A patient presents for evaluation. Ask questions to learn more about their condition."
             
             # Extract the case text
             case_data = generator_response.get("case_text", "")
             if not case_data:
                 print("Warning: No case data in generator response, using default case.")
-                case_data = "A 45-year-old male presents with fever and productive cough for 3 days."
+                if organism:
+                    case_data = f"A patient presents with symptoms suggestive of {organism} infection."
+                else:
+                    case_data = "A 45-year-old patient presents with fever and productive cough for 3 days."
             
             # Store the case in both case presenter and patient agents
-            self.case_presenter.current_case = {"case_text": case_data}  
-            self.patient.current_case = {"case_text": case_data}
-            
-            # Have the case presenter present the case
-            presentation = self.case_presenter(TaskPackage(
-                instruction="present initial case",
-                task_creator=self.id
-            ))
-            
-            # Extract the presentation text
-            if isinstance(presentation, dict):
-                return presentation.get("response", "A patient presents for evaluation.")
-            return presentation
+            try:
+                self.case_presenter.current_case = {"case_text": case_data}  
+                self.patient.current_case = {"case_text": case_data}
+                
+                # Have the case presenter present the case
+                presentation = self.case_presenter(TaskPackage(
+                    instruction="present initial case",
+                    task_creator=self.id
+                ))
+                
+                # Extract the presentation text
+                if isinstance(presentation, dict):
+                    return presentation.get("response", "A patient presents for evaluation.")
+                return presentation
+            except Exception as e:
+                print(f"Error in case presentation: {str(e)}")
+                # Return the case data directly if case presenter fails
+                return f"A new case has been generated: {case_data[:200]}..."
             
         except Exception as e:
             print(f"Error starting case: {str(e)}")
-            return "Error starting case. Please try again."
+            
+            # Return a more detailed error message with the organism
+            if organism:
+                return f"We encountered an issue starting a case for {organism}. Here's what we know: A patient with symptoms consistent with {organism} infection has been admitted. You may continue by asking questions about their condition."
+            else:
+                return "Error starting case. A patient presents with an unspecified infection. Please begin your evaluation."
     
     def reset(self):
         """Reset the tutor state."""

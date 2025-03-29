@@ -3,7 +3,7 @@ from .base_agent import BaseAgent
 from agentlite.commons import TaskPackage
 
 class CaseGeneratorAgent(BaseAgent):
-    def __init__(self, model_name: str = "gpt-4", temperature: float = 0.3):
+    def __init__(self, model_name: str = "o3-mini", temperature: float = 0.3):
         super().__init__(model_name, temperature)
         self.system_prompt = """You are an expert medical microbiologist specializing in creating realistic clinical cases.
         Generate detailed, medically accurate cases that include subtle but important diagnostic clues. Each case should be

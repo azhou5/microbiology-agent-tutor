@@ -474,6 +474,9 @@ Student's Differential Diagnosis:
 Full Case Conversation (all questions asked and answers received):
 {full_case_with_current if full_case_with_current else "[No prior conversation recorded]"}
 
+Case-relevant information that the student has already gathered:
+{self.revealed_info}
+
 Based on this exchange, determine if the student's reasoning is complete and accurate enough to move forward, or if further questioning would be beneficial for their learning.
 If you need to probe further, don't give away the answers - ask questions that lead them to discover insights themselves.
 
