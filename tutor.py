@@ -155,8 +155,12 @@ class MedicalMicrobiologyTutor(ManagerAgent):
             7. When the student is unsure or needs guidance:
                - Route to the helper agent for contextual hints
             
-            8. When the student is in the middle of reasoning evaluation:
-               - Route ALL messages to the case_presenter until reasoning is complete
+            8. When the student is in the middle of reasoning evaluation (in_reasoning_evaluation = True):
+               - For student messages, route to case_presenter for reasoning evaluation
+               - For doctor/tutor messages (is_doctor_message = True):
+                 * If asking about case details, route to case_presenter
+                 * If asking the patient something directly, route to patient agent
+                 * Otherwise, use my best judgment to determine the appropriate agent
             
             I maintain state through my actions to ensure proper flow.""",
             actions=[TutorStateAction(), ThinkAction(), AgentTrackingFinishAction()],
@@ -435,6 +439,53 @@ class MedicalMicrobiologyTutor(ManagerAgent):
              "Task completed.")
         ]
         self.add_example(task9, action_chain9)
+
+        # Add new examples for reasoning evaluation
+        
+        # Example for student reasoning response during reasoning evaluation
+        task_reasoning = TaskPackage(
+            instruction="The patient has rust-colored sputum which is characteristic of pneumococcal pneumonia",
+            context={"in_reasoning_evaluation": True, "is_doctor_message": False}
+        )
+        action_chain_reasoning = [
+            (AgentAct(name="Think", params={"response": "Student is providing reasoning for their differential. Since we're in reasoning evaluation mode, I should route to case_presenter."}),
+             "OK"),
+            (AgentAct(name="case_presenter", params={"Task": "The patient has rust-colored sputum which is characteristic of pneumococcal pneumonia"}),
+             {"response": "Good observation! Rust-colored sputum is indeed characteristic of pneumococcal pneumonia. Can you explain why pneumococcus produces this distinctive sputum color?", "agent": "case_presenter"}),
+            (AgentAct(name="Finish", params={"response": {"response": "Good observation! Rust-colored sputum is indeed characteristic of pneumococcal pneumonia. Can you explain why pneumococcus produces this distinctive sputum color?", "agent": "case_presenter"}}),
+             "Task completed.")
+        ]
+        self.add_example(task_reasoning, action_chain_reasoning)
+        
+        # Example for doctor message during reasoning evaluation
+        task_doctor_during_reasoning = TaskPackage(
+            instruction="Doctor: What other physical exam findings would you expect?",
+            context={"in_reasoning_evaluation": True, "is_doctor_message": True, "doctor_message_content": "What other physical exam findings would you expect?"}
+        )
+        action_chain_doctor_during_reasoning = [
+            (AgentAct(name="Think", params={"response": "This is a doctor message during reasoning evaluation. Since the doctor is asking about physical exam findings, I should route to case_presenter."}),
+             "OK"),
+            (AgentAct(name="case_presenter", params={"Task": "What other physical exam findings would you expect?"}),
+             {"response": "In a typical case of pneumococcal pneumonia, you might expect to find increased tactile fremitus, dullness to percussion over the affected area, and egophony on auscultation. These findings correspond to consolidation of lung tissue.", "agent": "case_presenter"}),
+            (AgentAct(name="Finish", params={"response": {"response": "In a typical case of pneumococcal pneumonia, you might expect to find increased tactile fremitus, dullness to percussion over the affected area, and egophony on auscultation. These findings correspond to consolidation of lung tissue.", "agent": "case_presenter"}}),
+             "Task completed.")
+        ]
+        self.add_example(task_doctor_during_reasoning, action_chain_doctor_during_reasoning)
+        
+        # Example for doctor asking patient a question during reasoning evaluation
+        task_doctor_to_patient = TaskPackage(
+            instruction="Doctor: Patient, have you had pneumonia before?",
+            context={"in_reasoning_evaluation": True, "is_doctor_message": True, "doctor_message_content": "Patient, have you had pneumonia before?"}
+        )
+        action_chain_doctor_to_patient = [
+            (AgentAct(name="Think", params={"response": "This is a doctor message directed at the patient during reasoning evaluation. I should route it to the patient agent."}),
+             "OK"),
+            (AgentAct(name="patient", params={"Task": "Patient, have you had pneumonia before?"}),
+             {"response": "Yes, I had pneumonia about two years ago. They told me it was also pneumococcal pneumonia at that time. I was hospitalized for 3 days.", "agent": "patient"}),
+            (AgentAct(name="Finish", params={"response": {"response": "Yes, I had pneumonia about two years ago. They told me it was also pneumococcal pneumonia at that time. I was hospitalized for 3 days.", "agent": "patient"}}),
+             "Task completed.")
+        ]
+        self.add_example(task_doctor_to_patient, action_chain_doctor_to_patient)
     
     def start_new_case(self, organism: str = None) -> str:
         """Start a new case session by first generating a case, then having the case presenter provide a one-liner presentation.
@@ -516,6 +567,9 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         self.in_knowledge_assessment = False
         self.differential_given = False
         self.current_stage = TutorStage.PRE_DIFFERENTIAL
+        
+        # Ensure revealed_info is synchronized after reset
+        self._synchronize_revealed_info()
 
     def llm_layer(self, prompt: str) -> str:
         """Override the llm_layer method to use the correct LangChain API."""
@@ -531,7 +585,19 @@ class MedicalMicrobiologyTutor(ManagerAgent):
 
     def _is_in_reasoning_evaluation(self):
         """Check if case_presenter is currently awaiting reasoning responses."""
-        return hasattr(self.case_presenter, 'awaiting_reasoning') and self.case_presenter.awaiting_reasoning
+        # Check for awaiting_reasoning and reasoning_evaluation_started flags
+        if not hasattr(self.case_presenter, 'awaiting_reasoning'):
+            return False
+            
+        awaiting_reasoning = self.case_presenter.awaiting_reasoning
+        reasoning_started = False
+        if hasattr(self.case_presenter, 'reasoning_evaluation_started'):
+            reasoning_started = self.case_presenter.reasoning_evaluation_started
+            
+        print(f"DEBUG - _is_in_reasoning_evaluation check: awaiting_reasoning={awaiting_reasoning}, reasoning_started={reasoning_started}")
+        
+        # Only return True if both flags indicate we're in an active reasoning evaluation
+        return awaiting_reasoning
     
     def _get_full_conversation_history(self):
         """Get the combined conversation history from all agents."""
@@ -560,40 +626,66 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         
         return combined_history
 
+    def _synchronize_revealed_info(self):
+        """Synchronize revealed_info between patient and case_presenter agents."""
+        # Make sure both agents are initialized
+        if hasattr(self, 'patient') and hasattr(self, 'case_presenter'):
+            # Get revealed info from both agents
+            patient_revealed_info = getattr(self.patient, 'revealed_info', set())
+            presenter_revealed_info = getattr(self.case_presenter, 'revealed_info', set())
+            
+            # Combine them
+            combined_revealed_info = patient_revealed_info.union(presenter_revealed_info)
+            
+            # Update both agents
+            self.patient.revealed_info = combined_revealed_info
+            self.case_presenter.revealed_info = combined_revealed_info
+            
+            print(f"DEBUG - Synchronized revealed_info: {', '.join(combined_revealed_info) if combined_revealed_info else 'None'}")
+        else:
+            print("DEBUG - Could not synchronize revealed_info: agents not properly initialized")
+
     def __call__(self, task: TaskPackage) -> str:
         """Handle task requests by routing to appropriate agents."""
-        # Check if we're currently in reasoning evaluation mode
-        if self._is_in_reasoning_evaluation():
-            print(f"DEBUG - Tutor detected ongoing reasoning evaluation, routing to case_presenter")
-            
-            # Get the full conversation history
-            full_history = self._get_full_conversation_history()
-            
-            # If in reasoning evaluation, always route to case_presenter
-            response = self.case_presenter(TaskPackage(
-                instruction=task.instruction,
-                context={"full_conversation_history": full_history},
-                task_creator=self.id
-            ))
-            
-            # Preserve agent information in the response
-            if isinstance(response, dict) and "agent" in response:
-                return response
-            else:
-                return {
-                    "response": str(response),
-                    "agent": "case_presenter"
-                }
+        # Synchronize revealed_info between agents
+        self._synchronize_revealed_info()
         
-        # Regular routing for other scenarios
         # Create a task package for the manager agent
-        task = TaskPackage(
+        # Add context about the reasoning evaluation state to help with routing
+        reasoning_state = self._is_in_reasoning_evaluation()
+        
+        # Check if this is a doctor/tutor message
+        instruction = task.instruction
+        is_doctor_message = instruction.lower().startswith("doctor:") or instruction.lower().startswith("tutor:")
+        
+        # Format the context appropriately
+        context = {}
+        if hasattr(task, 'context') and task.context:
+            context = task.context.copy()
+        
+        # Add reasoning evaluation state to context
+        context["in_reasoning_evaluation"] = reasoning_state
+        context["is_doctor_message"] = is_doctor_message
+        
+        # Extract content from doctor messages
+        if is_doctor_message and ":" in instruction:
+            parts = instruction.split(":", 1)
+            if len(parts) > 1:
+                content = parts[1].strip()
+                context["doctor_message_content"] = content
+        
+        # Add full conversation history to context
+        context["full_conversation_history"] = self._get_full_conversation_history()
+        
+        # Create the enhanced task package
+        enhanced_task = TaskPackage(
             instruction=task.instruction,
+            context=context,
             task_creator=self.id
         )
         
-        # Let the manager agent handle the routing based on examples
-        response = super().__call__(task)
+        # Let the manager agent handle the routing based on examples and context
+        response = super().__call__(enhanced_task)
         
         # Check if the response contains a correct diagnosis
         if isinstance(response, dict) and response.get("agent") == "case_presenter":
@@ -668,6 +760,9 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         
         # Call the parent forward method
         response = super().forward(task, agent_act)
+        
+        # Synchronize revealed_info after action execution
+        self._synchronize_revealed_info()
         
         # If this was a Finish action and we have agent info, add it to the response
         if agent_act.name == "Finish" and (agent_param or self._last_agent):
