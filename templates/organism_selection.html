@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Microbiology Tutor - Select Organism</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+    <style>
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        
+        .loading-message {
+            color: white;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            text-align: center;
+            padding: 1rem;
+        }
+        
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .random-case-btn {
+            display: block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            margin: 20px auto;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+            width: 250px;
+            text-align: center;
+        }
+        
+        .random-case-btn:hover {
+            background-color: #3e8e41;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Medical Microbiology Tutor</h1>
+        
+        <div class="instruction">
+            <p>Select an organism for your clinical case study, or enter a custom one:</p>
+        </div>
+        
+        <!-- Random Case Button -->
+        <button class="random-case-btn" onclick="selectRandomOrganism()">Choose Random Case</button>
+        
+        <div class="organism-list">
+            {% for organism in organisms %}
+            <div class="organism-card" onclick="selectOrganism('{{ organism }}')">
+                <h3>{{ organism|title }}</h3>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <form id="caseForm" onsubmit="redirectToChatWithOrganism(event)">
+            <div class="custom-input">
+                <input type="text" id="selectedOrganism" name="organism" placeholder="Selected or custom organism" required>
+                <button type="submit" class="start-btn" id="startBtn">Start Case Study</button>
+            </div>
+        </form>
+        
+        <a href="/" class="back-btn">← Back to main page</a>
+    </div>
+    
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-message">Preparing your case study...</div>
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        function selectOrganism(organism) {
+            document.getElementById('selectedOrganism').value = organism;
+        }
+        
+        function selectRandomOrganism() {
+            // Set a special value to indicate random organism selection
+            document.getElementById('selectedOrganism').value = "RANDOM_CASE";
+            // Submit the form automatically
+            document.getElementById('caseForm').dispatchEvent(new Event('submit'));
+        }
+        
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('startBtn').disabled = true;
+        }
+        
+        function redirectToChatWithOrganism(event) {
+            event.preventDefault();
+            const organism = document.getElementById('selectedOrganism').value.trim();
+            if (!organism) {
+                alert('Please select or enter an organism');
+                return;
+            }
+            
+            // Show loading overlay
+            showLoading();
+            
+            // Redirect to chat page with organism as query parameter
+            setTimeout(() => {
+                window.location.href = `/?organism=${encodeURIComponent(organism)}`;
+            }, 100); // Short delay to allow loading overlay to appear
+        }
+    </script>
+</body>
+</html> 
