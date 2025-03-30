@@ -16,6 +16,7 @@ OPENAI_CHAT_MODELS = [
     "gpt-4-32k-0613",
     "gpt-4-1106-preview",
     "gpt-4o",
+    'o3-mini'
 ]
 OPENAI_LLM_MODELS = ["text-davinci-003", "text-ada-001"]
 
@@ -26,7 +27,7 @@ class BaseLLM:
         self.context_len: int = llm_config.context_len
         self.stop: list = llm_config.stop
         self.max_tokens: int = llm_config.max_tokens
-        self.temperature: float = llm_config.temperature
+        #self.temperature: float = llm_config.temperature
         self.end_of_prompt: str = llm_config.end_of_prompt
         self.api_type = llm_config.api_type
 
@@ -80,16 +81,16 @@ class LangchainLLM(BaseLLM):
             llm = AzureOpenAI(
                 deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", self.llm_name),
                 model_name=self.llm_name,
-                temperature=self.temperature,
+                #temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 api_key=llm_config.api_key,
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
             )
         else:
             llm = OpenAI(
                 model_name=self.llm_name,
-                temperature=self.temperature,
+                #temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 api_key=llm_config.api_key,
             )
@@ -110,7 +111,7 @@ class LangchainChatModel(BaseLLM):
             llm = AzureChatOpenAI(
                 deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", self.llm_name),
                 model_name=self.llm_name,
-                temperature=self.temperature,
+                #temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 api_key=llm_config.api_key,
@@ -119,7 +120,7 @@ class LangchainChatModel(BaseLLM):
         else:
             llm = ChatOpenAI(
                 model_name=self.llm_name,
-                temperature=self.temperature,
+                #temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 api_key=llm_config.api_key,
             )

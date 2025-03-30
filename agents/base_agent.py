@@ -18,11 +18,11 @@ if not os.getenv("AZURE_OPENAI_API_KEY") or not os.getenv("AZURE_OPENAI_ENDPOINT
     raise ValueError("Missing required Azure OpenAI environment variables")
 
 class BaseAgent(CustomAgentWrapper):
-    def __init__(self, model_name: str = "o3-mini", temperature: float = 0.3):
+    def __init__(self, model_name: str = "o3-mini"):
         # Initialize Azure OpenAI through LangChain
         self.llm = AzureChatOpenAI(
             openai_api_type="azure",
-            openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
+            openai_api_version="2024-12-01-preview",
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", model_name),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),

@@ -10,7 +10,7 @@ class LLMConfig:
         self.llm_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
         if not self.llm_name:
             raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
-        self.temperature = 0.9
+        #self.temperature = 0.9
         self.stop = ["\n"]
         self.max_tokens = 256
         self.end_of_prompt = ""
