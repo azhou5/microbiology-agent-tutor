@@ -11,9 +11,46 @@ from langchain.chat_models import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from shared_definitions import TutorStage  # Import the stage enum from shared_definitions
 
+"""
+Case Presenter Agent Module
+
+This module implements a medical case presenter agent that simulates a clinical instructor
+presenting cases to medical students and evaluating their diagnostic reasoning.
+
+Key Components:
+- PresentCaseAction: Presents initial clinical case information to students
+- PhysicalExamAction: Provides physical examination findings based on student requests
+- EvaluateDifferentialAction: Evaluates student's differential diagnosis
+- EvaluateDifferentialReasoningAction: Conducts interactive Socratic dialogue to evaluate reasoning
+- EvaluateFinalDiagnosisAction: Evaluates student's final diagnosis
+- CasePresenterAgent: Main agent class that orchestrates the clinical case workflow
+
+The module uses Azure OpenAI services to generate responses and evaluate student reasoning.
+It supports a structured educational approach that guides students through:
+1. Initial case presentation
+2. Information gathering through history and physical examination
+3. Differential diagnosis formulation and reasoning
+4. Final diagnosis and evaluation
+
+The agent tracks revealed information, conversation history, and student progress through
+different stages of the diagnostic process.
+"""
+
 # Helper function to create Azure OpenAI LLM instance
 def get_azure_llm(deployment_name=None, temperature=0.1):
-    """Create and return an Azure OpenAI LLM instance with the specified parameters."""
+    """
+    Create and return an Azure OpenAI LLM instance with the specified parameters.
+    
+    Args:
+        deployment_name (str, optional): The Azure deployment name to use. Defaults to environment variable.
+        temperature (float, optional): The temperature parameter for generation. Defaults to 0.1.
+        
+    Returns:
+        AzureChatOpenAI: Configured Azure OpenAI client
+        
+    Raises:
+        ValueError: If required environment variables are not set
+    """
     if not deployment_name:
         deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         if not deployment_name:
@@ -29,6 +66,16 @@ def get_azure_llm(deployment_name=None, temperature=0.1):
     )
 
 class PresentCaseAction(BaseAction):
+    """
+    Action that presents a clinical case to the student.
+    
+    Generates a concise one-line initial presentation focusing on patient 
+    demographics and chief complaint using the format:
+    "A [age] year old [sex] presents with [chief complaint]."
+    
+    Returns:
+        dict: Contains the case presentation, full case details, and metadata
+    """
     def __init__(self):
         super().__init__(
             action_name="PresentCase",
@@ -68,6 +115,15 @@ Use this exact format, nothing else: "A [age] year old [sex] presents with [chie
         }
 
 class PhysicalExamAction(BaseAction):
+    """
+    Action that provides physical examination findings based on student requests.
+    
+    Generates realistic and clinically appropriate physical exam findings
+    that are consistent with the underlying pathology in the case.
+    
+    Returns:
+        dict: Contains the physical exam findings and metadata
+    """
     def __init__(self):
         super().__init__(
             action_name="PhysicalExam",
@@ -122,41 +178,24 @@ Provide appropriate physical examination findings for this specific request, con
         
         response = self.llm.invoke(messages)
         
-        # Add the examined area to revealed info
-        exam_category = self._categorize_exam_request(exam_request)
-        
         return {
             "response": response.content.strip(),
-            "exam_type": exam_category,
+            "exam_type": "physical_exam",
             "agent": "case_presenter"
         }
     
-    def _categorize_exam_request(self, request):
-        """Categorize the exam request into a standard category for tracking."""
-        request_lower = request.lower()
-        
-        if any(term in request_lower for term in ["lung", "chest", "breath", "respiratory", "auscultation"]):
-            return "respiratory_exam"
-        elif any(term in request_lower for term in ["heart", "cardiac", "pulse", "cardiovascular"]):
-            return "cardiac_exam"
-        elif any(term in request_lower for term in ["abdomen", "belly", "stomach", "bowel"]):
-            return "abdominal_exam"
-        elif any(term in request_lower for term in ["neuro", "neurological", "mental", "consciousness"]):
-            return "neurological_exam"
-        elif any(term in request_lower for term in ["skin", "rash", "lesion"]):
-            return "skin_exam"
-        elif any(term in request_lower for term in ["lymph", "node", "spleen", "liver"]):
-            return "lymphatic_exam"
-        elif any(term in request_lower for term in ["ear", "nose", "throat", "mouth"]):
-            return "ent_exam"
-        elif any(term in request_lower for term in ["eye", "vision", "pupil"]):
-            return "eye_exam"
-        elif any(term in request_lower for term in ["musculoskeletal", "joint", "muscle", "bone"]):
-            return "musculoskeletal_exam"
-        else:
-            return "general_physical_exam"
+
 
 class EvaluateDifferentialAction(BaseAction):
+    """
+    Action that evaluates a student's differential diagnosis.
+    
+    Assesses the appropriateness of proposed conditions, use of clinical findings,
+    consideration of epidemiological factors, and pattern recognition.
+    
+    Returns:
+        dict: Contains feedback, assessment of appropriateness, and metadata
+    """
     def __init__(self):
         super().__init__(
             action_name="EvaluateDifferential",
@@ -229,6 +268,20 @@ Evaluate their differential diagnosis, considering:
             }
 
 class EvaluateDifferentialReasoningAction(BaseAction):
+    """
+    Action that conducts an interactive Socratic dialogue to evaluate a student's
+    clinical reasoning process.
+    
+    Implements a two-stage approach:
+    1. Clarification stage: Determines if reasoning is already included in the differential
+    2. Interactive evaluation stage: Engages in dialogue to probe reasoning
+    
+    Identifies student failure modes (information gathering vs. knowledge gaps)
+    and provides appropriate guidance without giving away answers.
+    
+    Returns:
+        dict: Contains response, reasoning assessment, and completion status
+    """
     def __init__(self):
         super().__init__(
             action_name="EvaluateDifferentialReasoning",
@@ -238,12 +291,17 @@ class EvaluateDifferentialReasoningAction(BaseAction):
                 "student_differential": "Student's differential diagnosis",
                 "student_reasoning": "Student's current reasoning statement",
                 "is_initial_response": "Whether this is the first response to the differential",
-                "full_case_conversation": "Full conversation history from the entire case including reasoning dialogue"
+                "full_case_conversation": "Full conversation history from the entire case including reasoning dialogue",
+                "revealed_info": "Set of information categories already revealed to the student"
             }
         )
         # Initialize Azure OpenAI for different tasks
         self.clarify_llm = get_azure_llm("gpt-4o-mini")  # Lighter model for clarification
         self.evaluate_llm = get_azure_llm("gpt-4o")      # More powerful model for evaluation
+        
+        # Track conversation state
+        self.last_response_type = None
+        self.discussed_findings = set()
     
     def __call__(self, **kwargs) -> str:
         student_differential = kwargs.get("student_differential", "")
@@ -251,27 +309,46 @@ class EvaluateDifferentialReasoningAction(BaseAction):
         case_details = kwargs.get("case_details", {})
         is_initial_response = kwargs.get("is_initial_response", True)
         full_case_conversation = kwargs.get("full_case_conversation", "")
+        revealed_info = kwargs.get("revealed_info", set())
         
         # If this is the initial differential diagnosis, use it as both the differential and reasoning
         if is_initial_response and not student_reasoning and student_differential:
             student_reasoning = student_differential
         
+        # Check if the input is a doctor/tutor message
+        is_doctor_message = False
+        if student_reasoning:
+            lower_reasoning = student_reasoning.lower()
+            if lower_reasoning.startswith("doctor:") or lower_reasoning.startswith("tutor:"):
+                is_doctor_message = True
+                # For doctor messages, we'll return a special response indicating not to count this as student reasoning
+                print(f"DEBUG - Detected doctor message in reasoning evaluation: '{student_reasoning}'")
+                return {
+                    "response": "This appears to be a message from the doctor/tutor, not student reasoning.",
+                    "reasoning_complete": False,
+                    "is_doctor_message": True,
+                    "agent": "case_presenter"
+                }
+        
         # STAGE 1: CLARIFICATION STAGE
         # If this is the first response to the differential, check if reasoning is already included
         if is_initial_response:
-            # Use a lighter model to determine if reasoning is already included in the differential
+            # Use a lighter model to determine if reasoning is already included
             system_prompt = """You are analyzing a student's differential diagnosis to determine if it already includes reasoning.
             Respond with a JSON object in this format:
             {
                 "includes_reasoning": true/false,
-                "next_question": "The question to ask the student next"
+                "next_question": "The question to ask the student next",
+                "identified_findings": ["list", "of", "clinical", "findings", "mentioned"]
             }
             
             If the student's response includes "because", "due to", "as a result of", "given that", or similar phrases
             followed by clinical reasoning, set includes_reasoning to true.
             
-            If includes_reasoning is true, the next_question should ask for additional factors.
-            If includes_reasoning is false, the next_question should ask why they think this is the diagnosis."""
+            Extract any clinical findings or observations the student mentions and include them in identified_findings.
+            
+            If includes_reasoning is true, the next_question should ask about additional factors they haven't mentioned.
+            If includes_reasoning is false, ask them to explain their reasoning."""
             
             main_prompt = f"""Student's differential diagnosis: {student_differential}
 
@@ -292,24 +369,29 @@ class EvaluateDifferentialReasoningAction(BaseAction):
                 if start >= 0 and end > start:
                     analysis = json.loads(response_text[start:end])
                     
+                    # Track findings mentioned
+                    if "identified_findings" in analysis:
+                        self.discussed_findings.update(analysis["identified_findings"])
+                    
                     if analysis.get("includes_reasoning", False):
-                        # If reasoning is included, ask for additional factors
+                        self.last_response_type = "probe_further"
                         return {
-                            "response": "Any other clinical findings or epidemiological factors that support your differential?",
+                            "response": analysis.get("next_question", "Any other clinical findings or epidemiological factors that support your differential?"),
                             "includes_reasoning": True,
                             "agent": "case_presenter"
                         }
                     else:
-                        # If no reasoning is provided, ask why
+                        self.last_response_type = "request_reasoning"
                         return {
-                            "response": "Why do you think this is the most likely diagnosis? What specific findings support your differential?",
+                            "response": analysis.get("next_question", "Why do you think these are the most likely diagnoses? What specific findings support your differential?"),
                             "includes_reasoning": False,
                             "agent": "case_presenter"
                         }
             except:
                 # Default to asking why if we can't parse the response
+                self.last_response_type = "request_reasoning"
                 return {
-                    "response": "Why do you think this is the most likely diagnosis? What specific findings support your differential?",
+                    "response": "Why do you think these are the most likely diagnoses? What specific findings support your differential?",
                     "includes_reasoning": False,
                     "agent": "case_presenter"
                 }
@@ -340,130 +422,49 @@ class EvaluateDifferentialReasoningAction(BaseAction):
             1. Whether the student has done sufficient information gathering before reaching their differential diagnosis
             2. Whether their reasoning about the information they collected is correct
             
-            When analyzing their information gathering, review the FULL case conversation provided to determine what questions they asked and what information they obtained. Did they miss important history, physical exam findings, or necessary tests? Did they fail to explore important epidemiological factors?
+            When analyzing their information gathering, review the FULL case conversation provided to determine what questions they asked and what information they obtained.
             
-            **If the failure mode is information gathering (aka, the reasoning is STRONG but INCOMPLETE)**:
-                => ask about specific missing elements they should consider!! 
-            
-            EXAMPLES:
-
-            Student reason given: "staph epidermidis lives on the skin so it's a likely bug to cause infection. probably the patient got a small cut somehow and then it got bad."
-            Doctor: However, in this case, the microbiological analysis specifically identified Staphylococcus aureus, not Staphylococcus epidermidis.
-            => don't just say "well actually it's staph aureus" - that's not helpful! Also the micro analysis was in the case conversation up to that point, so the student wouldn't have know about it!
-            => Instead, ask: "That's a good thought, but if I told you this is incorrect, what question or investigation would help you get to the right answer?"
-            ⸻ 
-            Fever, night sweats, weight loss → Tuberculosis
-            But ask about:
-            New information 1: What if I told you the patient had a cat that recently scratched them? → Bartonella henselae
-            New information 2: What if I told you the patient is a healthy 22-year-old and their lymph nodes are fluctuant with overlying redness? → Bartonella
-            ⸻
-            Pneumonia with cavitation → Tuberculosis
-            But ask about:
-            New information 1: What if I told you they have very poor dentition and recently had a tooth extracted? → Anaerobic lung abscess
-            New information 2: What if I told you they also have chronic sinus issues and new hematuria? → Granulomatosis with polyangiitis
-            ⸻
-            Fever + travel to sub-Saharan Africa → Malaria
-            But ask about:
-            New information 1: What if I told you they went swimming in Lake Victoria? → Acute schistosomiasis
-            New information 2: What if I told you they remember pulling off a tick after a hike through the grasslands? → African tick-bite fever
-            ⸻
-            Monoarthritis + fever → Septic arthritis
-            But ask about:
-            New information 1: What if I told you they had some small pustular lesions on their palms and their knee pain started after shoulder and wrist pain? → Disseminated gonococcal infection
-            New information 2: What if I told you they had unprotected sex with a new partner two weeks ago? → DGI
-            ⸻
-            Meningitis in an immunocompromised patient → TB meningitis
-            But ask about:
-            New information 1: What if I told you they live in a shelter with a large pigeon population nearby? → Cryptococcal meningitis
-            New information 2: What if I told you they’re HIV-positive with a CD4 count of 45? → Cryptococcus
-            ⸻
-            Fever, rash, myalgia after travel to Southeast Asia → Dengue
-            But ask about:
-            New information 1: What if I told you they have a black crusted lesion on their abdomen and had hiked through tall grass? → Scrub typhus
-            New information 2: What if I told you they’re now confused and have a stiff neck? → Japanese encephalitis
-            ⸻
-            Febrile returning traveler → Malaria
-            But ask about:
-            New information 1: What if I told you they took mefloquine prophylaxis the whole trip and their eosinophil count is elevated? → Strongyloides or schistosomiasis
-            New information 2: What if I told you they went rafting in a river? → Acute schistosomiasis
-            ⸻
-            Diarrhea after antibiotics → Clostridioides difficile
-            But ask about:
-            New information 1: What if I told you their colonoscopy shows deep ulcerations and they’re also having visual floaters? → CMV colitis
-            New information 2: What if I told you they were recently hospitalized in India? → Multidrug-resistant enteric infection
-            ⸻
-            Red, swollen leg → Cellulitis
-            But ask about:
-            New information 1: What if I told you the pain is excruciating and spreads over hours despite IV antibiotics? → Necrotizing fasciitis
-            New information 2: What if I told you they went hunting last week and now have a black eschar? → Tularemia or anthrax
-            ⸻
-            Fever + new murmur → Endocarditis
-            But ask about:
-            New information 1: What if I told you they were just diagnosed with iron deficiency anemia and their colonoscopy showed a mass? → Strep gallolyticus endocarditis
-            New information 2: What if I told you they inject heroin and have septic pulmonary emboli? → Tricuspid valve S. aureus endocarditis
-
-           
-            **If the failure mode is knowledge (aka, the reasoning is INCORRECT)**: 
-                => gently correct them to help them reroute them into the correct direction
-
-            EXAMPLES: 
-            Case: “Patient presents with monoarthritis of the knee and fever. I think it’s gout, since he has a history of elevated uric acid.”
-            Failure mode: Misunderstanding that gout = non-infectious, and that septic arthritis can coexist with high uric acid
-            Correction:
-            “It’s true that hyperuricemia can point toward gout, but remember that it doesn’t rule out septic arthritis — especially in the setting of fever and an acutely inflamed joint. What would help you definitively distinguish between the two here?”
-            → (Joint aspiration)
-            ⸻
-            Case: “This returning traveler with fever, chills, and low platelets must have typhoid — they were in India last month.”
-            Failure mode: Overrelying on geography, missing malaria as the most urgent r/o
-            Correction:
-            “Typhoid is definitely endemic in India, but before you settle there — which diagnosis would you want to rule out first, given how quickly it can deteriorate and how treatable it is if caught early?”
-            → (Malaria with thick/thin smear)
-            ⸻
-            Case: “This patient has a cough and night sweats — so I think it’s bacterial pneumonia.”
-            Failure mode: Not recognizing chronicity and constitutional symptoms suggest something else
-            Correction:
-            “Interesting — bacterial pneumonia is often more acute. Does anything about the time course or those night sweats make you think of a more chronic or systemic process?”
-            → (Consider TB, fungal infection, malignancy)
-            ⸻
-            Case: “The patient has fever and a diastolic murmur — it’s aortic stenosis.”
-            Failure mode: Misidentifying murmur type, missing the red flag of fever + murmur
-            Correction:
-            “Aortic stenosis is a good thought for a murmur, but it usually causes a systolic sound. With a diastolic murmur and fever, what serious diagnosis should we prioritize?”
-            → (Endocarditis with aortic regurg)
-            ⸻
-            Case: “They have HIV and are coughing — it’s PCP pneumonia.”
-            Failure mode: Anchoring on HIV without considering CD4 count or OI timeline
-            Correction:
-            “PCP is certainly common in HIV, but not every patient with HIV is equally vulnerable. What kind of immune status would make you more concerned for that?”
-            → (PCP usually if CD4 < 200)
-            ⸻
-            Case: “This elderly patient has fever and flank pain — must be appendicitis.”
-            Failure mode: Anchoring on abdominal pain without considering age-adjusted prevalence
-            Correction:
-            “Appendicitis is common, but in someone older, are there other intra-abdominal or urologic sources you’d want to think about, especially with flank pain?”
-            → (Consider pyelonephritis, diverticulitis)
-            ⸻
-            Case: “The patient has diarrhea after antibiotics — must be a foodborne bug like Salmonella.”
-            Failure mode: Missing the classic iatrogenic cause
-            Correction:
-            “Salmonella’s definitely on the list — but if they were recently on antibiotics, is there another cause that’s directly related to that exposure?”
-            → (C. difficile)
-            ⸻
-            Case: “This patient has fever and a systolic murmur — probably rheumatic fever.”
-            Failure mode: Misunderstanding of rheumatic fever epidemiology and murmur acuity
-            Correction:
-            “Interesting pick — rheumatic fever is more common in younger patients and developing regions. In an adult with new fever and murmur, what more urgent infectious cause should we consider?”
-            → (Infective endocarditis)
-
-            Keep asking questions until you are confident about the accuracy of reasoning OR if the student asks to move on. Then you should conclude the reasoning phase: reasoning_complete = true. 
-
             Return a JSON object with:
             {
                 "reasoning_complete": true/false,
                 "response_type": "probe_further|correct_misconception|challenge_with_information|acknowledge_good_reasoning",
                 "response": "Your response to the student",
-                "reasoning_quality": "strong|adequate|needs_improvement|flawed"
-            }"""
+                "reasoning_quality": "strong|adequate|needs_improvement|flawed",
+                "identified_findings": ["list", "of", "clinical", "findings", "mentioned"],
+                "next_steps": ["suggested", "areas", "to", "explore"]
+            }
+            
+            IMPORTANT:
+            1. Never repeat the exact same question
+            2. Acknowledge what the student has said before asking the next question
+            3. If they mention a finding, probe deeper about its significance
+            4. If they miss key findings, guide them to consider those areas
+            5. Make your responses feel like a natural conversation"""
+            
+            # Format revealed_info to be more readable
+            formatted_revealed_info = []
+            info_mapping = {
+                "symptoms": "Symptoms and complaints",
+                "physical_exam": "Physical examination findings",
+                "epidemiology": "Epidemiological information", 
+                "medical_history": "Medical history",
+                "respiratory_exam": "Respiratory examination",
+                "cardiac_exam": "Cardiac examination",
+                "abdominal_exam": "Abdominal examination",
+                "neurological_exam": "Neurological examination",
+                "skin_exam": "Skin examination",
+                "lymphatic_exam": "Lymphatic examination",
+                "ent_exam": "ENT examination",
+                "eye_exam": "Eye examination",
+                "musculoskeletal_exam": "Musculoskeletal examination",
+                "general_physical_exam": "General physical examination"
+            }
+            
+            for info in revealed_info:
+                readable_name = info_mapping.get(info, info.replace("_", " ").title())
+                formatted_revealed_info.append(readable_name)
+                
+            revealed_info_text = ", ".join(formatted_revealed_info) if formatted_revealed_info else "No specific information categories gathered yet"
             
             main_prompt = f"""Case Details:
 {case_details.get('case_text', '')}
@@ -471,11 +472,23 @@ class EvaluateDifferentialReasoningAction(BaseAction):
 Student's Differential Diagnosis:
 {student_differential}
 
-Full Case Conversation (all questions asked and answers received):
+Student's Latest Response:
+{student_reasoning}
+
+Previously Discussed Findings:
+{', '.join(self.discussed_findings) if self.discussed_findings else "None"}
+
+Last Response Type:
+{self.last_response_type if self.last_response_type else "None"}
+
+Full Case Conversation:
 {full_case_with_current if full_case_with_current else "[No prior conversation recorded]"}
 
-Case-relevant information that the student has already gathered:
-{self.revealed_info}
+Information Categories Gathered:
+{revealed_info_text}
+This part is crucial. This is the only information that the student has gathered. Please do not reference any information outside of this. 
+
+If the student has not gathered enough information to make the differential diagnosis in your judgement, you should tell them to gather more information. 
 
 Based on this exchange, determine if the student's reasoning is complete and accurate enough to move forward, or if further questioning would be beneficial for their learning.
 If you need to probe further, don't give away the answers - ask questions that lead them to discover insights themselves.
@@ -499,9 +512,26 @@ When evaluating, consider BOTH:
                 if start >= 0 and end > start:
                     evaluation = json.loads(response_text[start:end])
                     
+                    # Update tracking
+                    self.last_response_type = evaluation.get("response_type", "probe_further")
+                    if "identified_findings" in evaluation:
+                        self.discussed_findings.update(evaluation["identified_findings"])
+                    
+                    # Be more explicit about reasoning completion
+                    # If the response type indicates acknowledgment of good reasoning or reasoning quality is strong,
+                    # we should consider reasoning complete even if not explicitly marked
+                    is_reasoning_complete = evaluation.get("reasoning_complete", False)
+                    if not is_reasoning_complete:
+                        response_type = evaluation.get("response_type", "")
+                        reasoning_quality = evaluation.get("reasoning_quality", "")
+                        
+                        if response_type == "acknowledge_good_reasoning" or reasoning_quality == "strong":
+                            is_reasoning_complete = True
+                            print(f"DEBUG - EvaluateDifferentialReasoningAction: Forcing reasoning_complete=True based on response_type={response_type} and reasoning_quality={reasoning_quality}")
+                    
                     return {
                         "response": evaluation.get("response", "Could you elaborate on your reasoning?"),
-                        "reasoning_complete": evaluation.get("reasoning_complete", False),
+                        "reasoning_complete": is_reasoning_complete,
                         "reasoning_quality": evaluation.get("reasoning_quality", "needs_improvement"),
                         "response_type": evaluation.get("response_type", "probe_further"),
                         "agent": "case_presenter"
@@ -511,9 +541,10 @@ When evaluating, consider BOTH:
                 
             except Exception as e:
                 print(f"Error evaluating reasoning: {str(e)}")
-                # Default to a generic follow-up question
+                # Default to a generic follow-up question that acknowledges their input
+                self.last_response_type = "probe_further"
                 return {
-                    "response": "Interesting. Could you elaborate more on the connection between your observations and your diagnosis?",
+                    "response": f"I see you mentioned {student_reasoning}. Could you elaborate on how this connects to your differential diagnoses?",
                     "reasoning_complete": False,
                     "reasoning_quality": "needs_improvement",
                     "response_type": "probe_further",
@@ -521,6 +552,15 @@ When evaluating, consider BOTH:
                 }
 
 class EvaluateFinalDiagnosisAction(BaseAction):
+    """
+    Action that evaluates a student's final diagnosis.
+    
+    Assesses diagnostic accuracy, supporting/refuting evidence, and extracts
+    the identified pathogen when correct.
+    
+    Returns:
+        dict: Contains feedback, correctness assessment, identified organism, and metadata
+    """
     def __init__(self):
         super().__init__(
             action_name="EvaluateFinalDiagnosis",
@@ -663,6 +703,23 @@ For example, if the student says "This is Streptococcus pneumoniae pneumonia", t
             }
 
 class CasePresenterAgent(CustomAgentWrapper):
+    """
+    Main agent class that orchestrates the clinical case presentation workflow.
+    
+    Manages the progression through different stages of the diagnostic process:
+    1. PRE_DIFFERENTIAL: Initial case presentation and information gathering
+    2. POST_DIFFERENTIAL: Evaluation of differential diagnosis and reasoning
+    3. KNOWLEDGE_ASSESSMENT: Final diagnosis evaluation
+    
+    Tracks revealed information categories, conversation history, and supports
+    both direct evaluation and interactive reasoning approaches.
+    
+    Methods:
+        determine_action: Selects appropriate action based on student input
+        __call__: Processes student input and returns appropriate response
+        _classify_physical_exam: Categorizes physical exam requests by body system
+        reset: Resets the agent state for a new case
+    """
     def __init__(self, model_name: str = None, temperature: float = 0.3):
         # A/B Testing configuration
         # Set this to True to use the interactive reasoning approach,
@@ -684,14 +741,14 @@ class CasePresenterAgent(CustomAgentWrapper):
         # Initialize custom actions
         actions = [
             PresentCaseAction(),
-            PhysicalExamAction(),  # Add the new physical exam action
-            EvaluateDifferentialAction(),  # Keep both for A/B testing
-            EvaluateDifferentialReasoningAction(), # Add the new reasoning evaluation action
+            PhysicalExamAction(),
+            EvaluateDifferentialAction(),
+            EvaluateDifferentialReasoningAction(),
             EvaluateFinalDiagnosisAction(),
             ThinkAction(),
             FinishAction()
         ]
-        ##3. Assess readiness for differential diagnosis, 4. Assess final diagnoses and provide feedback
+        
         super().__init__(
             name="case_presenter",
             role="""I am an expert medical case presenter and clinical reasoning coach. I:
@@ -726,25 +783,71 @@ class CasePresenterAgent(CustomAgentWrapper):
         
         # Track all differential diagnoses presented by the student over time
         self.differential_history = []
+        
+        # Add a counter to limit the number of reasoning turns
+        self.reasoning_turn_count = 0
+        self.max_reasoning_turns = 5  # Maximum number of back-and-forth exchanges for reasoning
     
     def determine_action(self, task: TaskPackage) -> BaseAction:
         """Determine which action to use based on the task instruction."""
         instruction = task.instruction.lower()
         
         # Use a smaller model for action determination
-        determine_action_llm = get_azure_llm("gpt-4o")
+        determine_action_llm = get_azure_llm("gpt-4o-mini")
         
         # Debug state
         print(f"DEBUG - determine_action - awaiting_reasoning: {self.awaiting_reasoning}, pending_differential: {self.pending_differential}")
         
-        # If we're awaiting reasoning, this is likely the reasoning response
-        if self.awaiting_reasoning:
+        # Check for doctor/tutor messages
+        is_doctor_message = instruction.startswith("doctor:") or instruction.startswith("tutor:")
+        
+        # If we're awaiting reasoning and this is not a doctor message, treat it as a reasoning response
+        if self.awaiting_reasoning and not is_doctor_message:
             print(f"DEBUG - Already awaiting reasoning, using EvaluateDifferentialReasoningAction")
             return next(action for action in self.actions if isinstance(action, EvaluateDifferentialReasoningAction))
         
-        # For A/B testing, the decision is controlled by the class variable
-        # If we're determining action for a differential diagnosis input, return the appropriate action
-        if "diagnosis" in instruction or "differential" in instruction or "ddx" in instruction:
+        # Create a prompt for the LLM to classify the request type
+        system_prompt = """You are an expert medical educator helping to classify student requests during a case-based learning session.
+
+        Analyze the student's request and classify it into one of these categories:
+        1. DIAGNOSTIC_REQUEST - Any request for test results, imaging, cultures, or other diagnostic information
+        2. DIFFERENTIAL_DIAGNOSIS - Student providing or discussing their differential diagnosis
+        3. PHYSICAL_EXAM - Request for physical examination findings
+        4. PRESENT_CASE - Request for initial case presentation
+        5. FINAL_DIAGNOSIS - Student providing their final diagnosis
+        6. OTHER - Any other type of request
+
+        Consider the full context of medical education when classifying. For example:
+        - "What do the labs show?" -> DIAGNOSTIC_REQUEST
+        - "I think this could be pneumonia" -> DIFFERENTIAL_DIAGNOSIS
+        - "Can you check their lungs?" -> PHYSICAL_EXAM
+        - "What's the case?" -> PRESENT_CASE
+        - "My final diagnosis is S. aureus infection" -> FINAL_DIAGNOSIS
+        
+        Respond with ONLY the category name, nothing else."""
+        
+        # Get the context from the task
+        context = f"""Student request: {instruction}
+        Current state:
+        - Differential given: {self.differential_given}
+        - Information revealed: {', '.join(self.revealed_info) if self.revealed_info else 'None'}
+        """
+        
+        # Use LLM to classify the request type
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=context)
+        ]
+        
+        request_type = determine_action_llm.invoke(messages).content.strip()
+        
+        # Handle diagnostic requests before differential
+        if request_type == "DIAGNOSTIC_REQUEST" and not self.differential_given:
+            # Return the ThinkAction object itself, not the result of calling it
+            return next(action for action in self.actions if isinstance(action, ThinkAction))
+        
+        # Handle differential diagnosis requests
+        if request_type == "DIFFERENTIAL_DIAGNOSIS":
             # If this appears to be a new differential diagnosis, store it
             if not self.awaiting_reasoning:
                 print(f"DEBUG - Detected differential diagnosis: {instruction}")
@@ -767,8 +870,8 @@ class CasePresenterAgent(CustomAgentWrapper):
             else:
                 return next(action for action in self.actions if isinstance(action, EvaluateDifferentialAction))
         
-        # Create a prompt for the LLM to help determine the appropriate action
-        system_prompt = """You are an expert medical case presenter helping to determine which action to take based on a student's input.
+        # For other request types, use another LLM call to determine the specific action
+        action_system_prompt = """You are an expert medical case presenter helping to determine which action to take based on a student's input.
         Available actions are:
         1. PresentCase - For presenting initial case information
         2. PhysicalExam - For providing physical examination findings when the student asks for specific exam components
@@ -776,40 +879,23 @@ class CasePresenterAgent(CustomAgentWrapper):
         4. EvaluateDifferentialReasoning - For evaluating differential diagnoses with an interactive reasoning process 
         5. EvaluateFinalDiagnosis - For evaluating a final diagnosis
         
-        PresentCase is only used when the case is just started, to give the initial one-liner.
-
-        PhysicalExam is used when the student asks for specific physical examination findings, such as:
-        - "What do you hear when you listen to the lungs?"
-        - "Can you check the patient's abdomen?"
-        - "What do the vital signs show?"
-        - "Are there any skin findings?"
-        - "What do you see in the throat?"
-
-        EvaluateDifferential is used when the student proposes a differential diagnosis and you want to evaluate it directly without the interactive reasoning process.
-
-        EvaluateDifferentialReasoning is used when the student proposes a differential diagnosis and you want to engage in an interactive reasoning process.
-
-        EvaluateFinalDiagnosis is used to evaluate a definitive final diagnosis (after the differential).
+        The request has been classified as: {request_type}
         
-        IMPORTANT: EvaluateDifferential and EvaluateDifferentialReasoning are two different approaches. Do not confuse them.
+        Based on this classification and the following guidelines, determine the appropriate action:
+        
+        - PHYSICAL_EXAM requests should use PhysicalExam action
+        - PRESENT_CASE requests should use PresentCase action
+        - FINAL_DIAGNOSIS requests should use EvaluateFinalDiagnosis action
+        - For OTHER requests, choose the most appropriate action based on context
         
         Respond with ONLY the action name, nothing else."""
         
-        # Get the context from the task
-        context = f"""Task instruction: {instruction}
-        Current state:
-        - Differential given: {self.differential_given}
-        - Information revealed: {', '.join(self.revealed_info) if self.revealed_info else 'None'}
-        """
-        
-        # Use LLM to determine action for non-differential inputs
         messages = [
-            SystemMessage(content=system_prompt),
+            SystemMessage(content=action_system_prompt),
             HumanMessage(content=context)
         ]
         
-        response = determine_action_llm.invoke(messages)
-        action_name = response.content.strip()
+        action_name = determine_action_llm.invoke(messages).content.strip()
         
         # Map the action name to the actual action
         for action in self.actions:
@@ -818,12 +904,33 @@ class CasePresenterAgent(CustomAgentWrapper):
         
         # Default to first action if no match
         return self.actions[0]
-    
+
     def __call__(self, task: TaskPackage) -> str:
         """Handle case presentation, clinical reasoning, and diagnostic evaluation."""
         # Determine which action to use
         print(f"DEBUG - __call__ - Starting with instruction: {task.instruction}")
         print(f"DEBUG - __call__ - State before action: awaiting_reasoning={self.awaiting_reasoning}, pending_differential={self.pending_differential}")
+        
+        # Process doctor/tutor messages to extract actual content
+        instruction = task.instruction
+        original_instruction = instruction
+        is_doctor_message = False
+        
+        # Extract content if it's a doctor message
+        if instruction.lower().startswith("doctor:") or instruction.lower().startswith("tutor:"):
+            is_doctor_message = True
+            # Extract the content after "Doctor:" or "Tutor:"
+            split_msg = instruction.split(":", 1)
+            if len(split_msg) > 1:
+                instruction = split_msg[1].strip()
+                print(f"DEBUG - Extracted doctor message content: '{instruction}'")
+        
+        # Update the task with the processed instruction
+        modified_task = TaskPackage(
+            instruction=instruction,
+            context=getattr(task, 'context', {}),
+            task_creator=getattr(task, 'task_creator', None)
+        )
         
         # Check for full conversation history in the context
         full_conversation_history = None
@@ -831,13 +938,13 @@ class CasePresenterAgent(CustomAgentWrapper):
             full_conversation_history = task.context['full_conversation_history']
             print(f"DEBUG - __call__ - Received full conversation history with {len(full_conversation_history)} entries")
         
-        action = self.determine_action(task)
+        action = self.determine_action(modified_task)
         
         print(f"DEBUG - __call__ - Selected action: {action.action_name}")
         
         # Handle each action type
         if isinstance(action, PresentCaseAction):
-            case_data = getattr(task, 'context', {}).get('case', {}) or self.current_case
+            case_data = getattr(modified_task, 'context', {}).get('case', {}) or self.current_case
             result = action(case=case_data)
             if isinstance(result, dict):
                 if result.get("full_case"):
@@ -845,9 +952,12 @@ class CasePresenterAgent(CustomAgentWrapper):
                 elif result.get("case_text"):
                     self.current_case = {"case_text": result.get("case_text")}
                 
+                # Add to revealed info
+                self.revealed_info.add("initial_presentation")
+                
                 response = result.get("case_presentation", "A patient presents for evaluation.")
                 self.conversation_history.append({
-                    "question": task.instruction,
+                    "question": original_instruction,
                     "response": response
                 })
                 return {
@@ -858,18 +968,16 @@ class CasePresenterAgent(CustomAgentWrapper):
         
         elif isinstance(action, PhysicalExamAction):
             result = action(
-                exam_request=task.instruction,
+                exam_request=modified_task.instruction,
                 case_details=self.current_case
             )
             if isinstance(result, dict):
-                # Add the exam type to revealed info
-                exam_type = result.get("exam_type")
-                if exam_type:
-                    self.revealed_info.add(exam_type)
+                # Simply track that a physical exam was performed
+                self.revealed_info.add("physical_exam")
                 
                 response = result.get("response", "No significant findings.")
                 self.conversation_history.append({
-                    "question": task.instruction,
+                    "question": original_instruction,
                     "response": response
                 })
                 return {
@@ -878,156 +986,134 @@ class CasePresenterAgent(CustomAgentWrapper):
                 }
             return str(result)
         
-        # Handle EvaluateDifferentialAction directly (non-interactive approach)
-        elif isinstance(action, EvaluateDifferentialAction):
-            # Store the differential for future reference
-            self.pending_differential = task.instruction
-            self.current_differential = task.instruction
+        elif isinstance(action, EvaluateDifferentialAction) or isinstance(action, EvaluateDifferentialReasoningAction):
+            if isinstance(action, EvaluateDifferentialAction):
+                result = action(
+                    student_differential=modified_task.instruction,
+                    case_details=self.current_case
+                )
+            else:
+                result = action(
+                    student_differential=self.pending_differential,
+                    student_reasoning=modified_task.instruction if not self.reasoning_evaluation_started else modified_task.instruction,
+                    is_initial_response=not self.reasoning_evaluation_started,
+                    full_case_conversation=full_conversation_history,
+                    case_details=self.current_case,
+                    revealed_info=self.revealed_info
+                )
             
-            # Add to differential history if it's not already there
-            if task.instruction not in self.differential_history:
-                self.differential_history.append(task.instruction)
-                print(f"DEBUG - Added to differential history (non-interactive): {task.instruction}")
-            
-            # Process using the original non-interactive approach
-            result = action(
-                student_differential=task.instruction,
-                case_details=self.current_case
-            )
-            
-            # Extract and store information
             if isinstance(result, dict):
-                response = result.get("feedback", str(result))
-                is_appropriate = result.get("is_appropriate", False)
+                # Check if this was a doctor message that was erroneously routed
+                if result.get("is_doctor_message", False):
+                    print(f"DEBUG - Detected doctor message in reasoning evaluation, not counting as student reasoning")
+                    # Process the doctor's message with the appropriate action
+                    # We'll need to figure out what the doctor is asking and route accordingly
+                    # For now, we'll just return a generic response
+                    response = "I'll help evaluate the student's reasoning when they respond."
+                    self.conversation_history.append({
+                        "question": original_instruction if 'original_instruction' in locals() else task.instruction,
+                        "response": response
+                    })
+                    return {
+                        "response": response,
+                        "agent": "case_presenter"
+                    }
                 
-                # Update state if the differential is appropriate
-                if is_appropriate:
+                # Increment the reasoning turn counter if this is a student response
+                # Check if this is a doctor message from the original instruction
+                is_doctor_message = False
+                if 'original_instruction' in locals() and original_instruction:
+                    is_doctor_message = original_instruction.lower().startswith("doctor:") or original_instruction.lower().startswith("tutor:")
+                
+                if not is_doctor_message and not result.get("is_doctor_message", False):
+                    self.reasoning_turn_count += 1
+                    print(f"DEBUG - Incremented reasoning turn count to {self.reasoning_turn_count}")
+                
+                # Check if we've exceeded the maximum number of reasoning turns
+                if self.reasoning_turn_count >= self.max_reasoning_turns:
+                    print(f"DEBUG - Reached maximum reasoning turns ({self.max_reasoning_turns}), marking reasoning as complete")
+                    self.awaiting_reasoning = False
+                    self.reasoning_evaluation_started = False
+                    self.reasoning_turn_count = 0
                     self.differential_given = True
                     self.current_stage = TutorStage.POST_DIFFERENTIAL
-                
-                self.conversation_history.append({
-                    "question": task.instruction,
-                    "response": response
-                })
-                
-                return {
-                    "response": response,
-                    "agent": "case_presenter"
-                }
-            return str(result)
-        
-        # Handle EvaluateDifferentialReasoningAction (interactive approach)
-        elif isinstance(action, EvaluateDifferentialReasoningAction):
-            # Store the differential if this is the first interaction
-            if not self.awaiting_reasoning:
-                print(f"DEBUG - EvaluateDifferentialReasoningAction - Setting pending_differential: {task.instruction}")
-                self.pending_differential = task.instruction
-                self.awaiting_reasoning = True
-                self.reasoning_evaluation_started = False
-            
-            # Check if we have a pending differential to evaluate
-            if not self.pending_differential:
-                print(f"DEBUG - EvaluateDifferentialReasoningAction - No pending_differential found!")
-                # If no differential, ask for one
-                response = "Please provide a differential diagnosis first."
-                self.conversation_history.append({
-                    "question": task.instruction,
-                    "response": response
-                })
-                return {
-                    "response": response,
-                    "agent": "case_presenter"
-                }
-            
-            # Determine if this is the initial response or a follow-up
-            is_initial_response = not self.reasoning_evaluation_started
-            print(f"DEBUG - EvaluateDifferentialReasoningAction - is_initial_response: {is_initial_response}")
-            self.reasoning_evaluation_started = True
-            
-            # Format the full conversation history into a readable string if available
-            full_conversation_string = ""
-            if full_conversation_history:
-                print(f"DEBUG - Using full conversation history with {len(full_conversation_history)} entries")
-                for entry in full_conversation_history:
-                    question = entry.get("question", "")
-                    response = entry.get("response", "")
-                    agent = entry.get("agent", "unknown")
-                    agent_label = "Doctor" if agent == "case_presenter" else "Patient"
+                    self.revealed_info.add("differential_diagnosis")
                     
-                    if question:
-                        full_conversation_string += f"Student: {question}\n"
-                    if response:
-                        full_conversation_string += f"{agent_label}: {response}\n\n"
-            
-            # Debug information
-            print(f"DEBUG - Current case: {self.current_case}")
-            
-            # Evaluate the reasoning
-            result = action(
-                student_differential=self.pending_differential,
-                student_reasoning=task.instruction if not is_initial_response else self.pending_differential,
-                is_initial_response=is_initial_response,
-                full_case_conversation=full_conversation_string,
-                case_details=self.current_case
-            )
-            
-            # Get the response
-            response = result.get("response", "Please elaborate on your reasoning.")
-            
-            # Store in conversation history
-            self.conversation_history.append({
-                "question": task.instruction,
-                "response": response
-            })
-            
-            # If reasoning is complete, update status
-            if result.get("reasoning_complete", False):
-                self.awaiting_reasoning = False
-                self.differential_given = True
-                self.current_stage = TutorStage.POST_DIFFERENTIAL
-                print(f"DEBUG - Reasoning complete for differential: {self.pending_differential}")
-            
-            return {
-                "response": response,
-                "agent": "case_presenter"
-            }
+                    # Create a completion response
+                    completion_response = "Thank you for explaining your reasoning. Based on your differential and reasoning, let's proceed with the next steps in evaluating this case."
+                    self.conversation_history.append({
+                        "question": original_instruction if 'original_instruction' in locals() else task.instruction,
+                        "response": completion_response
+                    })
+                    return {
+                        "response": completion_response,
+                        "reasoning_complete": True,
+                        "agent": "case_presenter"
+                    }
+                
+                # Update state based on differential evaluation
+                if result.get("reasoning_complete", False) or result.get("is_appropriate", False):
+                    self.differential_given = True
+                    self.current_stage = TutorStage.POST_DIFFERENTIAL
+                    self.revealed_info.add("differential_diagnosis")
+                    # Reset awaiting_reasoning flag when reasoning is complete
+                    self.awaiting_reasoning = False
+                    self.reasoning_evaluation_started = False
+                    self.reasoning_turn_count = 0  # Reset the counter
+                    print(f"DEBUG - Reasoning complete, resetting awaiting_reasoning to False")
+                
+                # Track that we've started the reasoning evaluation process
+                if not self.reasoning_evaluation_started and not result.get("reasoning_complete", False):
+                    self.reasoning_evaluation_started = True
+                    print(f"DEBUG - Started reasoning evaluation process")
+                
+                response = result.get("response", "Please elaborate on your reasoning.")
+                self.conversation_history.append({
+                    "question": original_instruction if 'original_instruction' in locals() else task.instruction,
+                    "response": response
+                })
+                
+                # Log the current state after processing
+                print(f"DEBUG - After processing reasoning: awaiting_reasoning={self.awaiting_reasoning}, reasoning_evaluation_started={self.reasoning_evaluation_started}")
+                return result
+            return str(result)
         
         elif isinstance(action, EvaluateFinalDiagnosisAction):
             result = action(
-                student_diagnosis=task.instruction,
+                student_diagnosis=modified_task.instruction,
                 case_details=self.current_case,
                 previous_differential=self.current_differential
             )
-            if isinstance(result, dict) and result.get("is_correct", False):
-                self.current_stage = TutorStage.KNOWLEDGE_ASSESSMENT
-            
-            # Extract response and organism
-            response = result.get("feedback", str(result))
-            organism = result.get("organism", "Unknown organism")
-            is_correct = result.get("is_correct", False)
-            
-            self.conversation_history.append({
-                "question": task.instruction,
-                "response": response
-            })
-            
-            # Return the full result including organism if correct
-            if is_correct:
-                return {
-                    "response": response,
-                    "is_correct": True,
-                    "organism": organism,
-                    "agent": "case_presenter"
-                }
-            else:
-                return {
-                    "response": response,
-                    "agent": "case_presenter"
-                }
+            if isinstance(result, dict):
+                if result.get("is_correct", False):
+                    self.current_stage = TutorStage.KNOWLEDGE_ASSESSMENT
+                    self.revealed_info.add("final_diagnosis")
+                
+                response = result.get("feedback", str(result))
+                self.conversation_history.append({
+                    "question": original_instruction,
+                    "response": response
+                })
+                return result
+            return str(result)
         
         # For any other action type, just execute it
-        return str(action(task=task.instruction))
-    
+        if isinstance(action, ThinkAction):
+            # Special case for ThinkAction - likely for diagnostic request before differential
+            result = "Before we look at diagnostic tests, I'd like to hear your differential diagnosis based on the history and physical examination findings. What conditions are you considering?"
+        else:
+            result = str(action(task=modified_task.instruction))
+            
+        self.conversation_history.append({
+            "question": original_instruction,
+            "response": result
+        })
+        return {
+            "response": result,
+            "agent": "case_presenter"
+        }
+
+
     def reset(self):
         """Reset the agent state."""
         self.current_case = None
@@ -1042,6 +1128,7 @@ class CasePresenterAgent(CustomAgentWrapper):
         self.awaiting_reasoning = False
         self.reasoning_evaluation_started = False
         self.pending_differential = None
+        self.reasoning_turn_count = 0
         
         # Reset differential tracking
         self.differential_history = []

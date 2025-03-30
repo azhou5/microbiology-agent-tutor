@@ -104,6 +104,41 @@ class CaseGeneratorRAGAgent(BaseAgent):
         }
 
     def generate_case(self) -> str:
+        print("Checking for existing case...")
+        # Check if case already exists
+        try:
+            if os.path.exists(self.output_dir):
+                case_file = os.path.join(self.output_dir, "case.txt")
+                if os.path.exists(case_file):
+                    print(f"Found existing case for {self.organism}")
+                    with open(case_file, 'r') as f:
+                        case_text = f.read()
+                    
+                    # Load other files if they exist
+                    for section_name in self.case_sections:
+                        section_file = os.path.join(self.output_dir, f"{section_name}.txt")
+                        if os.path.exists(section_file):
+                            with open(section_file, 'r') as f:
+                                self.case_sections[section_name] = f.read()
+                    
+                    # Load guiding questions if they exist
+                    for section_name in self.guiding_questions:
+                        questions_file = os.path.join(self.output_dir, f"{section_name}_questions.txt")
+                        if os.path.exists(questions_file):
+                            with open(questions_file, 'r') as f:
+                                # Parse questions from file
+                                questions = []
+                                for line in f:
+                                    if line.startswith("Question: "):
+                                        questions.append(line[len("Question: "):].strip())
+                                self.guiding_questions[section_name] = questions
+                    
+                    print("Successfully loaded existing case and associated files")
+                    return case_text
+        except Exception as e:
+            print(f"Error checking/loading existing case: {str(e)}")
+            # Continue with generating new case if there was an error loading existing one
+        
         print("Generating a new clinical case...")
         # Reset chat history and case sections
         self.chat_history = [SystemMessage(content=self.system_prompt)]
