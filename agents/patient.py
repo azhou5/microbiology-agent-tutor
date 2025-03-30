@@ -31,7 +31,7 @@ class RespondToQuestionAction(BaseAction):
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.5
+            #temperature=0.5
         )
     
     def __call__(self, **kwargs) -> str:
@@ -124,7 +124,6 @@ class ElaborateResponseAction(BaseAction):
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.5
         )
     
     def __call__(self, **kwargs) -> str:
@@ -177,9 +176,9 @@ Elaborate naturally as the patient, while:
         }
 
 class PatientAgent(CustomAgentWrapper):
-    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.3):
+    def __init__(self, model_name: str = "gpt-4o-mini"):
         # Initialize LLM configuration
-        llm_config = LLMConfig({"llm_name": model_name, "temperature": temperature})
+        llm_config = LLMConfig({"llm_name": model_name})
         llm = get_llm_backend(llm_config)
         
         # Initialize custom actions

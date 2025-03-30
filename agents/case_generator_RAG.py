@@ -12,8 +12,8 @@ from agentlite.commons import TaskPackage
 load_dotenv('.env')
 
 class CaseGeneratorRAGAgent(BaseAgent):
-    def __init__(self, model_name: str = "gpt-4", temperature: float = 0.3):
-        super().__init__(model_name, temperature)
+    def __init__(self, model_name: str = "gpt-4o"):
+        super().__init__(model_name)
         print("Initializing CaseGeneratorRAGAgent...")
         
         # Default organism if none is specified
@@ -45,7 +45,7 @@ class CaseGeneratorRAGAgent(BaseAgent):
         self.rag_llm = AzureChatOpenAI(
             azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-09-01-preview"),
-            temperature=0,
+            
             max_tokens=None,
             timeout=None,
             max_retries=2,
@@ -573,7 +573,13 @@ Case
             """
             
             # Generate a complete case using the LLM directly
-            complete_case = self.llm_layer(fallback_prompt)
+            # Create messages for the LLM instead of direct invoke with parameters
+            messages = [
+                SystemMessage(content=self.system_prompt),
+                HumanMessage(content=fallback_prompt)
+            ]
+            response = self.llm.invoke(messages)
+            complete_case = response.content
             
             # Add it to the patient_info section as a placeholder
             self.case_sections["patient_info"] = complete_case
@@ -592,11 +598,16 @@ Case
     def _fallback_generate_section(self, prompt: str) -> str:
         """Generate a section using the standard LLM approach if RAG fails."""
         try:
-            response = self.llm_layer(prompt)
+            # Create messages for the LLM instead of direct invoke
+            messages = [
+                SystemMessage(content=self.system_prompt),
+                HumanMessage(content=prompt)
+            ]
+            response = self.llm.invoke(messages)
             
             # Ensure we got a valid response
-            if isinstance(response, str) and len(response) > 10:  # Basic validation
-                return response.strip()
+            if hasattr(response, 'content') and isinstance(response.content, str) and len(response.content) > 10:  # Basic validation
+                return response.content.strip()
             return ""
         except Exception as e:
             print(f"Error in fallback section generation: {str(e)}")
@@ -627,11 +638,17 @@ Case
             Generate only the questions, numbered 1-5, without explanations or answers.
             """
             
-            response = self.llm_layer(prompt)
+            # Create messages for the LLM instead of direct invoke
+            messages = [
+                SystemMessage(content=self.system_prompt),
+                HumanMessage(content=prompt)
+            ]
+            response = self.llm.invoke(messages)
+            response_text = response.content
             
             # Parse questions from the response
             questions = []
-            for line in response.strip().split('\n'):
+            for line in response_text.strip().split('\n'):
                 line = line.strip()
                 if line and (line[0].isdigit() or line.startswith('•')):
                     # Remove number/bullet and clean up
@@ -890,7 +907,7 @@ Case
             Format each key concept as a brief bullet point (1-2 sentences).
             """
             
-            response = self.llm_layer(prompt)
+            response = self.llm.invoke(prompt)
             return response.strip()
         except Exception as e:
             print(f"Error in fallback key concepts generation: {str(e)}")

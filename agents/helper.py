@@ -22,7 +22,7 @@ class ProvideGuidanceAction(BaseAction):
             }
         )
         # Initialize Azure OpenAI using the helper function
-        self.llm = get_azure_llm("gpt-4o-mini", temperature=0.3)
+        self.llm = get_azure_llm("gpt-4o-mini")
     
     def __call__(self, **kwargs) -> str:
         case_details = kwargs.get("case_details", {}) or {}  # Handle None case
@@ -83,7 +83,7 @@ class AnswerDirectQuestionAction(BaseAction):
             }
         )
         # Initialize Azure OpenAI using the helper function - use a more capable model for educational content
-        self.llm = get_azure_llm("gpt-4o", temperature=0.2)
+        self.llm = get_azure_llm("gpt-4o-mini")
     
     def __call__(self, **kwargs) -> str:
         question = kwargs.get("question", "")
@@ -121,7 +121,7 @@ Provide a direct educational answer to this question. If it's closely related to
         }
 
 class HelperAgent(CustomAgentWrapper):
-    def __init__(self, model_name: str = None, temperature: float = 0.3):
+    def __init__(self, model_name: str = None):
         # Initialize LLM configuration
         deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         if not deployment_name:
@@ -129,7 +129,7 @@ class HelperAgent(CustomAgentWrapper):
             
         llm_config = LLMConfig({
             "llm_name": deployment_name,
-            "temperature": temperature,
+            #"temperature": temperature,
             "api_type": "azure"
         })
         llm = get_llm_backend(llm_config)
@@ -179,7 +179,7 @@ For direct educational questions not related to the current case, I provide accu
             The appropriate action to handle the question
         """
         # Use a smaller model for action determination
-        determine_action_llm = get_azure_llm("gpt-4o-mini", temperature=0.1)
+        determine_action_llm = get_azure_llm("gpt-4o-mini")
         
         # Get case text safely
         case_text = ""

@@ -10,9 +10,8 @@ from agentlite.llm.agent_llms import BaseLLM
 from agentlite.logging import DefaultLogger
 from agentlite.logging.terminal_logger import AgentLogger
 from agentlite.memory.AgentSTMemory import AgentSTMemory, DictAgentSTMemory
-
+from openai import OpenAI 
 from .ABCAgent import ABCAgent
-
 
 class BaseAgent(ABCAgent):
     """the base agent class for multi-turn action calling. Subclass from ABCAgent

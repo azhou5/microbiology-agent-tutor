@@ -66,7 +66,8 @@ class AgentTrackingFinishAction(FinishAction):
 
 class MedicalMicrobiologyTutor(ManagerAgent):
     def __init__(self, model_name: str = None, temperature: float = 0.1):
-        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        #deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        deployment_name = 'gpt-4o'
         if not deployment_name:
             raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
         print(f"Using Azure OpenAI deployment: {deployment_name}")
@@ -74,7 +75,7 @@ class MedicalMicrobiologyTutor(ManagerAgent):
         # Initialize Azure OpenAI through LangChain
         self.llm = AzureChatOpenAI(
             openai_api_type="azure",
-            openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
+            openai_api_version= "2024-12-01-preview",
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             deployment_name=deployment_name,
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -580,7 +581,7 @@ class MedicalMicrobiologyTutor(ManagerAgent):
             # If it's already a list of messages, use it as is
             messages = prompt
             
-        response = self.llm.predict_messages(messages)
+        response = self.llm.invoke(messages)
         return response.content
 
     def _is_in_reasoning_evaluation(self):

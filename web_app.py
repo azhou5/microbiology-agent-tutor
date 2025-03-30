@@ -77,7 +77,6 @@ def initialize_summarize_llm():
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            temperature=0.3,
             model="gpt-4o-mini"  # Use the smaller model for efficiency
         )
         print("Initialized summarization LLM successfully")

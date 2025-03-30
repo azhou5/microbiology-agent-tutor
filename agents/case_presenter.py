@@ -37,7 +37,7 @@ different stages of the diagnostic process.
 """
 
 # Helper function to create Azure OpenAI LLM instance
-def get_azure_llm(deployment_name=None, temperature=0.1):
+def get_azure_llm(deployment_name=None):
     """
     Create and return an Azure OpenAI LLM instance with the specified parameters.
     
@@ -58,11 +58,10 @@ def get_azure_llm(deployment_name=None, temperature=0.1):
     
     return AzureChatOpenAI(
         openai_api_type="azure",
-        openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview"),
+        openai_api_version="2024-12-01-preview",
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         deployment_name=deployment_name,
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        temperature=temperature
     )
 
 class PresentCaseAction(BaseAction):
@@ -272,12 +271,8 @@ class EvaluateDifferentialReasoningAction(BaseAction):
     Action that conducts an interactive Socratic dialogue to evaluate a student's
     clinical reasoning process.
     
-    Implements a two-stage approach:
-    1. Clarification stage: Determines if reasoning is already included in the differential
-    2. Interactive evaluation stage: Engages in dialogue to probe reasoning
-    
-    Identifies student failure modes (information gathering vs. knowledge gaps)
-    and provides appropriate guidance without giving away answers.
+    Uses a single LLM to evaluate student reasoning, identify failure modes,
+    and provide appropriate guidance without giving away answers.
     
     Returns:
         dict: Contains response, reasoning assessment, and completion status
@@ -295,10 +290,15 @@ class EvaluateDifferentialReasoningAction(BaseAction):
                 "revealed_info": "Set of information categories already revealed to the student"
             }
         )
-        # Initialize Azure OpenAI for different tasks
-        self.clarify_llm = get_azure_llm("gpt-4o-mini")  # Lighter model for clarification
-        self.evaluate_llm = get_azure_llm("gpt-4o")      # More powerful model for evaluation
-        
+        # Initialize a single Azure OpenAI model for all reasoning evaluation
+        self.llm =  AzureChatOpenAI(
+        openai_api_type="azure",
+        openai_api_version="2024-12-01-preview",
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        deployment_name='gpt-4o',
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    )
+
         # Track conversation state
         self.last_response_type = None
         self.discussed_findings = set()
@@ -330,143 +330,80 @@ class EvaluateDifferentialReasoningAction(BaseAction):
                     "agent": "case_presenter"
                 }
         
-        # STAGE 1: CLARIFICATION STAGE
-        # If this is the first response to the differential, check if reasoning is already included
-        if is_initial_response:
-            # Use a lighter model to determine if reasoning is already included
-            system_prompt = """You are analyzing a student's differential diagnosis to determine if it already includes reasoning.
-            Respond with a JSON object in this format:
-            {
-                "includes_reasoning": true/false,
-                "next_question": "The question to ask the student next",
-                "identified_findings": ["list", "of", "clinical", "findings", "mentioned"]
-            }
-            
-            If the student's response includes "because", "due to", "as a result of", "given that", or similar phrases
-            followed by clinical reasoning, set includes_reasoning to true.
-            
-            Extract any clinical findings or observations the student mentions and include them in identified_findings.
-            
-            If includes_reasoning is true, the next_question should ask about additional factors they haven't mentioned.
-            If includes_reasoning is false, ask them to explain their reasoning."""
-            
-            main_prompt = f"""Student's differential diagnosis: {student_differential}
-
-            Determine if this already includes reasoning for the diagnosis."""
-            
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=main_prompt)
-            ]
-            
-            response = self.clarify_llm.invoke(messages)
-            
-            try:
-                import json
-                response_text = response.content.strip()
-                start = response_text.find('{')
-                end = response_text.rfind('}') + 1
-                if start >= 0 and end > start:
-                    analysis = json.loads(response_text[start:end])
-                    
-                    # Track findings mentioned
-                    if "identified_findings" in analysis:
-                        self.discussed_findings.update(analysis["identified_findings"])
-                    
-                    if analysis.get("includes_reasoning", False):
-                        self.last_response_type = "probe_further"
-                        return {
-                            "response": analysis.get("next_question", "Any other clinical findings or epidemiological factors that support your differential?"),
-                            "includes_reasoning": True,
-                            "agent": "case_presenter"
-                        }
-                    else:
-                        self.last_response_type = "request_reasoning"
-                        return {
-                            "response": analysis.get("next_question", "Why do you think these are the most likely diagnoses? What specific findings support your differential?"),
-                            "includes_reasoning": False,
-                            "agent": "case_presenter"
-                        }
-            except:
-                # Default to asking why if we can't parse the response
-                self.last_response_type = "request_reasoning"
-                return {
-                    "response": "Why do you think these are the most likely diagnoses? What specific findings support your differential?",
-                    "includes_reasoning": False,
-                    "agent": "case_presenter"
-                }
+        # Add the current reasoning to the conversation for continuity
+        full_case_with_current = full_case_conversation 
+        if full_case_with_current and student_reasoning:
+            full_case_with_current += f"\nStudent: {student_reasoning}"
+        elif student_reasoning:
+            full_case_with_current = f"Student: {student_reasoning}"
         
-        # STAGE 2: INTERACTIVE EVALUATION STAGE
-        # This is the continuous back-and-forth evaluation of reasoning
-        else:
-            # Add the current reasoning to the conversation for continuity
-            full_case_with_current = full_case_conversation 
-            if full_case_with_current and student_reasoning:
-                full_case_with_current += f"\nStudent: {student_reasoning}"
-            elif student_reasoning:
-                full_case_with_current = f"Student: {student_reasoning}"
+        # Format revealed_info to be more readable
+        formatted_revealed_info = []
+        info_mapping = {
+            "symptoms": "Symptoms and complaints",
+            "physical_exam": "Physical examination findings",
+            "epidemiology": "Epidemiological information", 
+            "medical_history": "Medical history",
+            "respiratory_exam": "Respiratory examination",
+            "cardiac_exam": "Cardiac examination",
+            "abdominal_exam": "Abdominal examination",
+            "neurological_exam": "Neurological examination",
+            "skin_exam": "Skin examination",
+            "lymphatic_exam": "Lymphatic examination",
+            "ent_exam": "ENT examination",
+            "eye_exam": "Eye examination",
+            "musculoskeletal_exam": "Musculoskeletal examination",
+            "general_physical_exam": "General physical examination"
+        }
+        
+        for info in revealed_info:
+            readable_name = info_mapping.get(info, info.replace("_", " ").title())
+            formatted_revealed_info.append(readable_name)
             
-            system_prompt = """You are an expert medical educator engaging in a Socratic dialogue with a student about their differential diagnosis.
-            
-            Your goal is to:
-            1. Evaluate the strength and accuracy of their reasoning
-            2. Identify failure modes of the students 
-            3. Provide feedback based on the failure mode
-            4. Help them arrive at a well-reasoned conclusion
-            
-            Students are likely to have two main failure modes: 
-            1. The reasoning for the information they have collected up to that point is correct, but they did not collect enough/the right information to come to the correct conclusion. This is a failure of information gathering. 
-            2. The reasoning for the information they have collected up to that point is incorrect. This is a failure of knowledge. 
+        revealed_info_text = ", ".join(formatted_revealed_info) if formatted_revealed_info else "No specific information categories gathered yet"
+        
+        system_prompt = """You are an expert medical educator engaging in a Socratic dialogue with a student about their differential diagnosis.
+        
+        Your goal is to:
+        1. Evaluate the strength and accuracy of their reasoning
+        2. Identify failure modes of the students 
+        3. Provide feedback based on the failure mode
+        4. Help them arrive at a well-reasoned conclusion
+        
+        Students are likely to have two main failure modes: 
+        1. The reasoning for the information they have collected up to that point is correct, but they did not collect enough/the right information to come to the correct conclusion. This is a failure of information gathering. 
+        2. The reasoning for the information they have collected up to that point is incorrect. This is a failure of knowledge. 
 
-            EVALUATE BOTH:
-            1. Whether the student has done sufficient information gathering before reaching their differential diagnosis
-            2. Whether their reasoning about the information they collected is correct
-            
-            When analyzing their information gathering, review the FULL case conversation provided to determine what questions they asked and what information they obtained.
-            
-            Return a JSON object with:
-            {
-                "reasoning_complete": true/false,
-                "response_type": "probe_further|correct_misconception|challenge_with_information|acknowledge_good_reasoning",
-                "response": "Your response to the student",
-                "reasoning_quality": "strong|adequate|needs_improvement|flawed",
-                "identified_findings": ["list", "of", "clinical", "findings", "mentioned"],
-                "next_steps": ["suggested", "areas", "to", "explore"]
-            }
-            
-            IMPORTANT:
-            1. Never repeat the exact same question
-            2. Acknowledge what the student has said before asking the next question
-            3. If they mention a finding, probe deeper about its significance
-            4. If they miss key findings, guide them to consider those areas
-            5. Make your responses feel like a natural conversation"""
-            
-            # Format revealed_info to be more readable
-            formatted_revealed_info = []
-            info_mapping = {
-                "symptoms": "Symptoms and complaints",
-                "physical_exam": "Physical examination findings",
-                "epidemiology": "Epidemiological information", 
-                "medical_history": "Medical history",
-                "respiratory_exam": "Respiratory examination",
-                "cardiac_exam": "Cardiac examination",
-                "abdominal_exam": "Abdominal examination",
-                "neurological_exam": "Neurological examination",
-                "skin_exam": "Skin examination",
-                "lymphatic_exam": "Lymphatic examination",
-                "ent_exam": "ENT examination",
-                "eye_exam": "Eye examination",
-                "musculoskeletal_exam": "Musculoskeletal examination",
-                "general_physical_exam": "General physical examination"
-            }
-            
-            for info in revealed_info:
-                readable_name = info_mapping.get(info, info.replace("_", " ").title())
-                formatted_revealed_info.append(readable_name)
-                
-            revealed_info_text = ", ".join(formatted_revealed_info) if formatted_revealed_info else "No specific information categories gathered yet"
-            
-            main_prompt = f"""Case Details:
+        EVALUATE BOTH:
+        1. Whether the student has done sufficient information gathering before reaching their differential diagnosis
+        2. Whether their reasoning about the information they collected is correct
+        
+        When analyzing their information gathering, review the FULL case conversation provided to determine what questions they asked and what information they obtained.
+        
+        Return a JSON object with:
+        {
+            "reasoning_complete": true/false,
+            "response_type": "probe_further|correct_misconception|challenge_with_information|acknowledge_good_reasoning",
+            "response": "Your response to the student",
+            "reasoning_quality": "strong|adequate|needs_improvement|flawed",
+            "identified_findings": ["list", "of", "clinical", "findings", "mentioned"],
+            "next_steps": ["suggested", "areas", "to", "explore"]
+        }
+        
+        IMPORTANT INSTRUCTIONS:
+        1. If this is the first time evaluating the differential (is_initial_response=true):
+           - Check if the differential already includes reasoning (e.g., contains "because", "due to", etc.)
+           - If it includes reasoning, acknowledge it and probe further with specific questions
+           - If it doesn't include reasoning, ask them to explain their reasoning
+           
+        2. For follow-up responses:
+           - Never repeat the exact same question
+           - Acknowledge what the student has said before asking the next question
+           - If they mention a finding, probe deeper about its significance
+           - If they miss key findings, guide them to consider those areas
+           - Make your responses feel like a natural conversation"""
+        
+        main_prompt = f"""Case Details:
 {case_details.get('case_text', '')}
 
 Student's Differential Diagnosis:
@@ -484,69 +421,74 @@ Last Response Type:
 Full Case Conversation:
 {full_case_with_current if full_case_with_current else "[No prior conversation recorded]"}
 
-Case-relevant information that the student has already gathered:
-{self.revealed_info}
+Information Categories Gathered:
+{revealed_info_text}
+This part is crucial. This is the only information that the student has gathered. Please do not reference any information outside of this. 
 
+Is this the initial response to the differential: {is_initial_response}
+
+If the student has not gathered enough information to make the differential diagnosis in your judgement, you should tell them to gather more information. 
+You can give them a hint about what type of information they are missing. 
 Based on this exchange, determine if the student's reasoning is complete and accurate enough to move forward, or if further questioning would be beneficial for their learning.
 If you need to probe further, don't give away the answers - ask questions that lead them to discover insights themselves.
 
 When evaluating, consider BOTH:
 1. Did they ask sufficient questions to gather appropriate information before making their differential diagnosis?
 2. Is their reasoning about the information they gathered correct?"""
-            
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=main_prompt)
-            ]
-            
-            response = self.evaluate_llm.invoke(messages)
-            
-            try:
-                import json
-                response_text = response.content.strip()
-                start = response_text.find('{')
-                end = response_text.rfind('}') + 1
-                if start >= 0 and end > start:
-                    evaluation = json.loads(response_text[start:end])
-                    
-                    # Update tracking
-                    self.last_response_type = evaluation.get("response_type", "probe_further")
-                    if "identified_findings" in evaluation:
-                        self.discussed_findings.update(evaluation["identified_findings"])
-                    
-                    # Be more explicit about reasoning completion
-                    # If the response type indicates acknowledgment of good reasoning or reasoning quality is strong,
-                    # we should consider reasoning complete even if not explicitly marked
-                    is_reasoning_complete = evaluation.get("reasoning_complete", False)
-                    if not is_reasoning_complete:
-                        response_type = evaluation.get("response_type", "")
-                        reasoning_quality = evaluation.get("reasoning_quality", "")
-                        
-                        if response_type == "acknowledge_good_reasoning" or reasoning_quality == "strong":
-                            is_reasoning_complete = True
-                            print(f"DEBUG - EvaluateDifferentialReasoningAction: Forcing reasoning_complete=True based on response_type={response_type} and reasoning_quality={reasoning_quality}")
-                    
-                    return {
-                        "response": evaluation.get("response", "Could you elaborate on your reasoning?"),
-                        "reasoning_complete": is_reasoning_complete,
-                        "reasoning_quality": evaluation.get("reasoning_quality", "needs_improvement"),
-                        "response_type": evaluation.get("response_type", "probe_further"),
-                        "agent": "case_presenter"
-                    }
+        
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=main_prompt)
+        ]
+        
+        response = self.llm.invoke(messages)
+        
+        try:
+            import json
+            response_text = response.content.strip()
+            start = response_text.find('{')
+            end = response_text.rfind('}') + 1
+            if start >= 0 and end > start:
+                evaluation = json.loads(response_text[start:end])
                 
-                raise ValueError("No valid JSON found in response")
+                # Update tracking
+                self.last_response_type = evaluation.get("response_type", "probe_further")
+                if "identified_findings" in evaluation:
+                    self.discussed_findings.update(evaluation["identified_findings"])
                 
-            except Exception as e:
-                print(f"Error evaluating reasoning: {str(e)}")
-                # Default to a generic follow-up question that acknowledges their input
-                self.last_response_type = "probe_further"
+                # Be more explicit about reasoning completion
+                # If the response type indicates acknowledgment of good reasoning or reasoning quality is strong,
+                # we should consider reasoning complete even if not explicitly marked
+                is_reasoning_complete = evaluation.get("reasoning_complete", False)
+                if not is_reasoning_complete:
+                    response_type = evaluation.get("response_type", "")
+                    reasoning_quality = evaluation.get("reasoning_quality", "")
+                    
+                    if response_type == "acknowledge_good_reasoning" or reasoning_quality == "strong":
+                        is_reasoning_complete = True
+                        print(f"DEBUG - EvaluateDifferentialReasoningAction: Forcing reasoning_complete=True based on response_type={response_type} and reasoning_quality={reasoning_quality}")
+                
                 return {
-                    "response": f"I see you mentioned {student_reasoning}. Could you elaborate on how this connects to your differential diagnoses?",
-                    "reasoning_complete": False,
-                    "reasoning_quality": "needs_improvement",
-                    "response_type": "probe_further",
+                    "response": evaluation.get("response", "Could you elaborate on your reasoning?"),
+                    "reasoning_complete": is_reasoning_complete,
+                    "reasoning_quality": evaluation.get("reasoning_quality", "needs_improvement"),
+                    "response_type": evaluation.get("response_type", "probe_further"),
                     "agent": "case_presenter"
                 }
+            
+            raise ValueError("No valid JSON found in response")
+            
+        except Exception as e:
+            print(f"Error evaluating reasoning: {str(e)}")
+            # Default to a generic follow-up question that acknowledges their input
+            self.last_response_type = "probe_further"
+            return {
+                "response": f"I see you mentioned {student_reasoning}. Could you elaborate on how this connects to your differential diagnoses?",
+                "reasoning_complete": False,
+                "reasoning_quality": "needs_improvement",
+                "response_type": "probe_further",
+                "agent": "case_presenter"
+            }
 
 class EvaluateFinalDiagnosisAction(BaseAction):
     """
@@ -569,7 +511,7 @@ class EvaluateFinalDiagnosisAction(BaseAction):
             }
         )
         # Initialize Azure OpenAI
-        self.llm = get_azure_llm(temperature=0.3)
+        self.llm = get_azure_llm()
     
     def __call__(self, **kwargs) -> str:
         case_details = kwargs.get("case_details", {})
@@ -730,7 +672,7 @@ class CasePresenterAgent(CustomAgentWrapper):
             
         llm_config = LLMConfig({
             "llm_name": deployment_name,
-            "temperature": temperature,
+           # "temperature": temperature,
             "api_type": "azure"
         })
         llm = get_llm_backend(llm_config)
