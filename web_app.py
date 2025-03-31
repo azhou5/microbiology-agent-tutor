@@ -181,9 +181,9 @@ def extract_revealed_info(response, tutor_instance):
             # Handle physical exam responses - only if it's actual exam findings
             if "exam_type" in response and "response" in response and response.get("agent") == "case_presenter":
             # Handle case presentation - only if it's the actual initial case info
-            if "case_presentation" in response and "full_case" in response:
-                revealed_info["history"]["Initial Presentation"] = response["case_presentation"]
-                print(f"Added initial presentation: {response['case_presentation']}")
+                if "case_presentation" in response and "full_case" in response:
+                    revealed_info["history"]["Initial Presentation"] = response["case_presentation"]
+                    print(f"Added initial presentation: {response['case_presentation']}")
             
             # Handle physical exam responses - only if it's actual exam findings
             if "exam_type" in response and "response" in response and response.get("agent") == "case_presenter":
@@ -228,16 +228,16 @@ def extract_revealed_info(response, tutor_instance):
         else:
             print("No patient agent found in tutor_instance")
         
-                exam_response = response["response"]
-                # Only add if the response contains actual findings (not error messages or generic responses)
-                if exam_type and exam_response and any(term in exam_response.lower() for term in [
-                    "auscultation", "palpation", "percussion", "inspection", "tenderness", "rales", 
-                    "crackles", "wheezes", "murmur", "rhythm", "sound", "reflex", "strength", 
-                    "sensation", "range", "motion", "pulse", "pressure", "temperature"
-                ]):
-                    key = f"Examined {exam_type}"
-                    revealed_info["exam"][key] = summarize_text(exam_response)
-                    print(f"Added exam finding: {key} = {exam_response[:100]}...")
+            exam_response = response["response"]
+            # Only add if the response contains actual findings (not error messages or generic responses)
+            if exam_type and exam_response and any(term in exam_response.lower() for term in [
+                "auscultation", "palpation", "percussion", "inspection", "tenderness", "rales", 
+                "crackles", "wheezes", "murmur", "rhythm", "sound", "reflex", "strength", 
+                "sensation", "range", "motion", "pulse", "pressure", "temperature"
+            ]):
+                key = f"Examined {exam_type}"
+                revealed_info["exam"][key] = summarize_text(exam_response)
+                print(f"Added exam finding: {key} = {exam_response[:100]}...")
             
             # Check if this is a patient response and add it directly to history if so
             if response.get("agent") == "patient" and "response" in response:
