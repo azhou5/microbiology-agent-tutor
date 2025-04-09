@@ -1,0 +1,181 @@
+/* Global Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: #2c3e50;
+    margin-bottom: 0.5em;
+}
+
+/* Revealed Info Panel Styles */
+.revealed-info {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 5px;
+    font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+/* Card that contains the revealed info */
+.card-revealed-info {
+    height: calc(100vh - 220px);
+    overflow: hidden;
+}
+
+.card-revealed-info .card-header {
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+
+.revealed-info h5 {
+    font-size: 0.95rem;
+    margin: 8px 0 3px 0;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.revealed-info .list-group-item {
+    padding: 6px 8px;
+    margin-bottom: 3px;
+    border-radius: 4px;
+    border: 1px solid #f0f0f0;
+    background-color: #f9f9f9;
+}
+
+.revealed-info .list-group-item strong {
+    font-size: 0.8rem;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.revealed-info .info-content {
+    font-size: 0.8rem;
+    margin-left: 5px;
+    display: block;
+    color: #555;
+}
+
+.revealed-info .history-header,
+.revealed-info .exam-header,
+.revealed-info .labs-header {
+    color: #3498db;
+}
+
+.revealed-info #current-organism {
+    font-size: 0.9rem;
+    margin: 8px 0;
+}
+
+/* Organism Selection Page */
+.instruction {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 25px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.organism-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.organism-card {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    padding: 20px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.organism-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    background-color: #f1f8ff;
+    border-color: #b3d7ff;
+}
+
+.organism-card h3 {
+    margin-top: 0;
+    color: #3498db;
+    font-size: 1.2rem;
+}
+
+.custom-input {
+    display: flex;
+    flex-direction: column;
+    margin-top: 20px;
+}
+
+.custom-input input {
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.start-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.start-btn:hover {
+    background-color: #2980b9;
+}
+
+.back-btn {
+    display: block;
+    margin-top: 20px;
+    text-align: center;
+    color: #3498db;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.back-btn:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .organism-list {
+        grid-template-columns: 1fr;
+    }
+
+    body {
+        padding: 10px;
+    }
+}

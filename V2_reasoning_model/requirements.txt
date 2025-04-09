@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+jinja2
+python-dotenv
+openai
+langchain
+langchain_community
+langchain_openai
+qdrant-client
+chardet 
