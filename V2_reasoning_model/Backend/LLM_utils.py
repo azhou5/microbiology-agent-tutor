@@ -3,7 +3,6 @@ from openai import AzureOpenAI
 import os
 import time
 import copy
-import pandas as pd
 import json
 import pickle
 from dotenv import load_dotenv
