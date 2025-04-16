@@ -1,0 +1,34 @@
+2025-04-16 15:49:32,548 - INFO - {
+  "timestamp": "2025-04-16T15:49:32.547922",
+  "organism": "staphylococcus aureus",
+  "rating": "4",
+  "rated_message": "Preceptor: A 47-year-old male presents with worsening pain, redness, and swelling on his right forearm.",
+  "feedback_text": "",
+  "visible_chat_history": [
+    {
+      "role": "assistant",
+      "content": "Preceptor: A 47-year-old male presents with worsening pain, redness, and swelling on his right forearm."
+    }
+  ]
+}
+2025-04-16 15:49:54,443 - INFO - {
+  "timestamp": "2025-04-16T15:49:54.442984",
+  "organism": "staphylococcus aureus",
+  "rating": "4",
+  "rated_message": "Patient: Around 5 days ago.",
+  "feedback_text": "good",
+  "visible_chat_history": [
+    {
+      "role": "assistant",
+      "content": "Preceptor: A 47-year-old male presents with worsening pain, redness, and swelling on his right forearm."
+    },
+    {
+      "role": "user",
+      "content": "when did it start ?"
+    },
+    {
+      "role": "assistant",
+      "content": "Patient: Around 5 days ago."
+    }
+  ]
+}

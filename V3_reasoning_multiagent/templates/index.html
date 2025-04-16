@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microbiology Tutor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Microbiology Tutor</h1>
+
+        <div class="case-setup">
+            <label for="organism-select">Select Organism:</label>
+            <select id="organism-select">
+                <option value="staphylococcus aureus">Staphylococcus aureus</option>
+                <option value="streptococcus pneumoniae">Streptococcus pneumoniae</option>
+                <option value="escherichia coli">Escherichia coli</option>
+                <!-- Add more organisms as needed -->
+            </select>
+            <button id="start-case-btn">Start New Case</button>
+        </div>
+
+        <div id="chatbox">
+            <!-- Chat messages will be appended here -->
+        </div>
+
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Enter your message..." disabled>
+            <button id="send-btn" disabled>Send</button>
+        </div>
+         <p id="status-message" class="status"></p>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html> 
