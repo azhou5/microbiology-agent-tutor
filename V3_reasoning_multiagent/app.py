@@ -7,6 +7,7 @@ from tutor import MedicalMicrobiologyTutor # Assuming tutor.py is in the same di
 
 # --- Configuration ---
 FEEDBACK_LOG_FILE = 'feedback.log'
+CASE_FEEDBACK_LOG_FILE = 'case_feedback.log'  # New log file for case feedback
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 
 # --- Logging Setup ---
@@ -18,6 +19,14 @@ feedback_logger = logging.getLogger('feedback')
 feedback_logger.addHandler(file_handler)
 feedback_logger.setLevel(logging.INFO)
 feedback_logger.propagate = False # Prevent feedback logs from appearing in the main console log
+
+# Setup case feedback logger
+case_feedback_handler = logging.FileHandler(CASE_FEEDBACK_LOG_FILE)
+case_feedback_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+case_feedback_logger = logging.getLogger('case_feedback')
+case_feedback_logger.addHandler(case_feedback_handler)
+case_feedback_logger.setLevel(logging.INFO)
+case_feedback_logger.propagate = False
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -128,6 +137,41 @@ def feedback():
         return jsonify({"status": "Feedback received"}), 200
     except Exception as e:
         logging.error(f"Error processing feedback: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/case_feedback', methods=['POST'])
+def case_feedback():
+    """Receives and logs overall case feedback from the user."""
+    try:
+        data = request.get_json()
+        detail_rating = data.get('detail')
+        helpfulness_rating = data.get('helpfulness')
+        accuracy_rating = data.get('accuracy')
+        comments = data.get('comments', '')
+        
+        if not all([detail_rating, helpfulness_rating, accuracy_rating]):
+            return jsonify({"error": "Missing required feedback ratings"}), 400
+            
+        # Get current organism
+        current_organism = tutor.current_organism or "Unknown"
+        
+        # Prepare log entry
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "organism": current_organism,
+            "detail_rating": detail_rating,
+            "helpfulness_rating": helpfulness_rating,
+            "accuracy_rating": accuracy_rating,
+            "comments": comments
+        }
+        
+        # Log the feedback entry as a JSON string
+        case_feedback_logger.info(json.dumps(log_entry, indent=2))
+        
+        logging.info(f"Received case feedback for {current_organism} case - Detail: {detail_rating}/5, Helpfulness: {helpfulness_rating}/5, Accuracy: {accuracy_rating}/5")
+        return jsonify({"status": "Case feedback received"}), 200
+    except Exception as e:
+        logging.error(f"Error processing case feedback: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 # --- Main Execution ---

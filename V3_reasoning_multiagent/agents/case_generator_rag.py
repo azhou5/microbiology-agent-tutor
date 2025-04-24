@@ -26,7 +26,7 @@ class CaseGeneratorRAGAgent(BaseAgent):
         
         # Default organism if none is specified
         self.organism = os.getenv("DEFAULT_ORGANISM", "staphylococcus")
-        self.collection = f"{self.organism}_collection"
+        self.collection = "union_collection"
         
         # System prompt for case generation
         self.system_prompt = """You are an expert medical microbiologist specializing in creating realistic clinical cases.
@@ -77,7 +77,7 @@ class CaseGeneratorRAGAgent(BaseAgent):
         """Generate a clinical case for the specified organism."""
         if organism:
             self.organism = organism.lower()
-            self.collection = f"{self.organism}_collection"
+            self.collection = "union_collection"
         
         print(f"Generating case for {self.organism}...")
         

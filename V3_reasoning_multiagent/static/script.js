@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const startCaseBtn = document.getElementById('start-case-btn');
     const organismSelect = document.getElementById('organism-select');
     const statusMessage = document.getElementById('status-message');
+    const finishBtn = document.getElementById('finish-btn');
 
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
 
@@ -57,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function disableInput(disabled = true) {
         userInput.disabled = disabled;
         sendBtn.disabled = disabled;
+        // Don't disable the finish button here, as we want to control it separately
         statusMessage.textContent = disabled ? 'Processing...' : '';
     }
 
@@ -93,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
                  setStatus('Received empty initial message from server.', true);
             }
             disableInput(false); // Enable chat input
+            finishBtn.disabled = false; // Enable the finish button
             setStatus('Case started. You can now chat.');
 
         } catch (error) {
@@ -100,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus(`Error starting case: ${error.message}`, true);
             // Keep input disabled if start fails
             disableInput(true);
+            finishBtn.disabled = true; // Keep finish button disabled on error
         } finally {
             // Re-enable start button regardless of success/failure to allow retries/new cases
              startCaseBtn.disabled = false;
@@ -214,4 +218,84 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial state
     setStatus('Select an organism and click "Start New Case".');
+
+    // Feedback modal elements
+    const feedbackModal = document.getElementById('feedback-modal');
+    const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
+    const closeFeedbackBtn = document.getElementById('close-feedback-btn');
+
+    // Finish Case button
+    finishBtn.addEventListener('click', function() {
+        // Show the feedback modal
+        feedbackModal.style.display = 'block';
+    });
+
+    // Submit case feedback
+    submitFeedbackBtn.addEventListener('click', function() {
+        // Get selected ratings
+        const detailRating = document.querySelector('input[name="detail"]:checked')?.value;
+        const helpfulnessRating = document.querySelector('input[name="helpfulness"]:checked')?.value;
+        const accuracyRating = document.querySelector('input[name="accuracy"]:checked')?.value;
+        const comments = document.getElementById('feedback-comments').value;
+        
+        // Validate that all ratings are selected
+        if (!detailRating || !helpfulnessRating || !accuracyRating) {
+            alert('Please select a rating for all three questions.');
+            return;
+        }
+        
+        // Submit the feedback
+        fetch('/case_feedback', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                detail: detailRating,
+                helpfulness: helpfulnessRating,
+                accuracy: accuracyRating,
+                comments: comments
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                statusMessage.textContent = 'Error submitting case feedback: ' + data.error;
+            } else {
+                // Close the modal
+                feedbackModal.style.display = 'none';
+                
+                // Reset the form
+                document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    radio.checked = false;
+                });
+                document.getElementById('feedback-comments').value = '';
+                
+                // Show thank you message
+                statusMessage.textContent = 'Thank you for your feedback! You can start a new case.';
+                
+                // Reset the chat
+                chatbox.innerHTML = '';
+                userInput.disabled = true;
+                sendBtn.disabled = true;
+                finishBtn.disabled = true;
+            }
+        })
+        .catch(error => {
+            statusMessage.textContent = 'Error submitting case feedback: ' + error;
+            console.error('Error submitting case feedback:', error);
+        });
+    });
+
+    // Close feedback modal
+    closeFeedbackBtn.addEventListener('click', function() {
+        feedbackModal.style.display = 'none';
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        if (event.target === feedbackModal) {
+            feedbackModal.style.display = 'none';
+        }
+    });
 }); 
