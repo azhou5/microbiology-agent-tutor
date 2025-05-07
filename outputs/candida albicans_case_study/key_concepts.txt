@@ -1,0 +1,13 @@
+- **Microbiological Characteristics**: Candida albicans is a yeast that reproduces by budding and forms pseudohyphae, which are key features observed in laboratory diagnostics such as Gram stain and culture.
+
+- **Pathophysiology**: The overgrowth of Candida albicans is often triggered by disruptions in normal flora, such as antibiotic use, which reduces bacterial competition and allows yeast proliferation, particularly in mucosal areas.
+
+- **Diagnostic Approaches**: Diagnosis of vulvovaginal candidiasis involves clinical examination and microbiological confirmation through culture and identification tests like the germ tube test and MALDI-TOF mass spectrometry.
+
+- **Treatment Principles**: Fluconazole is a common antifungal treatment for uncomplicated vulvovaginal candidiasis, with a single oral dose often being effective; however, treatment may need adjustment based on susceptibility testing and clinical response.
+
+- **Prevention Strategies**: Preventive measures include minimizing unnecessary antibiotic use, maintaining good genital hygiene, and addressing lifestyle factors that may predispose to recurrent infections.
+
+- **Differential Diagnosis**: It is important to differentiate vulvovaginal candidiasis from other causes of vaginitis, such as bacterial vaginosis and trichomoniasis, through careful clinical and laboratory evaluation.
+
+- **Complications and Management**: Recurrent infections may require a longer course of antifungal therapy or alternative treatments, and patients should be monitored for potential resistance, especially in cases of treatment failure.

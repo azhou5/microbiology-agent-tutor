@@ -1,0 +1,5 @@
+1. Given that Emily's complete blood count and inflammatory markers are within normal limits, what does this suggest about the nature of her Candida albicans infection, and why might systemic involvement be absent?
+2. How does the presence of budding yeast cells and pseudohyphae on Gram stain correlate with the pathophysiology of Candida albicans infection, and what does this indicate about the organism's growth and colonization?
+3. Considering the normal results of Emily's basic metabolic panel and urinalysis, what conclusions can be drawn about the localization of her infection, and how does this guide the decision to forego imaging studies?
+4. How does the identification of Candida albicans using a germ tube test and MALDI-TOF mass spectrometry influence the choice of antifungal therapy, and why is susceptibility testing important in this context?
+5. In the absence of elevated inflammatory markers, what role do microbiological findings play in confirming the diagnosis of Candida albicans infection, and how do they impact the management plan?
