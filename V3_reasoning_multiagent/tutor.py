@@ -6,7 +6,12 @@ import os
 import dotenv
 import sys
 import json
+from agents.patient import run_patient
 import re
+import pickle
+import numpy as np
+import faiss
+from agents.patient import get_embedding  # reuse the same embedding util
 dotenv.load_dotenv()
 from openai import AzureOpenAI
 client = AzureOpenAI(
@@ -15,28 +20,11 @@ client = AzureOpenAI(
   api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
 )
 
-# Define tool functions - Note: patient function now needs history and case passed explicitly
-def patient(pt_input: str, case_description: str, history: list) -> str:
-    """
-    Responds as the patient. When there's a question that should be directed to the patient, use this tool.
-
-    The patient will respond with a JSON object containing the patient's response.
-
-    Inputs:
-    - pt_input: The question to ask the patient.
-    - case_description: The description of the current case.
-    - history: The conversation history.
-    """
-    # Pass the extracted values on to the patient agent.
-    # Ensure run_patient uses the passed history, not a global one.
-    patient_response = run_patient(pt_input, case_description, history)
-    return patient_response
-
 # Removed the 'finish' function and StopException
 
 # Tool mapping - only includes 'patient' now
 name_to_function_map: dict[str, Callable] = {
-    "patient": patient,
+    "patient": run_patient,
     # "finish": finish, # Removed finish tool
 }
 
@@ -230,6 +218,7 @@ class MedicalMicrobiologyTutor:
 
             # Check if the response contains an action request
             if "[Action]" in response_content:
+                tool_name = None  # initialize before inner try to avoid UnboundLocalError
                 try:
                     # Extract action details
                     action_text = response_content.split("[Action]:", 1)[1].strip()
@@ -313,9 +302,12 @@ class MedicalMicrobiologyTutor:
                     self.messages.append({"role": "assistant", "content": final_response})
                     return final_response
             else:
-                # If no action, the first response is the final one
-                self.messages.append({"role": "assistant", "content": response_content})
-                return response_content
+                # Direct tutor response: fetch and append similar feedback examples
+                similar = retrieve_similar_examples(message, self.messages)
+                examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
+                full_response = response_content + examples_text
+                self.messages.append({"role": "assistant", "content": full_response})
+                return full_response
 
         except Exception as e:
             print(f"Error during LLM call or processing: {e}")
@@ -325,6 +317,28 @@ class MedicalMicrobiologyTutor:
             return error_response
 
 # Removed StopException class
+
+# Load FAISS index and texts for example retrieval
+base_dir = os.path.dirname(__file__)
+index_path = os.path.join(base_dir, 'output_index.faiss')
+texts_path = os.path.join(base_dir, 'output_index.faiss.texts')
+with open(index_path, 'rb') as f:
+    index = pickle.load(f)
+with open(texts_path, 'rb') as f:
+    texts = pickle.load(f)
+
+def retrieve_similar_examples(input_text: str, history: list, k: int = 3) -> list[str]:
+    """Embed the last four messages + current user input, then fetch top-k similar feedback examples."""
+    recent_context = ""
+    if history:
+        recent_context = "Chat history:\n"
+        for message in history[-5:-1]:  # same slice as in index creation
+            if "role" in message and "content" in message:
+                recent_context += f"{message['role']}: {message['content']}\n"
+    embedding_input = recent_context + f"Rated message: {input_text}"
+    emb = get_embedding(embedding_input)
+    distances, indices = index.search(np.array([emb]).astype('float32'), k=k)
+    return [texts[idx] for idx in indices[0]]
 
 
 
