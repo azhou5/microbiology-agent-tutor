@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env
+
 import os
 import json
 import logging
@@ -35,7 +38,12 @@ app = Flask(__name__)
 # Instantiate the tutor globally or manage sessions if needed
 # For simplicity, using a single global instance here.
 # Be aware of concurrency issues if multiple users access this simultaneously without session management.
-tutor = MedicalMicrobiologyTutor()
+tutor = MedicalMicrobiologyTutor(
+  output_tool_directly=True,
+  run_with_faiss=False,
+  reward_model_sampling=True
+)
+
 
 # --- Routes ---
 @app.route('/')
@@ -97,6 +105,7 @@ def feedback():
         message = data.get('message') # The specific assistant message being rated
         history_from_client = data.get('history') # Full chat history [{role: ..., content: ...}, ...] from client at time of feedback
         feedback_text = data.get('feedback_text', '') # Optional text
+        replacement_text = data.get('replacement_text', '') # New: user's preferred response
 
         if not rating or not message or history_from_client is None: # Check history presence
              return jsonify({"error": "Missing feedback data (rating, message, or history)"}), 400
@@ -127,6 +136,7 @@ def feedback():
             "rating": rating,
             "rated_message": message, # Rename for clarity
             "feedback_text": feedback_text,
+            "replacement_text": replacement_text,
             "visible_chat_history": visible_history, # Log the filtered history
         }
 
@@ -176,5 +186,9 @@ def case_feedback():
 
 # --- Main Execution ---
 if __name__ == '__main__':
-    # Make sure the templates and static folders exist relative to app.py
-    app.run(debug=True) # debug=True for development, set to False for production 
+    import config
+    if not config.TERMINAL_MODE:
+        # Make sure the templates and static folders exist relative to app.py
+        app.run(debug=True) # debug=True for development, set to False for production
+    else:
+        print("App is in TERMINAL_MODE. Run 'python run_terminal.py' or './run_terminal.sh' instead.")

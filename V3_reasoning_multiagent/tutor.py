@@ -11,16 +11,15 @@ import re
 import pickle
 import numpy as np
 import faiss
-from agents.patient import get_embedding  # reuse the same embedding util
-dotenv.load_dotenv()
-from openai import AzureOpenAI
-client = AzureOpenAI(
-  azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-  api_key=os.getenv("AZURE_OPENAI_API_KEY"), 
-  api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-)
+from agents.patient import get_embedding  
+from Feedback.feedback_faiss import retrieve_similar_examples
+import config
 
-# Removed the 'finish' function and StopException
+
+dotenv.load_dotenv()
+
+from llm_router import chat_complete
+
 
 # Tool mapping - only includes 'patient' now
 name_to_function_map: dict[str, Callable] = {
@@ -125,11 +124,18 @@ You may also respond yourself as the tutor when handling case flow (and doing an
 
 # Removed top-level messages and history lists
 # Removed main() function
-
 class MedicalMicrobiologyTutor:
     """Adapter class to make the function-based tutor compatible with the web app."""
 
-    def __init__(self):
+    def __init__(self, 
+                 output_tool_directly: bool = config.OUTPUT_TOOL_DIRECTLY, 
+                 run_with_faiss: bool = config.USE_FAISS, 
+                 reward_model_sampling: bool = config.REWARD_MODEL_SAMPLING):
+        
+        self.output_tool_directly = output_tool_directly
+        self.run_with_faiss = run_with_faiss
+        self.reward_model_sampling = reward_model_sampling
+
         self.id = "tutor_agent"
         # Initialize messages with a placeholder system message
         self.messages = [{"role": "system", "content": "Initializing..."}]
@@ -170,11 +176,7 @@ class MedicalMicrobiologyTutor:
 
         # Get initial case presentation from the LLM
         try:
-            completion = client.chat.completions.create(
-                model="o3-mini", # Consider making the model configurable
-                messages=self.messages # Send only the system message initially
-            )
-            initial_response = completion.choices[0].message.content
+            initial_response = chat_complete(self.messages)
             # Add the initial assistant response to the message history
             self.messages.append({"role": "assistant", "content": initial_response})
             return initial_response
@@ -209,12 +211,7 @@ class MedicalMicrobiologyTutor:
         self.messages.append({"role": "user", "content": message})
 
         try:
-            # Get response from the LLM
-            completion = client.chat.completions.create(
-                model="o3-mini", # Use the same model as before
-                messages=self.messages # Send the full conversation history
-            )
-            response_content = completion.choices[0].message.content
+            response_content = chat_complete(self.messages)
 
             # Check if the response contains an action request
             if "[Action]" in response_content:
@@ -250,30 +247,28 @@ class MedicalMicrobiologyTutor:
                              # Handle other tools if they are added later
                              tool_result = tool_function(tool_input)
 
-                        tool_output = f"[Observation]: {tool_result}"
+                        if self.output_tool_directly:
+                            final_response = tool_result
+                            # Add the tool result to the message history
+                            tool_output = f"[Observation]: {json.dumps({tool_name: tool_result})}"
+                            self.messages.append({"role": "system", "content": tool_output})
+                            self.messages.append({"role": "assistant", "content": final_response})
+                            return final_response
+                        else:
+                            # Add the action's result (observation) back into the message history
+                            tool_output = f"[Observation]: {json.dumps({tool_name: tool_result})}"
+                            self.messages.append({"role": "system", "content": tool_output})
 
-                        # Add the action's result (observation) back into the message history
-                        self.messages.append({"role": "system", "content": tool_output})
-
-                        # Get a new response from the LLM, now including the tool's observation
-                        completion = client.chat.completions.create(
-                            model="o3-mini",
-                            messages=self.messages
-                        )
-                        final_response = completion.choices[0].message.content
-                        # Add this final assistant response to history
-                        self.messages.append({"role": "assistant", "content": final_response})
-                        return final_response
+                            final_response = chat_complete(self.messages)
+                            # Add this final assistant response to history
+                            self.messages.append({"role": "assistant", "content": final_response})
+                            return final_response
                     else:
                         # Handle case where the requested tool is not found
                         tool_output = f"[Observation]: Error: Tool '{tool_name}' not found."
                         self.messages.append({"role": "system", "content": tool_output})
                         # Get response after error observation
-                        completion = client.chat.completions.create(
-                            model="o3-mini",
-                            messages=self.messages
-                        )
-                        final_response = completion.choices[0].message.content
+                        final_response = chat_complete(self.messages)
                         self.messages.append({"role": "assistant", "content": final_response})
                         return final_response
 
@@ -282,11 +277,8 @@ class MedicalMicrobiologyTutor:
                     error_message = f"[Observation]: Error processing action - Invalid format: {e}"
                     self.messages.append({"role": "system", "content": error_message})
                     # Get response after error observation
-                    completion = client.chat.completions.create(
-                        model="o3-mini",
-                        messages=self.messages
-                    )
-                    final_response = completion.choices[0].message.content
+
+                    final_response = chat_complete(self.messages)
                     self.messages.append({"role": "assistant", "content": final_response})
                     return final_response
                 except Exception as e:
@@ -294,18 +286,17 @@ class MedicalMicrobiologyTutor:
                     error_message = f"[Observation]: Error executing tool '{tool_name}': {e}"
                     self.messages.append({"role": "system", "content": error_message})
                     # Get response after error observation
-                    completion = client.chat.completions.create(
-                        model="o3-mini",
-                        messages=self.messages
-                    )
-                    final_response = completion.choices[0].message.content
+                    final_response = chat_complete(self.messages)
                     self.messages.append({"role": "assistant", "content": final_response})
                     return final_response
             else:
-                # Direct tutor response: fetch and append similar feedback examples
-                similar = retrieve_similar_examples(message, self.messages)
-                examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
-                full_response = response_content + examples_text
+                if self.run_with_faiss:
+                    # Direct tutor response: fetch and append similar feedback examples
+                    similar = retrieve_similar_examples(message, self.messages)
+                    examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
+                    full_response = response_content + examples_text
+                else:
+                    full_response = response_content
                 self.messages.append({"role": "assistant", "content": full_response})
                 return full_response
 
@@ -316,29 +307,23 @@ class MedicalMicrobiologyTutor:
             self.messages.append({"role": "assistant", "content": error_response}) # Log error response
             return error_response
 
-# Removed StopException class
 
-# Load FAISS index and texts for example retrieval
-base_dir = os.path.dirname(__file__)
-index_path = os.path.join(base_dir, 'output_index.faiss')
-texts_path = os.path.join(base_dir, 'output_index.faiss.texts')
-with open(index_path, 'rb') as f:
-    index = pickle.load(f)
-with open(texts_path, 'rb') as f:
-    texts = pickle.load(f)
-
-def retrieve_similar_examples(input_text: str, history: list, k: int = 3) -> list[str]:
-    """Embed the last four messages + current user input, then fetch top-k similar feedback examples."""
-    recent_context = ""
-    if history:
-        recent_context = "Chat history:\n"
-        for message in history[-5:-1]:  # same slice as in index creation
-            if "role" in message and "content" in message:
-                recent_context += f"{message['role']}: {message['content']}\n"
-    embedding_input = recent_context + f"Rated message: {input_text}"
-    emb = get_embedding(embedding_input)
-    distances, indices = index.search(np.array([emb]).astype('float32'), k=k)
-    return [texts[idx] for idx in indices[0]]
-
-
-
+# Terminal interactive mode
+if __name__ == "__main__" and config.TERMINAL_MODE:
+    # Terminal interactive mode
+    tutor = MedicalMicrobiologyTutor()
+    print("Starting terminal interactive microbiology tutor...")
+    # Load default case
+    initial = tutor.start_new_case()
+    print(initial)
+    while True:
+        try:
+            user_input = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting.")
+            break
+        if not user_input or user_input.lower() in ("exit", "quit"):
+            print("Exiting.")
+            break
+        response = tutor(user_input)
+        print(response)

@@ -7,6 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusMessage = document.getElementById('status-message');
     const finishBtn = document.getElementById('finish-btn');
 
+    // --- Feedback mode toggle ---
+    const inlineFeedbackToggle = document.getElementById('inline-feedback-toggle');
+    let inlineFeedback = false;          // default: old prompt style
+
+    inlineFeedbackToggle.addEventListener('change', () => {
+        inlineFeedback = inlineFeedbackToggle.checked;
+        setStatus(`Feedback mode: ${inlineFeedback ? 'inline' : 'popup'}.`);
+    });
+
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
 
     function addMessage(sender, messageContent, addFeedbackUI = false) {
@@ -43,6 +52,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 feedbackButtonsDiv.appendChild(ratingBtn);
             }
             feedbackContainer.appendChild(feedbackButtonsDiv);
+            // If inline feedback mode is active, add description and replacement textareas + submit button
+            if (inlineFeedback) {
+                const feedbackInputDiv = document.createElement('div');
+                feedbackInputDiv.classList.add('feedback-input');
+
+                // 1) Description textarea
+                const descriptionLabel = document.createElement('label');
+                descriptionLabel.textContent = 'What could be better?';
+                feedbackInputDiv.appendChild(descriptionLabel);
+
+                const descriptionTextArea = document.createElement('textarea');
+                descriptionTextArea.placeholder = 'Describe improvements...';
+                descriptionTextArea.rows = 2;
+                descriptionTextArea.classList.add('feedback-description');
+                feedbackInputDiv.appendChild(descriptionTextArea);
+
+                // 2) Replacement textarea
+                const replacementLabel = document.createElement('label');
+                replacementLabel.textContent = 'Your preferred response';
+                feedbackInputDiv.appendChild(replacementLabel);
+
+                const replacementTextArea = document.createElement('textarea');
+                replacementTextArea.placeholder = 'Enter replacement output...';
+                replacementTextArea.rows = 3;
+                replacementTextArea.classList.add('feedback-replacement');
+                feedbackInputDiv.appendChild(replacementTextArea);
+
+                // 3) Submit button
+                const submitFeedbackBtn = document.createElement('button');
+                submitFeedbackBtn.textContent = 'Submit';
+                submitFeedbackBtn.classList.add('feedback-btn', 'submit-feedback-btn');
+                feedbackInputDiv.appendChild(submitFeedbackBtn);
+
+                feedbackContainer.appendChild(feedbackInputDiv);
+            }
             messageDiv.appendChild(feedbackContainer); // Append the whole container
         }
 
@@ -149,58 +193,136 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleFeedback(event) {
-        const button = event.target.closest('.rating-btn'); // Target rating buttons specifically
-        if (!button) return; // Click wasn't on a rating button
+        if (inlineFeedback) {
+            // === Inline feedback workflow ===
+            const ratingBtn = event.target.closest('.rating-btn');
+            const submitBtn = event.target.closest('.submit-feedback-btn');
 
-        const messageDiv = button.closest('.assistant-message');
-        const messageContent = messageDiv.dataset.messageContent;
-        const rating = button.dataset.rating; // Rating is now 1-5
+            // Handle rating selection
+            if (ratingBtn && !ratingBtn.disabled) {
+                const feedbackContainer = ratingBtn.closest('.feedback-container');
+                const rating = ratingBtn.dataset.rating;
+                feedbackContainer.dataset.rating = rating;
+                feedbackContainer.querySelectorAll('.rating-btn').forEach(btn => {
+                    btn.disabled = true;
+                    if (btn === ratingBtn) btn.classList.add('rated');
+                });
+                // Focus the first textarea (description)
+                const textarea = feedbackContainer.querySelector('.feedback-description');
+                if (textarea) textarea.focus();
+                setStatus(`You selected ${rating}/5. Add comments and hit Submit.`);
+                return;
+            }
 
-        // Disable all rating buttons for this message immediately
-        const buttonsInDiv = messageDiv.querySelectorAll('.rating-btn');
-        buttonsInDiv.forEach(btn => btn.disabled = true);
+            // Submit feedback
+            if (submitBtn) {
+                const feedbackContainer = submitBtn.closest('.feedback-container');
+                const messageDiv       = submitBtn.closest('.assistant-message');
+                const rating           = feedbackContainer.dataset.rating;
 
-        // Highlight the clicked button
-        button.classList.add('rated'); // Add a general 'rated' class for styling
+                if (!rating) {
+                    setStatus('Please select a rating first.', true);
+                    return;
+                }
 
-        // Always prompt for feedback, regardless of rating
-        let feedbackText = prompt(`You rated this response ${rating}/5. Add optional feedback:`, "");
-        if (feedbackText === null) { // User cancelled the prompt
-             // Re-enable buttons if prompt is cancelled
-             buttonsInDiv.forEach(btn => btn.disabled = false);
-             button.classList.remove('rated'); // Remove highlight
-             setStatus('Feedback cancelled.');
-             return;
-        }
+                const messageContent = messageDiv.dataset.messageContent;
+                const feedbackText = feedbackContainer.querySelector('.feedback-description').value.trim();
+                const replacementText = feedbackContainer.querySelector('.feedback-replacement').value.trim();
 
-        setStatus('Sending feedback...');
+                submitBtn.disabled = true;
+                setStatus('Sending feedback…');
 
-        try {
-            const response = await fetch('/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    rating: rating, // Send the numerical rating (1-5)
-                    message: messageContent,
-                    history: chatHistory,
-                    feedback_text: feedbackText || '' // Ensure it's not null
-                }),
-            });
+                try {
+                    const response = await fetch('/feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rating,
+                            message: messageContent,
+                            history: chatHistory,
+                            feedback_text: feedbackText,
+                            replacement_text: replacementText
+                        }),
+                    });
 
-             if (!response.ok) {
-                 const errorData = await response.json();
-                 throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-             }
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || `HTTP ${response.status}`);
+                    }
 
-            setStatus('Feedback submitted. Thank you!');
-            // Keep buttons disabled after successful submission
+                    setStatus('Feedback submitted — thank you!');
+                    // If user provided a replacement, inject it into the chat as the tutor
+                    if (replacementText) {
+                        addMessage('assistant', replacementText, true);
+                        chatHistory.push({ role: 'assistant', content: replacementText });
+                    }
+                    feedbackContainer.querySelectorAll('textarea').forEach(t => t.disabled = true);
+                } catch (error) {
+                    console.error(error);
+                    setStatus(`Error: ${error.message}`, true);
+                    submitBtn.disabled = false;
+                }
+            }
+        } else {
+            // === Popup feedback workflow (legacy) ===
+            const ratingBtn = event.target.closest('.rating-btn');
+            if (!ratingBtn) return;
 
-        } catch (error) {
-            console.error('Error sending feedback:', error);
-            setStatus(`Error submitting feedback: ${error.message}`, true);
-            // Optionally re-enable buttons on error to allow retry?
-            // buttonsInDiv.forEach(btn => btn.disabled = false);
-            // button.classList.remove('rated');
+            const messageDiv = ratingBtn.closest('.assistant-message');
+            const messageContent = messageDiv.dataset.messageContent;
+            const rating = ratingBtn.dataset.rating;
+
+            const buttonsInDiv = messageDiv.querySelectorAll('.rating-btn');
+            buttonsInDiv.forEach(btn => btn.disabled = true);
+            ratingBtn.classList.add('rated');
+
+            let feedbackText = prompt(`You rated this response ${rating}/5. What could be better?`, "");
+            if (feedbackText === null) {
+                buttonsInDiv.forEach(btn => btn.disabled = false);
+                ratingBtn.classList.remove('rated');
+                setStatus('Feedback cancelled.');
+                return;
+            }
+
+            let replacementText = prompt('Please enter your preferred response to replace the tutor output:', '');
+            if (replacementText === null) {
+                buttonsInDiv.forEach(btn => btn.disabled = false);
+                ratingBtn.classList.remove('rated');
+                setStatus('Feedback cancelled.');
+                return;
+            }
+
+            setStatus('Sending feedback...');
+            try {
+                const response = await fetch('/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rating,
+                        message: messageContent,
+                        history: chatHistory,
+                        feedback_text: feedbackText || '',
+                        replacement_text: replacementText || ''
+                    }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `HTTP ${response.status}`);
+                }
+
+                setStatus('Feedback submitted — thank you!');
+                // If the user provided a replacement in the prompt, show it
+                if (replacementText) {
+                    addMessage('assistant', replacementText, true);
+                    chatHistory.push({ role: 'assistant', content: replacementText });
+                }
+            } catch (error) {
+                console.error(error);
+                setStatus(`Error: ${error.message}`, true);
+                buttonsInDiv.forEach(btn => btn.disabled = false);
+                ratingBtn.classList.remove('rated');
+            }
         }
     }
 
