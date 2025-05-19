@@ -38,16 +38,14 @@ def generate_tool_descriptions(tools_dict):
 tool_descriptions = generate_tool_descriptions(name_to_function_map)
 
 # System message template remains largely the same, but references the updated tools
-system_message_template = """You are an expert microbiology instructor running a case with a student.You run in a loop of [Thought], [Action], [Observation].
-Use [Thought] to describe your thoughts about the question you have been asked.
+system_message_template = """You are an expert microbiology instructor running a case with a student.You run in a loop of  [Action], [Observation].
 [Action] is the tool you choose to solve the current problem. This should be a JSON object containing the tool name with corresponding tool input.
 [Observation] will be the result of running those actions.
 
 Note: Only use [Action] when you need to interact with the patient tool. For all other responses (including the initial presenting complaint), respond directly without using [Action].
 
 For each iteration, you should ONLY respond with:
-1. A [Thought] explaining your reasoning (optional for direct responses)
-2. An [Action] specifying the tool to use (only when using the patient tool)
+1. An [Action] specifying the tool to use (only when using the patient tool)
 OR
 A direct response as the tutor
 
@@ -59,14 +57,13 @@ When the question is directed to the patient, you MUST use the patient tool.
 
 Example usage:
 [User Input]: When did your fever start?
-[Thought]: The question is directed to the patient. So, I will use the patient tool.
 [Action]: {{"patient": "When did your fever start?"}}
 
 You will be called again with this:
 [Observation]: {{"patient": "A few days ago"}}
 
 You then output:
-[Answer]: Patient: A few days ago
+Patient: A few days ago
 
 You may also respond yourself as the tutor when handling case flow (and doing anything that does not involve the patient), and your personal specifications will be provided below.
 
@@ -243,26 +240,23 @@ class MedicalMicrobiologyTutor:
                                  raise ValueError("Case description is not available for the patient tool.")
                              # Pass the current message history
                              tool_result = tool_function(tool_input, self.case_description, self.messages)
+                             # Return the patient response directly without additional prefixing
+                             self.messages.append({"role": "assistant", "content": tool_result})
+                             return tool_result
                         else:
                              # Handle other tools if they are added later
                              tool_result = tool_function(tool_input)
 
-                        if self.output_tool_directly:
-                            final_response = tool_result
-                            # Add the tool result to the message history
-                            tool_output = f"[Observation]: {json.dumps({tool_name: tool_result})}"
-                            self.messages.append({"role": "system", "content": tool_output})
-                            self.messages.append({"role": "assistant", "content": final_response})
-                            return final_response
-                        else:
-                            # Add the action's result (observation) back into the message history
-                            tool_output = f"[Observation]: {json.dumps({tool_name: tool_result})}"
-                            self.messages.append({"role": "system", "content": tool_output})
+                        tool_output = f"[Observation]: {tool_result}"
 
-                            final_response = chat_complete(self.messages)
-                            # Add this final assistant response to history
-                            self.messages.append({"role": "assistant", "content": final_response})
-                            return final_response
+                        # Add the action's result (observation) back into the message history
+                        self.messages.append({"role": "system", "content": tool_output})
+
+                        # Get a new response from the LLM, now including the tool's observation
+                        final_response = chat_complete(self.messages)
+                        # Add this final assistant response to history
+                        self.messages.append({"role": "assistant", "content": final_response})
+                        return final_response
                     else:
                         # Handle case where the requested tool is not found
                         tool_output = f"[Observation]: Error: Tool '{tool_name}' not found."
@@ -277,7 +271,6 @@ class MedicalMicrobiologyTutor:
                     error_message = f"[Observation]: Error processing action - Invalid format: {e}"
                     self.messages.append({"role": "system", "content": error_message})
                     # Get response after error observation
-
                     final_response = chat_complete(self.messages)
                     self.messages.append({"role": "assistant", "content": final_response})
                     return final_response
@@ -290,13 +283,10 @@ class MedicalMicrobiologyTutor:
                     self.messages.append({"role": "assistant", "content": final_response})
                     return final_response
             else:
-                if self.run_with_faiss:
-                    # Direct tutor response: fetch and append similar feedback examples
-                    similar = retrieve_similar_examples(message, self.messages)
-                    examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
-                    full_response = response_content + examples_text
-                else:
-                    full_response = response_content
+                # Direct tutor response: fetch and append similar feedback examples
+                similar = retrieve_similar_examples(message, self.messages)
+                examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
+                full_response = response_content + examples_text
                 self.messages.append({"role": "assistant", "content": full_response})
                 return full_response
 

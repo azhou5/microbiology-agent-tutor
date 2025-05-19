@@ -5,7 +5,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import re, torch
 from dotenv import load_dotenv; load_dotenv()
 import config
-
+import sys
 
 
 # Make sure to use MPS device
@@ -25,12 +25,17 @@ if BACKEND == "azure":
 
     def chat_complete(messages, max_new_tokens=512):
         """Return assistant string given a list of {'role','content'} dicts."""
-        model_to_use = config.API_MODEL_NAME
-        rsp = _client.chat.completions.create(
-            model=model_to_use,
-            messages=messages
-        )
-        return rsp.choices[0].message.content
+        try: 
+            model_to_use = config.API_MODEL_NAME
+            rsp = _client.chat.completions.create(
+                model=model_to_use,
+                messages=messages
+            )
+            print(f"Response: {rsp.choices[0].message.content}")
+            return rsp.choices[0].message.content
+        except Exception as e:
+            print(f"Error: {e}")
+            sys.exit(1)
 
 else:
     # --- Local HF model ---
