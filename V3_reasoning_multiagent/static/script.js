@@ -7,15 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusMessage = document.getElementById('status-message');
     const finishBtn = document.getElementById('finish-btn');
 
-    // --- Feedback mode toggle ---
-    const inlineFeedbackToggle = document.getElementById('inline-feedback-toggle');
-    let inlineFeedback = false;          // default: old prompt style
-
-    inlineFeedbackToggle.addEventListener('change', () => {
-        inlineFeedback = inlineFeedbackToggle.checked;
-        setStatus(`Feedback mode: ${inlineFeedback ? 'inline' : 'popup'}.`);
-    });
-
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
 
     function addMessage(sender, messageContent, addFeedbackUI = false) {
@@ -23,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'assistant-message');
 
         // Use innerHTML to allow basic formatting later if needed, but be cautious
-        // For now, just setting text content is safer
         const messageTextSpan = document.createElement('span');
         messageTextSpan.textContent = messageContent;
         messageDiv.appendChild(messageTextSpan);
@@ -31,63 +21,107 @@ document.addEventListener('DOMContentLoaded', () => {
         // Store the raw message content for feedback
         messageDiv.dataset.messageContent = messageContent;
 
-        if (sender === 'assistant' && addFeedbackUI) {
+        if (sender === 'assistant') {
             const feedbackContainer = document.createElement('div');
-            feedbackContainer.classList.add('feedback-container'); // New container class
+            feedbackContainer.classList.add('feedback-container');
 
+            // Create rating prompt
             const ratingPrompt = document.createElement('span');
             ratingPrompt.textContent = "Rate this response (1-5):";
             ratingPrompt.classList.add('feedback-prompt');
             feedbackContainer.appendChild(ratingPrompt);
 
-            const feedbackButtonsDiv = document.createElement('div');
-            feedbackButtonsDiv.classList.add('feedback-buttons'); // Keep this class for styling buttons
+            // Create rating buttons container
+            const ratingButtonsDiv = document.createElement('div');
+            ratingButtonsDiv.classList.add('feedback-buttons');
 
+            // Create rating buttons
             for (let i = 1; i <= 5; i++) {
                 const ratingBtn = document.createElement('button');
-                ratingBtn.textContent = i; // Button text is the rating number
+                ratingBtn.textContent = i;
                 ratingBtn.title = `Rate ${i} out of 5`;
-                ratingBtn.classList.add('feedback-btn', 'rating-btn'); // Add 'rating-btn' class
-                ratingBtn.dataset.rating = i; // Store rating value
-                feedbackButtonsDiv.appendChild(ratingBtn);
+                ratingBtn.classList.add('feedback-btn', 'rating-btn');
+                ratingBtn.dataset.rating = i;
+                ratingButtonsDiv.appendChild(ratingBtn);
             }
-            feedbackContainer.appendChild(feedbackButtonsDiv);
-            // If inline feedback mode is active, add description and replacement textareas + submit button
-            if (inlineFeedback) {
-                const feedbackInputDiv = document.createElement('div');
-                feedbackInputDiv.classList.add('feedback-input');
+            feedbackContainer.appendChild(ratingButtonsDiv);
 
-                // 1) Description textarea
-                const descriptionLabel = document.createElement('label');
-                descriptionLabel.textContent = 'What could be better?';
-                feedbackInputDiv.appendChild(descriptionLabel);
+            // Add click handler for popup feedback
+            ratingButtonsDiv.addEventListener('click', async (event) => {
+                const ratingBtn = event.target.closest('.rating-btn');
+                if (!ratingBtn) return;
 
-                const descriptionTextArea = document.createElement('textarea');
-                descriptionTextArea.placeholder = 'Describe improvements...';
-                descriptionTextArea.rows = 2;
-                descriptionTextArea.classList.add('feedback-description');
-                feedbackInputDiv.appendChild(descriptionTextArea);
+                const rating = ratingBtn.dataset.rating;
+                const buttonsInDiv = ratingButtonsDiv.querySelectorAll('.rating-btn');
+                buttonsInDiv.forEach(btn => btn.disabled = true);
+                ratingBtn.classList.add('rated');
 
-                // 2) Replacement textarea
-                const replacementLabel = document.createElement('label');
-                replacementLabel.textContent = 'Your preferred response';
-                feedbackInputDiv.appendChild(replacementLabel);
+                let feedbackText = prompt(`You rated this response ${rating}/5. Why this score?`, "");
+                if (feedbackText === null) {
+                    buttonsInDiv.forEach(btn => btn.disabled = false);
+                    ratingBtn.classList.remove('rated');
+                    setStatus('Feedback cancelled.');
+                    return;
+                }
 
-                const replacementTextArea = document.createElement('textarea');
-                replacementTextArea.placeholder = 'Enter replacement output...';
-                replacementTextArea.rows = 3;
-                replacementTextArea.classList.add('feedback-replacement');
-                feedbackInputDiv.appendChild(replacementTextArea);
+                let replacementText = prompt('Please enter your preferred response to replace the tutor output:', '');
+                if (replacementText === null) {
+                    buttonsInDiv.forEach(btn => btn.disabled = false);
+                    ratingBtn.classList.remove('rated');
+                    setStatus('Feedback cancelled.');
+                    return;
+                }
 
-                // 3) Submit button
-                const submitFeedbackBtn = document.createElement('button');
-                submitFeedbackBtn.textContent = 'Submit';
-                submitFeedbackBtn.classList.add('feedback-btn', 'submit-feedback-btn');
-                feedbackInputDiv.appendChild(submitFeedbackBtn);
+                setStatus('Sending feedback...');
+                try {
+                    const response = await fetch('/feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            rating,
+                            message: messageContent,
+                            history: chatHistory,
+                            feedback_text: feedbackText || '',
+                            replacement_text: replacementText || ''
+                        }),
+                    });
 
-                feedbackContainer.appendChild(feedbackInputDiv);
-            }
-            messageDiv.appendChild(feedbackContainer); // Append the whole container
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || `HTTP ${response.status}`);
+                    }
+
+                    setStatus('Feedback submitted — thank you!');
+
+                    // Instead of showing "thanks" message, show the rating and feedback
+                    feedbackContainer.innerHTML = `
+                        <div class="feedback-submitted">
+                            <div class="feedback-rating">Rating: ${rating}/5</div>
+                            ${feedbackText ? `<div class="feedback-section">
+                                <div class="feedback-label">Why this score:</div>
+                                <div class="feedback-text">${feedbackText}</div>
+                            </div>` : ''}
+                            ${replacementText ? `<div class="feedback-section">
+                                <div class="feedback-label">Preferred response:</div>
+                                <div class="feedback-text">${replacementText}</div>
+                            </div>` : ''}
+                        </div>
+                    `;
+
+                    // If user provided a replacement, show it
+                    if (replacementText) {
+                        addMessage('assistant', replacementText, true);
+                        chatHistory.push({ role: 'assistant', content: replacementText });
+                    }
+                } catch (error) {
+                    console.error(error);
+                    setStatus(`Error: ${error.message}`, true);
+                    buttonsInDiv.forEach(btn => btn.disabled = false);
+                    ratingBtn.classList.remove('rated');
+                }
+            });
+
+            messageDiv.appendChild(feedbackContainer);
         }
 
         chatbox.appendChild(messageDiv);
@@ -108,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleStartCase() {
         const selectedOrganism = organismSelect.value;
+        const selectedModel = document.getElementById('model-select').value;
         if (!selectedOrganism) {
             setStatus('Please select an organism.', true);
             return;
@@ -116,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus('Starting new case...');
         startCaseBtn.disabled = true;
         organismSelect.disabled = true;
+        document.getElementById('model-select').disabled = true;
         chatbox.innerHTML = ''; // Clear previous chat
         chatHistory = []; // Reset history
 
@@ -123,7 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/start_case', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ organism: selectedOrganism }),
+                body: JSON.stringify({
+                    organism: selectedOrganism,
+                    model: selectedModel
+                }),
             });
 
             if (!response.ok) {
@@ -136,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.initial_message) {
                 addMessage('assistant', data.initial_message, true);
             } else {
-                 setStatus('Received empty initial message from server.', true);
+                setStatus('Received empty initial message from server.', true);
             }
             disableInput(false); // Enable chat input
             finishBtn.disabled = false; // Enable the finish button
@@ -150,8 +189,9 @@ document.addEventListener('DOMContentLoaded', () => {
             finishBtn.disabled = true; // Keep finish button disabled on error
         } finally {
             // Re-enable start button regardless of success/failure to allow retries/new cases
-             startCaseBtn.disabled = false;
-             organismSelect.disabled = false;
+            startCaseBtn.disabled = false;
+            organismSelect.disabled = false;
+            document.getElementById('model-select').disabled = false;
         }
     }
 
@@ -174,8 +214,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                 const errorData = await response.json();
-                 throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
@@ -192,140 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function handleFeedback(event) {
-        if (inlineFeedback) {
-            // === Inline feedback workflow ===
-            const ratingBtn = event.target.closest('.rating-btn');
-            const submitBtn = event.target.closest('.submit-feedback-btn');
-
-            // Handle rating selection
-            if (ratingBtn && !ratingBtn.disabled) {
-                const feedbackContainer = ratingBtn.closest('.feedback-container');
-                const rating = ratingBtn.dataset.rating;
-                feedbackContainer.dataset.rating = rating;
-                feedbackContainer.querySelectorAll('.rating-btn').forEach(btn => {
-                    btn.disabled = true;
-                    if (btn === ratingBtn) btn.classList.add('rated');
-                });
-                // Focus the first textarea (description)
-                const textarea = feedbackContainer.querySelector('.feedback-description');
-                if (textarea) textarea.focus();
-                setStatus(`You selected ${rating}/5. Add comments and hit Submit.`);
-                return;
-            }
-
-            // Submit feedback
-            if (submitBtn) {
-                const feedbackContainer = submitBtn.closest('.feedback-container');
-                const messageDiv       = submitBtn.closest('.assistant-message');
-                const rating           = feedbackContainer.dataset.rating;
-
-                if (!rating) {
-                    setStatus('Please select a rating first.', true);
-                    return;
-                }
-
-                const messageContent = messageDiv.dataset.messageContent;
-                const feedbackText = feedbackContainer.querySelector('.feedback-description').value.trim();
-                const replacementText = feedbackContainer.querySelector('.feedback-replacement').value.trim();
-
-                submitBtn.disabled = true;
-                setStatus('Sending feedback…');
-
-                try {
-                    const response = await fetch('/feedback', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            rating,
-                            message: messageContent,
-                            history: chatHistory,
-                            feedback_text: feedbackText,
-                            replacement_text: replacementText
-                        }),
-                    });
-
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || `HTTP ${response.status}`);
-                    }
-
-                    setStatus('Feedback submitted — thank you!');
-                    // If user provided a replacement, inject it into the chat as the tutor
-                    if (replacementText) {
-                        addMessage('assistant', replacementText, true);
-                        chatHistory.push({ role: 'assistant', content: replacementText });
-                    }
-                    feedbackContainer.querySelectorAll('textarea').forEach(t => t.disabled = true);
-                } catch (error) {
-                    console.error(error);
-                    setStatus(`Error: ${error.message}`, true);
-                    submitBtn.disabled = false;
-                }
-            }
-        } else {
-            // === Popup feedback workflow (legacy) ===
-            const ratingBtn = event.target.closest('.rating-btn');
-            if (!ratingBtn) return;
-
-            const messageDiv = ratingBtn.closest('.assistant-message');
-            const messageContent = messageDiv.dataset.messageContent;
-            const rating = ratingBtn.dataset.rating;
-
-            const buttonsInDiv = messageDiv.querySelectorAll('.rating-btn');
-            buttonsInDiv.forEach(btn => btn.disabled = true);
-            ratingBtn.classList.add('rated');
-
-            let feedbackText = prompt(`You rated this response ${rating}/5. What could be better?`, "");
-            if (feedbackText === null) {
-                buttonsInDiv.forEach(btn => btn.disabled = false);
-                ratingBtn.classList.remove('rated');
-                setStatus('Feedback cancelled.');
-                return;
-            }
-
-            let replacementText = prompt('Please enter your preferred response to replace the tutor output:', '');
-            if (replacementText === null) {
-                buttonsInDiv.forEach(btn => btn.disabled = false);
-                ratingBtn.classList.remove('rated');
-                setStatus('Feedback cancelled.');
-                return;
-            }
-
-            setStatus('Sending feedback...');
-            try {
-                const response = await fetch('/feedback', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        rating,
-                        message: messageContent,
-                        history: chatHistory,
-                        feedback_text: feedbackText || '',
-                        replacement_text: replacementText || ''
-                    }),
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || `HTTP ${response.status}`);
-                }
-
-                setStatus('Feedback submitted — thank you!');
-                // If the user provided a replacement in the prompt, show it
-                if (replacementText) {
-                    addMessage('assistant', replacementText, true);
-                    chatHistory.push({ role: 'assistant', content: replacementText });
-                }
-            } catch (error) {
-                console.error(error);
-                setStatus(`Error: ${error.message}`, true);
-                buttonsInDiv.forEach(btn => btn.disabled = false);
-                ratingBtn.classList.remove('rated');
-            }
-        }
-    }
-
     // --- Event Listeners ---
     startCaseBtn.addEventListener('click', handleStartCase);
     sendBtn.addEventListener('click', handleSendMessage);
@@ -334,9 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
             handleSendMessage();
         }
     });
-
-    // Use event delegation for feedback buttons
-    chatbox.addEventListener('click', handleFeedback);
 
     // Initial state
     setStatus('Select an organism and click "Start New Case".');
@@ -347,25 +250,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeFeedbackBtn = document.getElementById('close-feedback-btn');
 
     // Finish Case button
-    finishBtn.addEventListener('click', function() {
+    finishBtn.addEventListener('click', function () {
         // Show the feedback modal
         feedbackModal.style.display = 'block';
     });
 
     // Submit case feedback
-    submitFeedbackBtn.addEventListener('click', function() {
+    submitFeedbackBtn.addEventListener('click', function () {
         // Get selected ratings
         const detailRating = document.querySelector('input[name="detail"]:checked')?.value;
         const helpfulnessRating = document.querySelector('input[name="helpfulness"]:checked')?.value;
         const accuracyRating = document.querySelector('input[name="accuracy"]:checked')?.value;
         const comments = document.getElementById('feedback-comments').value;
-        
+
         // Validate that all ratings are selected
         if (!detailRating || !helpfulnessRating || !accuracyRating) {
             alert('Please select a rating for all three questions.');
             return;
         }
-        
+
         // Submit the feedback
         fetch('/case_feedback', {
             method: 'POST',
@@ -379,43 +282,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 comments: comments
             })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                statusMessage.textContent = 'Error submitting case feedback: ' + data.error;
-            } else {
-                // Close the modal
-                feedbackModal.style.display = 'none';
-                
-                // Reset the form
-                document.querySelectorAll('input[type="radio"]').forEach(radio => {
-                    radio.checked = false;
-                });
-                document.getElementById('feedback-comments').value = '';
-                
-                // Show thank you message
-                statusMessage.textContent = 'Thank you for your feedback! You can start a new case.';
-                
-                // Reset the chat
-                chatbox.innerHTML = '';
-                userInput.disabled = true;
-                sendBtn.disabled = true;
-                finishBtn.disabled = true;
-            }
-        })
-        .catch(error => {
-            statusMessage.textContent = 'Error submitting case feedback: ' + error;
-            console.error('Error submitting case feedback:', error);
-        });
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    statusMessage.textContent = 'Error submitting case feedback: ' + data.error;
+                } else {
+                    // Close the modal
+                    feedbackModal.style.display = 'none';
+
+                    // Reset the form
+                    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                        radio.checked = false;
+                    });
+                    document.getElementById('feedback-comments').value = '';
+
+                    // Show thank you message
+                    statusMessage.textContent = 'Thank you for your feedback! You can start a new case.';
+
+                    // Reset the chat
+                    chatbox.innerHTML = '';
+                    userInput.disabled = true;
+                    sendBtn.disabled = true;
+                    finishBtn.disabled = true;
+                }
+            })
+            .catch(error => {
+                statusMessage.textContent = 'Error submitting case feedback: ' + error;
+                console.error('Error submitting case feedback:', error);
+            });
     });
 
     // Close feedback modal
-    closeFeedbackBtn.addEventListener('click', function() {
+    closeFeedbackBtn.addEventListener('click', function () {
         feedbackModal.style.display = 'none';
     });
 
     // Close modal when clicking outside
-    window.addEventListener('click', function(event) {
+    window.addEventListener('click', function (event) {
         if (event.target === feedbackModal) {
             feedbackModal.style.display = 'none';
         }

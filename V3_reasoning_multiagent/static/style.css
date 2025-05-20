@@ -75,30 +75,35 @@ h1 {
     padding: 10px 15px;
     border-radius: 15px;
     max-width: 80%;
-    word-wrap: break-word; /* Ensure long words break */
+    word-wrap: break-word;
+    /* Ensure long words break */
     line-height: 1.4;
-    position: relative; /* For feedback buttons */
+    position: relative;
+    /* For feedback buttons */
 }
 
 .user-message {
-    background-color: #d1e7fd; /* Light blue */
+    background-color: #d1e7fd;
+    /* Light blue */
     color: #0a58ca;
     align-self: flex-end;
     border-bottom-right-radius: 5px;
 }
 
 .assistant-message {
-    background-color: #e2e3e5; /* Light grey */
+    background-color: #e2e3e5;
+    /* Light grey */
     color: #41464b;
     align-self: flex-start;
     border-bottom-left-radius: 5px;
-    padding-bottom: 5px; /* Add some padding at the bottom */
+    padding-bottom: 5px;
+    /* Add some padding at the bottom */
 }
 
-.assistant-message .feedback-container {
-    margin-top: 8px; /* Space between message text and feedback UI */
+.feedback-container {
+    margin-top: 8px;
     padding-top: 5px;
-    border-top: 1px solid #d5d8db; /* Subtle separator */
+    border-top: 1px solid #d5d8db;
     opacity: 0.8;
     transition: opacity 0.2s ease-in-out;
 }
@@ -111,73 +116,102 @@ h1 {
     font-size: 0.85em;
     color: #555;
     margin-right: 8px;
-    display: block; /* Make it block to appear above buttons */
+    display: block;
     margin-bottom: 4px;
 }
 
 .feedback-buttons {
-    display: flex; /* Align buttons horizontally */
-    gap: 5px; /* Space between rating buttons */
-    align-items: center; /* Vertically align items if needed */
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin-bottom: 8px;
 }
 
-/* General style for all feedback buttons (ratings 1-5) */
-.feedback-buttons button.rating-btn {
-    background-color: #f0f0f0; /* Light grey background */
+.feedback-buttons .rating-btn {
+    background-color: #f0f0f0;
     border: 1px solid #ccc;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.9em;
     padding: 3px 8px;
-    min-width: 25px; /* Ensure buttons have a minimum width */
+    min-width: 25px;
     text-align: center;
     transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
     color: #333;
 }
 
-.feedback-buttons button.rating-btn:hover {
+.feedback-buttons .rating-btn:hover {
     background-color: #e0e0e0;
     border-color: #bbb;
-    transform: translateY(-1px); /* Slight lift on hover */
+    transform: translateY(-1px);
 }
 
-/* Style for the selected/rated button */
-.feedback-buttons button.rated {
-    background-color: #007bff; /* Blue background for selected */
+.feedback-buttons .rating-btn.rated {
+    background-color: #007bff;
     color: white;
     border-color: #0056b3;
     font-weight: bold;
 }
-.feedback-buttons button.rated:hover {
-     background-color: #0069d9; /* Slightly darker blue on hover */
-     transform: none; /* Don't lift selected button on hover */
+
+.feedback-buttons .rating-btn.rated:hover {
+    background-color: #0069d9;
+    transform: none;
 }
 
-
-/* Style for disabled buttons (after rating or during submission) */
-.feedback-buttons button:disabled {
-    background-color: #e9ecef; /* Lighter grey when disabled */
+.feedback-buttons .rating-btn:disabled {
+    background-color: #e9ecef;
     border-color: #ced4da;
-    color: #6c757d; /* Muted text color */
+    color: #6c757d;
     cursor: not-allowed;
     opacity: 0.7;
 }
-.feedback-buttons button:disabled:hover {
-    transform: none; /* Prevent hover effect when disabled */
-    background-color: #e9ecef; /* Keep background consistent */
+
+.feedback-buttons .rating-btn:disabled:hover {
+    transform: none;
+    background-color: #e9ecef;
 }
 
-
-/* Remove old thumb styles if they exist */
-.feedback-buttons button.thumb-up,
-.feedback-buttons button.thumb-down {
-    /* Remove specific styles if any */
-}
-.feedback-buttons button.rated-up,
-.feedback-buttons button.rated-down {
-     /* Remove specific styles if any */
+.feedback-input {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
+.feedback-input textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.9em;
+}
+
+.feedback-submit-btn {
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.feedback-submit-btn:hover {
+    background-color: #0056b3;
+}
+
+.feedback-submit-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.feedback-container em {
+    font-style: italic;
+    color: #666;
+}
 
 #input-area {
     display: flex;
@@ -214,9 +248,11 @@ h1 {
 .status {
     text-align: center;
     margin-top: 10px;
-    color: #6c757d; /* Grey color */
+    color: #6c757d;
+    /* Grey color */
     font-style: italic;
-    min-height: 1.2em; /* Reserve space */
+    min-height: 1.2em;
+    /* Reserve space */
 }
 
 /* Modal styles */
@@ -266,7 +302,8 @@ h1 {
     margin-top: 20px;
 }
 
-#submit-feedback-btn, #close-feedback-btn {
+#submit-feedback-btn,
+#close-feedback-btn {
     padding: 8px 16px;
     border: none;
     border-radius: 4px;
@@ -309,4 +346,49 @@ h1 {
 #finish-btn:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+}
+
+.rating-select {
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.feedback-submitted {
+    margin-top: 8px;
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.feedback-rating {
+    color: #007bff;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.feedback-section {
+    margin-top: 8px;
+}
+
+.feedback-section:first-of-type {
+    margin-top: 0;
+}
+
+.feedback-label {
+    color: #495057;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.feedback-text {
+    color: #666;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-left: 8px;
+    border-left: 2px solid #dee2e6;
 }

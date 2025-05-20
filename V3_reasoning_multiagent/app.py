@@ -7,11 +7,42 @@ import logging
 from datetime import datetime
 from flask import Flask, request, render_template, jsonify
 from tutor import MedicalMicrobiologyTutor # Assuming tutor.py is in the same directory
+import config
 
 # --- Configuration ---
 FEEDBACK_LOG_FILE = 'feedback.log'
 CASE_FEEDBACK_LOG_FILE = 'case_feedback.log'  # New log file for case feedback
+MODEL_STATE_FILE = 'model_state.json'  # File to store the selected model
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+
+def get_current_model():
+    """Get the current model from the state file or default to config."""
+    try:
+        if os.path.exists(MODEL_STATE_FILE):
+            with open(MODEL_STATE_FILE, 'r') as f:
+                state = json.load(f)
+                selected = state.get('model', config.API_MODEL_NAME)
+                # Sync only when using the Azure backend
+                if config.LLM_BACKEND == "azure":
+                    config.API_MODEL_NAME = selected
+                return selected
+    except Exception as e:
+        logging.error(f"Error reading model state: {e}")
+    return config.API_MODEL_NAME
+
+def save_current_model(model):
+    """Save the current model to the state file."""
+    try:
+        with open(MODEL_STATE_FILE, 'w') as f:
+            json.dump({'model': model}, f)
+            # Keep config module in sync at runtime (only for Azure backend)
+            if config.LLM_BACKEND == "azure":
+                config.API_MODEL_NAME = model
+    except Exception as e:
+        logging.error(f"Error saving model state: {e}")
+
+# Global model variable initialized from state file or config
+CURRENT_MODEL = get_current_model()
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
@@ -52,15 +83,29 @@ def index():
     # Reset tutor state when the main page is loaded (for a fresh start)
     # In a multi-user scenario, you'd handle sessions differently.
     tutor.reset()
-    return render_template('index.html')
+    return render_template('index.html', current_model=CURRENT_MODEL)
 
 @app.route('/start_case', methods=['POST'])
 def start_case():
     """Starts a new case with the selected organism."""
+    global CURRENT_MODEL
     try:
         data = request.get_json()
         organism = data.get('organism', 'staphylococcus aureus') # Default if not provided
-        logging.info(f"Starting new case with organism: {organism}")
+        model = data.get('model', CURRENT_MODEL) # Default to current model if not provided
+        
+        logging.info(f"Starting new case with organism: {organism} and model: {model}")
+        
+        if model != CURRENT_MODEL:
+            CURRENT_MODEL = model
+            save_current_model(CURRENT_MODEL)
+            if config.LLM_BACKEND == "azure":
+                config.API_MODEL_NAME = CURRENT_MODEL  # keep config in sync
+        
+        # Update the tutor's model if it's different
+        if hasattr(tutor, 'update_model'):
+            tutor.update_model(CURRENT_MODEL)
+            
         initial_message = tutor.start_new_case(organism=organism)
         # The tutor's messages list now contains the system prompt and the first assistant message
         return jsonify({

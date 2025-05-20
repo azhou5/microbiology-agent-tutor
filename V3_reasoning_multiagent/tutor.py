@@ -240,6 +240,21 @@ class MedicalMicrobiologyTutor:
                                  raise ValueError("Case description is not available for the patient tool.")
                              # Pass the current message history
                              tool_result = tool_function(tool_input, self.case_description, self.messages)
+                             
+                             # Clean the response if output_tool_directly is True
+                             if self.output_tool_directly:
+                                 # Remove any [Action] or [Observation] wrappers
+                                 tool_result = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', tool_result)
+                                 # Remove any JSON formatting
+                                 tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)
+                                 # Remove any remaining JSON structure
+                                 tool_result = re.sub(r'^\s*{\s*"patient"\s*:\s*"|"\s*}\s*$', '', tool_result)
+                                 # Clean up any extra whitespace
+                                 tool_result = tool_result.strip()
+                                 # Add "Patient: " prefix if not already present
+                                 if not tool_result.startswith("Patient: "):
+                                     tool_result = f"Patient: {tool_result}"
+                             
                              # Return the patient response directly without additional prefixing
                              self.messages.append({"role": "assistant", "content": tool_result})
                              return tool_result
@@ -283,9 +298,16 @@ class MedicalMicrobiologyTutor:
                     self.messages.append({"role": "assistant", "content": final_response})
                     return final_response
             else:
-                # Direct tutor response: fetch and append similar feedback examples
-                similar = retrieve_similar_examples(message, self.messages)
-                examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
+                # Direct tutor response: optionally append similar feedback examples
+                examples_text = ""
+                if self.run_with_faiss:
+                    try:
+                        similar = retrieve_similar_examples(message, self.messages)
+                        if similar:
+                            examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
+                    except Exception as e:
+                        # Gracefully handle FAISS/embedding errors so the tutor reply still works
+                        print(f"Error retrieving similar examples: {e}")
                 full_response = response_content + examples_text
                 self.messages.append({"role": "assistant", "content": full_response})
                 return full_response

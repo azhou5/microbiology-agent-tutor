@@ -1,0 +1,55 @@
+2025-04-16 15:49:32,548 - INFO - {
+  "timestamp": "2025-04-16T15:49:32.547922",
+  "organism": "staphylococcus aureus",
+  "rating": "4",
+  "rated_message": "Preceptor: A 47-year-old male presents with worsening pain, redness, and swelling on his right forearm.",
+  "feedback_text": "",
+  "visible_chat_history": [
+    {
+      "role": "assistant",
+      "content": "Preceptor: A 47-year-old male presents with worsening pain, redness, and swelling on his right forearm."
+    }
+  ]
+}
+2025-04-16 15:49:54,443 - INFO - {
+  "timestamp": "2025-04-16T15:49:54.442984",
+  "organism": "staphylococcus aureus",
+  "rating": "4",
+  "rated_message": "Patient: Around 5 days ago.",
+  "feedback_text": "good",
+  "visible_chat_history": [
+    {
+      "role": "assistant",
+      "content": "Preceptor: A 47-year-old male presents with worsening pain, redness, and swelling on his right forearm."
+    },
+    {
+      "role": "user",
+      "content": "when did it start ?"
+    },
+    {
+      "role": "assistant",
+      "content": "Patient: Around 5 days ago."
+    }
+  ]
+}
+2025-05-15 19:25:33,609 - INFO - {
+  "timestamp": "2025-05-15T19:25:33.609457",
+  "organism": "Unknown",
+  "rating": "1",
+  "rated_message": "[Thought]: The question \"how long has it been going on for?\" is directed to the patient. I'll now ask the patient.\n[Action]: {\"patient\": \"How long have you been experiencing these symptoms?\"}",
+  "feedback_text": "shouldn't be showing me this internal routing message",
+  "visible_chat_history": [
+    {
+      "role": "assistant",
+      "content": "Preceptor: John Carter, a 47-year-old man, presents with worsening pain, redness, and swelling of his right forearm accompanied by low-grade fever."
+    },
+    {
+      "role": "user",
+      "content": "how long as it been going on for?"
+    },
+    {
+      "role": "assistant",
+      "content": "[Thought]: The question \"how long has it been going on for?\" is directed to the patient. I'll now ask the patient.\n[Action]: {\"patient\": \"How long have you been experiencing these symptoms?\"}"
+    }
+  ]
+}

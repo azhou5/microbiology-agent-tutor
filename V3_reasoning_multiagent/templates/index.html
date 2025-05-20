@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microbiology Tutor</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
     <div class="container">
         <h1>Microbiology Tutor</h1>
@@ -35,14 +37,12 @@
                     <option value="taenia solium">Taenia solium</option>
                 </optgroup>
             </select>
+            <label for="model-select">Select Model:</label>
+            <select id="model-select">
+                <option value="gpt-4o" {% if current_model=='gpt-4o' %}selected{% endif %}>GPT-4</option>
+                <option value="o3-mini" {% if current_model=='o3-mini' %}selected{% endif %}>O3-Mini</option>
+            </select>
             <button id="start-case-btn">Start New Case</button>
-        </div>
-        <!-- Feedback mode toggle -->
-        <div class="feedback-mode-toggle">
-            <label>
-                <input type="checkbox" id="inline-feedback-toggle">
-                Inline feedback mode
-            </label>
         </div>
 
         <div id="chatbox">
@@ -54,7 +54,7 @@
             <button id="send-btn" disabled>Send</button>
             <button id="finish-btn" disabled>Finish Case</button>
         </div>
-         <p id="status-message" class="status"></p>
+        <p id="status-message" class="status"></p>
     </div>
 
     <!-- Feedback Modal -->
@@ -62,7 +62,7 @@
         <div class="modal-content">
             <h2>Case Feedback</h2>
             <p>Please rate your experience with this case:</p>
-            
+
             <div class="feedback-question">
                 <p>How detailed was the case?</p>
                 <div class="likert-scale">
@@ -73,7 +73,7 @@
                     <label><input type="radio" name="detail" value="5"> 5 (Very detailed)</label>
                 </div>
             </div>
-            
+
             <div class="feedback-question">
                 <p>How helpful was this case for your learning?</p>
                 <div class="likert-scale">
@@ -84,7 +84,7 @@
                     <label><input type="radio" name="helpfulness" value="5"> 5 (Very helpful)</label>
                 </div>
             </div>
-            
+
             <div class="feedback-question">
                 <p>How accurate was the medical information in this case?</p>
                 <div class="likert-scale">
@@ -95,12 +95,12 @@
                     <label><input type="radio" name="accuracy" value="5"> 5 (Very accurate)</label>
                 </div>
             </div>
-            
+
             <div class="feedback-question">
                 <p>Additional comments (optional):</p>
                 <textarea id="feedback-comments" rows="4" cols="50"></textarea>
             </div>
-            
+
             <div class="modal-buttons">
                 <button id="submit-feedback-btn">Submit Feedback</button>
                 <button id="close-feedback-btn">Close</button>
@@ -110,4 +110,5 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
-</html> 
+
+</html>
