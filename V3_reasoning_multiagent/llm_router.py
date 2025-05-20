@@ -2,7 +2,7 @@
 import os
 # Allow duplicate OpenMP runtimes to avoid libomp initialization errors on macOS
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-import re, torch
+import re
 from dotenv import load_dotenv; load_dotenv()
 import config
 import sys
@@ -39,6 +39,7 @@ if BACKEND == "azure":
 
 else:
     # --- Local HF model ---
+    import torch
     from transformers import AutoTokenizer, AutoModelForCausalLM
     # import torch  # already imported above
 
