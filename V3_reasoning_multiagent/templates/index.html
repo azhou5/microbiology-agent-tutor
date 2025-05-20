@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microbiology Tutor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Microbiology Tutor</h1>
+
+        <div class="case-setup">
+            <label for="organism-select">Select Organism:</label>
+            <select id="organism-select">
+                <optgroup label="Bacteria">
+                    <option value="staphylococcus aureus">Staphylococcus aureus</option>
+                    <option value="escherichia coli">Escherichia coli</option>
+                    <option value="nocardia species">Nocardia species</option>
+                    <option value="borrelia burgdorferi">Borrelia burgdorferi</option>
+                    <option value="streptococcus pneumoniae">Streptococcus pneumoniae</option>
+                </optgroup>
+                <optgroup label="Viruses">
+                    <option value="hsv-1">HSV-1</option>
+                    <option value="influenza a">Influenza A</option>
+                    <option value="hiv">HIV</option>
+                    <option value="ebv">EBV</option>
+                </optgroup>
+                <optgroup label="Fungi">
+                    <option value="candida albicans">Candida albicans</option>
+                    <option value="aspergillus fumigatus">Aspergillus fumigatus</option>
+                </optgroup>
+                <optgroup label="Parasites">
+                    <option value="plasmodium falciparum">Plasmodium falciparum (malaria)</option>
+                    <option value="taenia solium">Taenia solium</option>
+                </optgroup>
+            </select>
+            <button id="start-case-btn">Start New Case</button>
+        </div>
+        <!-- Feedback mode toggle -->
+        <div class="feedback-mode-toggle">
+            <label>
+                <input type="checkbox" id="inline-feedback-toggle">
+                Inline feedback mode
+            </label>
+        </div>
+
+        <div id="chatbox">
+            <!-- Chat messages will be appended here -->
+        </div>
+
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Enter your message..." disabled>
+            <button id="send-btn" disabled>Send</button>
+            <button id="finish-btn" disabled>Finish Case</button>
+        </div>
+         <p id="status-message" class="status"></p>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal">
+        <div class="modal-content">
+            <h2>Case Feedback</h2>
+            <p>Please rate your experience with this case:</p>
+            
+            <div class="feedback-question">
+                <p>How detailed was the case?</p>
+                <div class="likert-scale">
+                    <label><input type="radio" name="detail" value="1"> 1 (Not detailed)</label>
+                    <label><input type="radio" name="detail" value="2"> 2</label>
+                    <label><input type="radio" name="detail" value="3"> 3</label>
+                    <label><input type="radio" name="detail" value="4"> 4</label>
+                    <label><input type="radio" name="detail" value="5"> 5 (Very detailed)</label>
+                </div>
+            </div>
+            
+            <div class="feedback-question">
+                <p>How helpful was this case for your learning?</p>
+                <div class="likert-scale">
+                    <label><input type="radio" name="helpfulness" value="1"> 1 (Not helpful)</label>
+                    <label><input type="radio" name="helpfulness" value="2"> 2</label>
+                    <label><input type="radio" name="helpfulness" value="3"> 3</label>
+                    <label><input type="radio" name="helpfulness" value="4"> 4</label>
+                    <label><input type="radio" name="helpfulness" value="5"> 5 (Very helpful)</label>
+                </div>
+            </div>
+            
+            <div class="feedback-question">
+                <p>How accurate was the medical information in this case?</p>
+                <div class="likert-scale">
+                    <label><input type="radio" name="accuracy" value="1"> 1 (Not accurate)</label>
+                    <label><input type="radio" name="accuracy" value="2"> 2</label>
+                    <label><input type="radio" name="accuracy" value="3"> 3</label>
+                    <label><input type="radio" name="accuracy" value="4"> 4</label>
+                    <label><input type="radio" name="accuracy" value="5"> 5 (Very accurate)</label>
+                </div>
+            </div>
+            
+            <div class="feedback-question">
+                <p>Additional comments (optional):</p>
+                <textarea id="feedback-comments" rows="4" cols="50"></textarea>
+            </div>
+            
+            <div class="modal-buttons">
+                <button id="submit-feedback-btn">Submit Feedback</button>
+                <button id="close-feedback-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html> 
