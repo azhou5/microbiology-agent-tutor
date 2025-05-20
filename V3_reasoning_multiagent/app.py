@@ -66,49 +66,68 @@ case_feedback_logger.setLevel(logging.INFO)
 case_feedback_logger.propagate = False
 
 # --- Flask App Initialization ---
+app = Flask(__name__)
 
 # — Database setup —
-app = Flask(__name__)
-# Select the database URL based on environment/config flags
-if config.USE_GLOBAL_DB:
-    db_uri = config.GLOBAL_DATABASE_URL
-elif config.USE_LOCAL_DB:
-    db_uri = config.LOCAL_DATABASE_URL
-else:
-    db_uri = None  # No database; fallback to file logging
-if db_uri:
-    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    db = SQLAlchemy(app)
-else:
-    db = None
+db = None
+if use_db:
+    try:
+        # Select the database URL based on environment/config flags
+        if config.USE_GLOBAL_DB:
+            db_uri = config.GLOBAL_DATABASE_URL
+        elif config.USE_LOCAL_DB:
+            db_uri = config.LOCAL_DATABASE_URL
+        else:
+            db_uri = None
 
+        if db_uri:
+            app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+            app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+            db = SQLAlchemy(app)
+            # Test the connection
+            with app.app_context():
+                db.engine.connect()
+            logging.info("Successfully connected to database")
+        else:
+            logging.warning("No database URI provided, falling back to file logging")
+    except Exception as e:
+        logging.error(f"Failed to initialize database: {e}")
+        logging.warning("Falling back to file logging")
+        db = None
+else:
+    logging.info("Database disabled, using file logging")
 
 # — Models —
-class FeedbackEntry(db.Model):
-    __tablename__ = 'feedback'
-    id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, nullable=False)
-    organism = db.Column(db.String(128), nullable=True)
-    rating = db.Column(db.String(2), nullable=False)
-    rated_message = db.Column(db.Text, nullable=False)
-    feedback_text = db.Column(db.Text, nullable=True)
-    replacement_text = db.Column(db.Text, nullable=True)
+if db is not None:
+    class FeedbackEntry(db.Model):
+        __tablename__ = 'feedback'
+        id = db.Column(db.Integer, primary_key=True)
+        timestamp = db.Column(db.DateTime, nullable=False)
+        organism = db.Column(db.String(128), nullable=True)
+        rating = db.Column(db.String(2), nullable=False)
+        rated_message = db.Column(db.Text, nullable=False)
+        feedback_text = db.Column(db.Text, nullable=True)
+        replacement_text = db.Column(db.Text, nullable=True)
 
-class CaseFeedbackEntry(db.Model):
-    __tablename__ = 'case_feedback'
-    id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, nullable=False)
-    organism = db.Column(db.String(128), nullable=True)
-    detail_rating = db.Column(db.String(2), nullable=False)
-    helpfulness_rating = db.Column(db.String(2), nullable=False)
-    accuracy_rating = db.Column(db.String(2), nullable=False)
-    comments = db.Column(db.Text, nullable=True)
+    class CaseFeedbackEntry(db.Model):
+        __tablename__ = 'case_feedback'
+        id = db.Column(db.Integer, primary_key=True)
+        timestamp = db.Column(db.DateTime, nullable=False)
+        organism = db.Column(db.String(128), nullable=True)
+        detail_rating = db.Column(db.String(2), nullable=False)
+        helpfulness_rating = db.Column(db.String(2), nullable=False)
+        accuracy_rating = db.Column(db.String(2), nullable=False)
+        comments = db.Column(db.Text, nullable=True)
 
-# Create tables if they don't exist
-if db:
+    # Create tables if they don't exist
     with app.app_context():
         db.create_all()
+else:
+    # Define empty model classes for when db is None
+    class FeedbackEntry:
+        pass
+    class CaseFeedbackEntry:
+        pass
 
 # --- Tutor Initialization ---
 # Instantiate the tutor globally or manage sessions if needed

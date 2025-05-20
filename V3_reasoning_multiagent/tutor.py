@@ -59,12 +59,6 @@ Example usage:
 [User Input]: When did your fever start?
 [Action]: {{"patient": "When did your fever start?"}}
 
-You will be called again with this:
-[Observation]: {{"patient": "A few days ago"}}
-
-You then output:
-Patient: A few days ago
-
 You may also respond yourself as the tutor when handling case flow (and doing anything that does not involve the patient), and your personal specifications will be provided below.
 
    PHASE 1: Information gathering
