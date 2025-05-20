@@ -243,6 +243,30 @@ h1 {
 
 .feedback-question {
     margin-bottom: 20px;
+    position: relative;
+}
+
+.skip-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 0.9em;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+}
+
+.skip-btn:hover {
+    background-color: #e9ecef;
+    color: #495057;
+}
+
+.skip-btn:disabled {
+    background-color: #e9ecef;
+    color: #adb5bd;
+    cursor: not-allowed;
 }
 
 .likert-scale {
@@ -308,5 +332,56 @@ h1 {
 
 #finish-btn:disabled {
     background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.feedback-input {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.feedback-input label {
+    font-size: 0.9em;
+    color: #555;
+}
+
+.feedback-input textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+}
+
+.feedback-input textarea:disabled {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
+.skip-feedback-btn,
+.skip-replacement-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 0.9em;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    align-self: flex-start;
+}
+
+.skip-feedback-btn:hover,
+.skip-replacement-btn:hover {
+    background-color: #e9ecef;
+    color: #495057;
+}
+
+.skip-feedback-btn:disabled,
+.skip-replacement-btn:disabled {
+    background-color: #e9ecef;
+    color: #adb5bd;
     cursor: not-allowed;
 }

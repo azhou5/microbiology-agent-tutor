@@ -59,14 +59,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // 1) Description textarea
                 const descriptionLabel = document.createElement('label');
-                descriptionLabel.textContent = 'What could be better?';
+                descriptionLabel.textContent = 'Please provide feedback on the strengths and weaknesses of this response.';
                 feedbackInputDiv.appendChild(descriptionLabel);
 
                 const descriptionTextArea = document.createElement('textarea');
-                descriptionTextArea.placeholder = 'Describe improvements...';
+                descriptionTextArea.placeholder = 'Share your thoughts on what worked well and what could be improved...';
                 descriptionTextArea.rows = 2;
                 descriptionTextArea.classList.add('feedback-description');
                 feedbackInputDiv.appendChild(descriptionTextArea);
+
+                // Add skip button for feedback text
+                const skipFeedbackBtn = document.createElement('button');
+                skipFeedbackBtn.textContent = 'Skip Feedback';
+                skipFeedbackBtn.classList.add('skip-feedback-btn');
+                skipFeedbackBtn.onclick = () => {
+                    descriptionTextArea.value = '';
+                    descriptionTextArea.disabled = true;
+                    skipFeedbackBtn.disabled = true;
+                    skipFeedbackBtn.textContent = 'Skipped';
+                };
+                feedbackInputDiv.appendChild(skipFeedbackBtn);
 
                 // 2) Replacement textarea
                 const replacementLabel = document.createElement('label');
@@ -78,6 +90,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 replacementTextArea.rows = 3;
                 replacementTextArea.classList.add('feedback-replacement');
                 feedbackInputDiv.appendChild(replacementTextArea);
+
+                // Add skip button for preferred response
+                const skipReplacementBtn = document.createElement('button');
+                skipReplacementBtn.textContent = 'Skip Preferred Response';
+                skipReplacementBtn.classList.add('skip-replacement-btn');
+                skipReplacementBtn.onclick = () => {
+                    replacementTextArea.value = '';
+                    replacementTextArea.disabled = true;
+                    skipReplacementBtn.disabled = true;
+                    skipReplacementBtn.textContent = 'Skipped';
+                };
+                feedbackInputDiv.appendChild(skipReplacementBtn);
 
                 // 3) Submit button
                 const submitFeedbackBtn = document.createElement('button');
@@ -276,53 +300,151 @@ document.addEventListener('DOMContentLoaded', () => {
             buttonsInDiv.forEach(btn => btn.disabled = true);
             ratingBtn.classList.add('rated');
 
-            let feedbackText = prompt(`You rated this response ${rating}/5. What could be better?`, "");
-            if (feedbackText === null) {
+            // Create custom dialog for feedback
+            const feedbackDialog = document.createElement('div');
+            feedbackDialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 1000;
+                width: 80%;
+                max-width: 500px;
+            `;
+
+            // Add feedback text input
+            const feedbackLabel = document.createElement('label');
+            feedbackLabel.textContent = 'Please provide feedback on the strengths and weaknesses of this response:';
+            feedbackLabel.style.display = 'block';
+            feedbackLabel.style.marginBottom = '10px';
+            feedbackDialog.appendChild(feedbackLabel);
+
+            const feedbackTextarea = document.createElement('textarea');
+            feedbackTextarea.style.width = '100%';
+            feedbackTextarea.style.marginBottom = '10px';
+            feedbackTextarea.style.padding = '8px';
+            feedbackTextarea.rows = 4;
+            feedbackDialog.appendChild(feedbackTextarea);
+
+            // Add skip button for feedback
+            const skipFeedbackBtn = document.createElement('button');
+            skipFeedbackBtn.textContent = 'Skip Feedback';
+            skipFeedbackBtn.style.marginRight = '10px';
+            skipFeedbackBtn.onclick = () => {
+                feedbackTextarea.value = '';
+                feedbackTextarea.disabled = true;
+                skipFeedbackBtn.disabled = true;
+                skipFeedbackBtn.textContent = 'Skipped';
+            };
+            feedbackDialog.appendChild(skipFeedbackBtn);
+
+            // Add buttons container
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.style.marginTop = '20px';
+            buttonsContainer.style.textAlign = 'right';
+
+            // Add continue button
+            const continueBtn = document.createElement('button');
+            continueBtn.textContent = 'Continue';
+            continueBtn.style.marginRight = '10px';
+            continueBtn.onclick = () => {
+                const feedbackText = feedbackTextarea.value;
+                feedbackDialog.remove();
+                overlay.remove();
+                
+                // Show preferred response dialog
+                const replacementDialog = document.createElement('div');
+                replacementDialog.style.cssText = feedbackDialog.style.cssText;
+
+                const replacementLabel = document.createElement('label');
+                replacementLabel.textContent = 'Your preferred response:';
+                replacementLabel.style.display = 'block';
+                replacementLabel.style.marginBottom = '10px';
+                replacementDialog.appendChild(replacementLabel);
+
+                const replacementTextarea = document.createElement('textarea');
+                replacementTextarea.style.width = '100%';
+                replacementTextarea.style.marginBottom = '10px';
+                replacementTextarea.style.padding = '8px';
+                replacementTextarea.rows = 4;
+                replacementDialog.appendChild(replacementTextarea);
+
+                // Add skip button for preferred response
+                const skipReplacementBtn = document.createElement('button');
+                skipReplacementBtn.textContent = 'Skip Preferred Response';
+                skipReplacementBtn.style.marginRight = '10px';
+                skipReplacementBtn.onclick = () => {
+                    replacementTextarea.value = '';
+                    replacementTextarea.disabled = true;
+                    skipReplacementBtn.disabled = true;
+                    skipReplacementBtn.textContent = 'Skipped';
+                };
+                replacementDialog.appendChild(skipReplacementBtn);
+
+                const replacementButtonsContainer = document.createElement('div');
+                replacementButtonsContainer.style.marginTop = '20px';
+                replacementButtonsContainer.style.textAlign = 'right';
+
+                const submitBtn = document.createElement('button');
+                submitBtn.textContent = 'Submit';
+                submitBtn.style.marginRight = '10px';
+                submitBtn.onclick = () => {
+                    replacementDialog.remove();
+                    overlay.remove();
+                    handleFeedbackSubmission(rating, messageContent, feedbackText, replacementTextarea.value);
+                };
+                replacementButtonsContainer.appendChild(submitBtn);
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.onclick = () => {
+                    replacementDialog.remove();
+                    overlay.remove();
+                    buttonsInDiv.forEach(btn => btn.disabled = false);
+                    ratingBtn.classList.remove('rated');
+                    setStatus('Feedback cancelled.');
+                };
+                replacementButtonsContainer.appendChild(cancelBtn);
+
+                replacementDialog.appendChild(replacementButtonsContainer);
+                document.body.appendChild(replacementDialog);
+                replacementTextarea.focus();
+            };
+            buttonsContainer.appendChild(continueBtn);
+
+            // Add cancel button
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => {
+                feedbackDialog.remove();
+                overlay.remove();
                 buttonsInDiv.forEach(btn => btn.disabled = false);
                 ratingBtn.classList.remove('rated');
                 setStatus('Feedback cancelled.');
-                return;
-            }
+            };
+            buttonsContainer.appendChild(cancelBtn);
 
-            let replacementText = prompt('Please enter your preferred response to replace the tutor output:', '');
-            if (replacementText === null) {
-                buttonsInDiv.forEach(btn => btn.disabled = false);
-                ratingBtn.classList.remove('rated');
-                setStatus('Feedback cancelled.');
-                return;
-            }
+            feedbackDialog.appendChild(buttonsContainer);
 
-            setStatus('Sending feedback...');
-            try {
-                const response = await fetch('/feedback', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        rating,
-                        message: messageContent,
-                        history: chatHistory,
-                        feedback_text: feedbackText || '',
-                        replacement_text: replacementText || ''
-                    }),
-                });
+            // Add overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 999;
+            `;
 
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || `HTTP ${response.status}`);
-                }
-
-                setStatus('Feedback submitted — thank you!');
-                // If the user provided a replacement in the prompt, show it
-                if (replacementText) {
-                    addMessage('assistant', replacementText, true);
-                    chatHistory.push({ role: 'assistant', content: replacementText });
-                }
-            } catch (error) {
-                console.error(error);
-                setStatus(`Error: ${error.message}`, true);
-                buttonsInDiv.forEach(btn => btn.disabled = false);
-                ratingBtn.classList.remove('rated');
-            }
+            document.body.appendChild(overlay);
+            document.body.appendChild(feedbackDialog);
+            feedbackTextarea.focus();
         }
     }
 
@@ -354,58 +476,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Submit case feedback
     submitFeedbackBtn.addEventListener('click', function() {
-        // Get selected ratings
         const detailRating = document.querySelector('input[name="detail"]:checked')?.value;
         const helpfulnessRating = document.querySelector('input[name="helpfulness"]:checked')?.value;
         const accuracyRating = document.querySelector('input[name="accuracy"]:checked')?.value;
         const comments = document.getElementById('feedback-comments').value;
-        
-        // Validate that all ratings are selected
-        if (!detailRating || !helpfulnessRating || !accuracyRating) {
-            alert('Please select a rating for all three questions.');
+
+        // Check if at least one question is answered
+        if (!detailRating && !helpfulnessRating && !accuracyRating) {
+            alert('Please provide at least one rating or skip all questions.');
             return;
         }
-        
-        // Submit the feedback
+
+        const feedbackData = {
+            detail: detailRating || 'skipped',
+            helpfulness: helpfulnessRating || 'skipped',
+            accuracy: accuracyRating || 'skipped',
+            comments: comments
+        };
+
+        // Send feedback to server
         fetch('/case_feedback', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                detail: detailRating,
-                helpfulness: helpfulnessRating,
-                accuracy: accuracyRating,
-                comments: comments
-            })
+            body: JSON.stringify(feedbackData)
         })
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                statusMessage.textContent = 'Error submitting case feedback: ' + data.error;
+                alert('Error submitting feedback: ' + data.error);
             } else {
-                // Close the modal
-                feedbackModal.style.display = 'none';
-                
+                alert('Thank you for your feedback!');
+                document.getElementById('feedback-modal').style.display = 'none';
                 // Reset the form
-                document.querySelectorAll('input[type="radio"]').forEach(radio => {
-                    radio.checked = false;
-                });
+                document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
                 document.getElementById('feedback-comments').value = '';
-                
-                // Show thank you message
-                statusMessage.textContent = 'Thank you for your feedback! You can start a new case.';
-                
-                // Reset the chat
-                chatbox.innerHTML = '';
-                userInput.disabled = true;
-                sendBtn.disabled = true;
-                finishBtn.disabled = true;
+                document.querySelectorAll('.skip-btn').forEach(btn => {
+                    btn.disabled = false;
+                    btn.textContent = 'Skip';
+                });
             }
         })
         .catch(error => {
-            statusMessage.textContent = 'Error submitting case feedback: ' + error;
-            console.error('Error submitting case feedback:', error);
+            console.error('Error:', error);
+            alert('Error submitting feedback. Please try again.');
         });
     });
 
@@ -419,5 +534,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target === feedbackModal) {
             feedbackModal.style.display = 'none';
         }
+    });
+
+    // Add event listeners for skip buttons
+    document.querySelectorAll('.skip-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const questionName = this.getAttribute('data-question');
+            // Uncheck all radio buttons for this question
+            document.querySelectorAll(`input[name="${questionName}"]`).forEach(radio => {
+                radio.checked = false;
+            });
+            // Disable the skip button
+            this.disabled = true;
+            // Add a visual indicator that this question was skipped
+            this.textContent = 'Skipped';
+        });
     });
 }); 
