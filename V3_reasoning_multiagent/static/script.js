@@ -273,14 +273,9 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('/case_feedback', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                detail: detailRating,
-                helpfulness: helpfulnessRating,
-                accuracy: accuracyRating,
-                comments: comments
-            })
+            body: JSON.stringify(feedbackData)
         })
             .then(response => response.json())
             .then(data => {
@@ -322,5 +317,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target === feedbackModal) {
             feedbackModal.style.display = 'none';
         }
+    });
+
+    // Add event listeners for skip buttons
+    document.querySelectorAll('.skip-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const questionName = this.getAttribute('data-question');
+            // Uncheck all radio buttons for this question
+            document.querySelectorAll(`input[name="${questionName}"]`).forEach(radio => {
+                radio.checked = false;
+            });
+            // Disable the skip button
+            this.disabled = true;
+            // Add a visual indicator that this question was skipped
+            this.textContent = 'Skipped';
+        });
     });
 }); 

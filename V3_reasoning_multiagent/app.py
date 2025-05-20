@@ -259,7 +259,14 @@ def case_feedback():
         logging.error(f"Error processing case feedback: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
-# --- Main Execution ---
+
+@app.cli.command("shell")
+def shell():
+    """Run a Flask interactive shell with app context."""
+    import code
+    code.interact(local=dict(globals(), **locals__))
+
+
 if __name__ == '__main__':
     import config
     if not config.TERMINAL_MODE:
