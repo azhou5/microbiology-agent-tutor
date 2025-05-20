@@ -6,6 +6,8 @@ import json
 import logging
 from datetime import datetime
 from flask import Flask, request, render_template, jsonify
+from flask_sqlalchemy import SQLAlchemy
+import os
 from tutor import MedicalMicrobiologyTutor # Assuming tutor.py is in the same directory
 import config
 
@@ -63,7 +65,38 @@ case_feedback_logger.setLevel(logging.INFO)
 case_feedback_logger.propagate = False
 
 # --- Flask App Initialization ---
+
+# — Database setup —
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+
+# — Models —
+class FeedbackEntry(db.Model):
+    __tablename__ = 'feedback'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False)
+    organism = db.Column(db.String(128), nullable=True)
+    rating = db.Column(db.String(2), nullable=False)
+    rated_message = db.Column(db.Text, nullable=False)
+    feedback_text = db.Column(db.Text, nullable=True)
+    replacement_text = db.Column(db.Text, nullable=True)
+
+class CaseFeedbackEntry(db.Model):
+    __tablename__ = 'case_feedback'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, nullable=False)
+    organism = db.Column(db.String(128), nullable=True)
+    detail_rating = db.Column(db.String(2), nullable=False)
+    helpfulness_rating = db.Column(db.String(2), nullable=False)
+    accuracy_rating = db.Column(db.String(2), nullable=False)
+    comments = db.Column(db.Text, nullable=True)
+
+# Create tables if they don't exist
+with app.app_context():
+    db.create_all()
 
 # --- Tutor Initialization ---
 # Instantiate the tutor globally or manage sessions if needed
@@ -174,19 +207,17 @@ def feedback():
         # --- Get current organism ---
         current_organism = tutor.current_organism or "Unknown" # Get from tutor instance
 
-        # --- Prepare log entry ---
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "organism": current_organism, # Add the organism
-            "rating": rating,
-            "rated_message": message, # Rename for clarity
-            "feedback_text": feedback_text,
-            "replacement_text": replacement_text,
-            "visible_chat_history": visible_history, # Log the filtered history
-        }
-
-        # Log the feedback entry as a JSON string
-        feedback_logger.info(json.dumps(log_entry, indent=2)) # Use indent for readability in the log file
+        # Store feedback in database
+        entry = FeedbackEntry(
+            timestamp=datetime.utcnow(),
+            organism=current_organism,
+            rating=rating,
+            rated_message=message,
+            feedback_text=feedback_text,
+            replacement_text=replacement_text
+        )
+        db.session.add(entry)
+        db.session.commit()
 
         logging.info(f"Received feedback: {rating}/5 for message snippet: '{message[:50]}...' (Organism: {current_organism})")
         return jsonify({"status": "Feedback received"}), 200
@@ -209,19 +240,18 @@ def case_feedback():
             
         # Get current organism
         current_organism = tutor.current_organism or "Unknown"
-        
-        # Prepare log entry
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "organism": current_organism,
-            "detail_rating": detail_rating,
-            "helpfulness_rating": helpfulness_rating,
-            "accuracy_rating": accuracy_rating,
-            "comments": comments
-        }
-        
-        # Log the feedback entry as a JSON string
-        case_feedback_logger.info(json.dumps(log_entry, indent=2))
+
+        # Store case feedback in database
+        entry = CaseFeedbackEntry(
+            timestamp=datetime.utcnow(),
+            organism=current_organism,
+            detail_rating=detail_rating,
+            helpfulness_rating=helpfulness_rating,
+            accuracy_rating=accuracy_rating,
+            comments=comments
+        )
+        db.session.add(entry)
+        db.session.commit()
         
         logging.info(f"Received case feedback for {current_organism} case - Detail: {detail_rating}/5, Helpfulness: {helpfulness_rating}/5, Accuracy: {accuracy_rating}/5")
         return jsonify({"status": "Case feedback received"}), 200

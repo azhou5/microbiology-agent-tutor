@@ -8,10 +8,6 @@ import config
 import sys
 
 
-# Make sure to use MPS device
-device = torch.device("mps") if torch.backends.mps.is_built() else torch.device("cpu")
-
-
 
 BACKEND  = config.LLM_BACKEND
 
@@ -41,7 +37,9 @@ else:
     # --- Local HF model ---
     import torch
     from transformers import AutoTokenizer, AutoModelForCausalLM
-    # import torch  # already imported above
+    
+    device = torch.device("mps") if torch.backends.mps.is_built() else torch.device("cpu")
+
 
     MODEL_NAME = config.LOCAL_MODEL_NAME
 
