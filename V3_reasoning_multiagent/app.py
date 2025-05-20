@@ -1,15 +1,16 @@
+import os
 from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env
-
-import os
 import json
 import logging
 from datetime import datetime
 from flask import Flask, request, render_template, jsonify
 from flask_sqlalchemy import SQLAlchemy
-import os
 from tutor import MedicalMicrobiologyTutor # Assuming tutor.py is in the same directory
 import config
+
+# --- Use DB flag ---
+use_db = config.USE_GLOBAL_DB or config.USE_LOCAL_DB
 
 # --- Configuration ---
 FEEDBACK_LOG_FILE = 'feedback.log'
@@ -68,9 +69,19 @@ case_feedback_logger.propagate = False
 
 # — Database setup —
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+# Select the database URL based on environment/config flags
+if config.USE_GLOBAL_DB:
+    db_uri = config.GLOBAL_DATABASE_URL
+elif config.USE_LOCAL_DB:
+    db_uri = config.LOCAL_DATABASE_URL
+else:
+    db_uri = None  # No database; fallback to file logging
+if db_uri:
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    db = SQLAlchemy(app)
+else:
+    db = None
 
 
 # — Models —
@@ -95,8 +106,9 @@ class CaseFeedbackEntry(db.Model):
     comments = db.Column(db.Text, nullable=True)
 
 # Create tables if they don't exist
-with app.app_context():
-    db.create_all()
+if db:
+    with app.app_context():
+        db.create_all()
 
 # --- Tutor Initialization ---
 # Instantiate the tutor globally or manage sessions if needed
@@ -207,17 +219,29 @@ def feedback():
         # --- Get current organism ---
         current_organism = tutor.current_organism or "Unknown" # Get from tutor instance
 
-        # Store feedback in database
-        entry = FeedbackEntry(
-            timestamp=datetime.utcnow(),
-            organism=current_organism,
-            rating=rating,
-            rated_message=message,
-            feedback_text=feedback_text,
-            replacement_text=replacement_text
-        )
-        db.session.add(entry)
-        db.session.commit()
+        if use_db:
+            entry = FeedbackEntry(
+                timestamp=datetime.utcnow(),
+                organism=current_organism,
+                rating=rating,
+                rated_message=message,
+                feedback_text=feedback_text,
+                replacement_text=replacement_text
+            )
+            db.session.add(entry)
+            db.session.commit()
+        else:
+            # Fallback to file logging
+            log_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "organism": current_organism,
+                "rating": rating,
+                "rated_message": message,
+                "feedback_text": feedback_text,
+                "replacement_text": replacement_text,
+                "visible_chat_history": visible_history,
+            }
+            feedback_logger.info(json.dumps(log_entry, indent=2))
 
         logging.info(f"Received feedback: {rating}/5 for message snippet: '{message[:50]}...' (Organism: {current_organism})")
         return jsonify({"status": "Feedback received"}), 200
@@ -241,17 +265,28 @@ def case_feedback():
         # Get current organism
         current_organism = tutor.current_organism or "Unknown"
 
-        # Store case feedback in database
-        entry = CaseFeedbackEntry(
-            timestamp=datetime.utcnow(),
-            organism=current_organism,
-            detail_rating=detail_rating,
-            helpfulness_rating=helpfulness_rating,
-            accuracy_rating=accuracy_rating,
-            comments=comments
-        )
-        db.session.add(entry)
-        db.session.commit()
+        if use_db:
+            entry = CaseFeedbackEntry(
+                timestamp=datetime.utcnow(),
+                organism=current_organism,
+                detail_rating=detail_rating,
+                helpfulness_rating=helpfulness_rating,
+                accuracy_rating=accuracy_rating,
+                comments=comments
+            )
+            db.session.add(entry)
+            db.session.commit()
+        else:
+            # Fallback to file logging
+            log_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "organism": current_organism,
+                "detail_rating": detail_rating,
+                "helpfulness_rating": helpfulness_rating,
+                "accuracy_rating": accuracy_rating,
+                "comments": comments
+            }
+            case_feedback_logger.info(json.dumps(log_entry, indent=2))
         
         logging.info(f"Received case feedback for {current_organism} case - Detail: {detail_rating}/5, Helpfulness: {helpfulness_rating}/5, Accuracy: {accuracy_rating}/5")
         return jsonify({"status": "Case feedback received"}), 200
@@ -260,17 +295,52 @@ def case_feedback():
         return jsonify({"error": str(e)}), 500
 
 
+
+# --- Admin Feedback Route ---
+@app.route('/admin/feedback')
+def admin_feedback():
+    """Simple HTML view of feedback entries."""
+    entries = FeedbackEntry.query.order_by(FeedbackEntry.timestamp.desc()).all()
+    # Build a simple HTML table
+    rows = ""
+    for e in entries:
+        rows += (
+            f"<tr>"
+            f"<td>{e.id}</td>"
+            f"<td>{e.timestamp}</td>"
+            f"<td>{e.organism or ''}</td>"
+            f"<td>{e.rating}</td>"
+            f"<td>{e.feedback_text or ''}</td>"
+            f"<td>{e.replacement_text or ''}</td>"
+            f"</tr>"
+        )
+    html = (
+        "<html><head><title>Feedback Admin</title></head>"
+        "<body>"
+        "<h1>Feedback Entries</h1>"
+        "<table border='1' cellpadding='5' cellspacing='0'>"
+        "<thead>"
+        "<tr><th>ID</th><th>Timestamp</th><th>Organism</th>"
+        "<th>Rating</th><th>Feedback Text</th><th>Replacement Text</th></tr>"
+        "</thead>"
+        f"<tbody>{rows}</tbody>"
+        "</table>"
+        "</body></html>"
+    )
+    return html
+
+
 @app.cli.command("shell")
 def shell():
     """Run a Flask interactive shell with app context."""
     import code
-    code.interact(local=dict(globals(), **locals__))
+    code.interact(local=dict(globals(), **locals()))
 
 
 if __name__ == '__main__':
     import config
     if not config.TERMINAL_MODE:
         # Make sure the templates and static folders exist relative to app.py
-        app.run(debug=True) # debug=True for development, set to False for production
+        app.run(host='0.0.0.0',port=5001, debug=True)  # listen on all interfaces so localhost/127.0.0.1 both work
     else:
         print("App is in TERMINAL_MODE. Run 'python run_terminal.py' or './run_terminal.sh' instead.")
