@@ -143,12 +143,21 @@ class MedicalMicrobiologyTutor:
                 tool_descriptions=tool_descriptions,
                 case=self.case_description
             )
-            self.messages[0]["content"] = formatted_system_message
+            # Create or update the system message
+            if not self.messages:
+                self.messages = [{"role": "system", "content": formatted_system_message}]
+            else:
+                self.messages[0]["content"] = formatted_system_message
         else:
-            self.messages[0]["content"] = system_message_template.format(
+            formatted_system_message = system_message_template.format(
                 tool_descriptions=tool_descriptions,
                 case="No case loaded yet."
             )
+            # Create or update the system message
+            if not self.messages:
+                self.messages = [{"role": "system", "content": formatted_system_message}]
+            else:
+                self.messages[0]["content"] = formatted_system_message
 
     def start_new_case(self, organism=None):
         """Initialize a new case with the specified organism."""
@@ -160,13 +169,17 @@ class MedicalMicrobiologyTutor:
             return "Error: Could not load case for the specified organism."
 
         # Reset the message history and set the formatted system message
-        self.messages = [{"role": "system", "content": "Initializing..."}]
-        self._update_system_message() # Update the system message with the loaded case
-
+        self.messages = []  # Clear messages first
+        self._update_system_message()  # This will create the system message
+        
         # Get initial case presentation from the LLM
         try:
             initial_response = chat_complete(self.messages, model=self.current_model)
-            self.messages.append({"role": "assistant", "content": initial_response})
+            # Add both the system message and initial response to history
+            self.messages = [
+                {"role": "system", "content": self.messages[0]["content"]},
+                {"role": "assistant", "content": initial_response}
+            ]
             return initial_response
         except Exception as e:
             print(f"Error getting initial case presentation: {e}")

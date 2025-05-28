@@ -209,7 +209,7 @@ def start_case():
     try:
         data = request.get_json()
         organism = data.get('organism')
-        model_name = data.get('model', CURRENT_MODEL)
+        model_name = 'o3-mini'  # Always use o3-mini
         
         logging.info(f"Starting new case with organism: {organism} and model: {model_name}")
         
@@ -239,7 +239,7 @@ def chat():
     try:
         data = request.get_json()
         message = data.get('message')
-        model_name = data.get('model', CURRENT_MODEL)
+        model_name = 'o3-mini'  # Always use o3-mini
         
         logging.info(f"Received user message: {message}")
 
