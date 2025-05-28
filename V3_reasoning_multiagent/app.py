@@ -124,8 +124,49 @@ if db is not None:
 
     # Create tables if they don't exist
     with app.app_context():
-        #db.drop_all()  # Drop all existing tables
-        db.create_all()  # Recreate tables with current schema
+        try:
+            # Check if tables exist and have correct columns
+            inspector = db.inspect(db.engine)
+            existing_tables = inspector.get_table_names()
+            
+            # Define expected columns for each table
+            expected_columns = {
+                'feedback': [
+                    'id', 'timestamp', 'organism', 'rating', 'rated_message',
+                    'feedback_text', 'replacement_text', 'chat_history', 'case_id'
+                ],
+                'case_feedback': [
+                    'id', 'timestamp', 'organism', 'detail_rating',
+                    'helpfulness_rating', 'accuracy_rating', 'comments', 'case_id'
+                ]
+            }
+            
+            # Check if tables need to be recreated
+            need_recreate = False
+            for table_name, expected_cols in expected_columns.items():
+                if table_name not in existing_tables:
+                    need_recreate = True
+                    break
+                
+                # Check if all expected columns exist
+                existing_cols = [col['name'] for col in inspector.get_columns(table_name)]
+                if not all(col in existing_cols for col in expected_cols):
+                    need_recreate = True
+                    break
+            
+            if need_recreate:
+                logging.info("Database schema mismatch detected. Recreating tables...")
+                db.drop_all()  # Drop existing tables
+                db.create_all()  # Create new tables with correct schema
+                logging.info("Database tables recreated successfully.")
+            else:
+                logging.info("Database tables exist with correct schema.")
+                
+        except Exception as e:
+            logging.error(f"Error checking/creating database tables: {e}")
+            logging.info("Attempting to create tables from scratch...")
+            db.create_all()
+            logging.info("Database tables created successfully.")
 else:
     # Define empty model classes for when db is None
     class FeedbackEntry:

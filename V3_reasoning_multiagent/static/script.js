@@ -248,7 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const selectedModel = document.getElementById('model-select').value;
         if (!selectedOrganism) {
             setStatus('Please select an organism.', true);
             return;
@@ -257,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus('Starting new case...');
         startCaseBtn.disabled = true;
         organismSelect.disabled = true;
-        document.getElementById('model-select').disabled = true;
         chatbox.innerHTML = ''; // Clear previous chat
         chatHistory = []; // Reset history
 
@@ -267,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     organism: selectedOrganism,
-                    model: selectedModel
+                    model: 'o3-mini'  // Always use o3-mini
                 }),
             });
 
@@ -297,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Re-enable start button regardless of success/failure to allow retries/new cases
             startCaseBtn.disabled = false;
             organismSelect.disabled = false;
-            document.getElementById('model-select').disabled = false;
         }
     }
 
