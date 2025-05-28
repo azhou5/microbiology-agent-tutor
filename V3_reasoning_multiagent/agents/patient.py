@@ -9,7 +9,7 @@ from Feedback.feedback_faiss import retrieve_similar_examples, get_embedding, in
 import config
 
 
-def run_patient(input: str, case: str, history: list, run_with_faiss: bool = config.USE_FAISS) -> str:
+def run_patient(input: str, case: str, history: list, run_with_faiss: bool = config.USE_FAISS, model: str = None) -> str:
     """Responds as the patient. When the user asks a question directed at the patient, you should use this tool to get the patient's response."""
     if run_with_faiss==True:
         if index is None:
@@ -82,7 +82,7 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
     )
 
     response = client.chat.completions.create(
-        model="o3-mini",
+        model=model or config.API_MODEL_NAME,  # Use passed model or default to config
         messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": input}],
     )
 

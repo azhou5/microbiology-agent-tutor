@@ -121,17 +121,17 @@ class MedicalMicrobiologyTutor:
     def __init__(self, 
                  output_tool_directly: bool = config.OUTPUT_TOOL_DIRECTLY, 
                  run_with_faiss: bool = config.USE_FAISS, 
-                 reward_model_sampling: bool = config.REWARD_MODEL_SAMPLING):
+                 reward_model_sampling: bool = config.REWARD_MODEL_SAMPLING,
+                 model_name: str = None):
         
         self.output_tool_directly = output_tool_directly
         self.run_with_faiss = run_with_faiss
         self.reward_model_sampling = reward_model_sampling
+        self.current_model = model_name or config.API_MODEL_NAME
 
         self.id = "tutor_agent"
         # Initialize messages with a placeholder system message
         self.messages = [{"role": "system", "content": "Initializing..."}]
-        # History might not be needed if messages list serves as the full context
-        # self.history = [] # Consider removing if not used elsewhere
         self.current_organism = None
         self.case_description = None # To store the current case details
         self.last_user_message = "" # Keep track of the last user message if needed for context
@@ -140,26 +140,24 @@ class MedicalMicrobiologyTutor:
         """Formats and updates the system message with current tool descriptions and case."""
         if self.case_description:
             formatted_system_message = system_message_template.format(
-                tool_descriptions=tool_descriptions, # Uses the globally generated descriptions
+                tool_descriptions=tool_descriptions,
                 case=self.case_description
             )
             self.messages[0]["content"] = formatted_system_message
         else:
-            # Handle case where case_description is not yet set
-             self.messages[0]["content"] = system_message_template.format(
+            self.messages[0]["content"] = system_message_template.format(
                 tool_descriptions=tool_descriptions,
                 case="No case loaded yet."
             )
 
     def start_new_case(self, organism=None):
         """Initialize a new case with the specified organism."""
-        self.current_organism = organism or "staphylococcus aureus" # Default organism
+        self.current_organism = organism or "staphylococcus aureus"
 
         # Get the case for the organism
         self.case_description = get_case(self.current_organism)
         if not self.case_description:
-             # Handle error case where case could not be loaded
-             return "Error: Could not load case for the specified organism."
+            return "Error: Could not load case for the specified organism."
 
         # Reset the message history and set the formatted system message
         self.messages = [{"role": "system", "content": "Initializing..."}]
@@ -167,8 +165,7 @@ class MedicalMicrobiologyTutor:
 
         # Get initial case presentation from the LLM
         try:
-            initial_response = chat_complete(self.messages)
-            # Add the initial assistant response to the message history
+            initial_response = chat_complete(self.messages, model=self.current_model)
             self.messages.append({"role": "assistant", "content": initial_response})
             return initial_response
         except Exception as e:
@@ -186,75 +183,83 @@ class MedicalMicrobiologyTutor:
 
     def __call__(self, task):
         """Process a user message (task) and return the tutor's response."""
-        # Extract the user's message from the task
         if isinstance(task, str):
             message = task
         elif hasattr(task, 'instruction'):
             message = task.instruction
         else:
-            # Fallback or error handling if task format is unexpected
             print(f"Warning: Unexpected task format: {type(task)}")
-            message = str(task) # Attempt to convert to string
+            message = str(task)
 
-        self.last_user_message = message # Store last user message
+        self.last_user_message = message
+        print(f"\n[DEBUG] User message: {message}")
 
-        # Add user message to the conversation history
         self.messages.append({"role": "user", "content": message})
 
         try:
-            response_content = chat_complete(self.messages)
+            response_content = chat_complete(self.messages, model=self.current_model)
+            print(f"\n[DEBUG] Initial LLM response: {response_content}")
 
-            # Check if the response contains an action request
-            if "[Action]" in response_content:
-                tool_name = None  # initialize before inner try to avoid UnboundLocalError
-                try:
-                    # Extract action details
-                    action_text = response_content.split("[Action]:", 1)[1].strip()
-                    # Improved JSON extraction to handle potential markdown/text around it
-                    json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', action_text, re.DOTALL | re.IGNORECASE)
-                    if json_match:
-                        # Prioritize JSON within markdown, then raw JSON
-                        json_str = json_match.group(1) or json_match.group(2)
-                        json_str = json_str.strip()
+            # If it's a direct response (no [Action]), return it
+            if "[Action]" not in response_content:
+                self.messages.append({"role": "assistant", "content": response_content})
+                return response_content
+
+            # Handle [Action] response
+            try:
+                # Extract the action text after [Action]
+                action_text = response_content.split("[Action]", 1)[1].strip()
+                print(f"\n[DEBUG] Action text: {action_text}")
+                
+                # Try to parse the JSON, handling both formats:
+                # 1. {"patient": "question"}
+                # 2. ```json {"patient": "question"}```
+                json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', action_text, re.DOTALL | re.IGNORECASE)
+                if json_match:
+                    json_str = json_match.group(1) or json_match.group(2)
+                    json_str = json_str.strip()
+                else:
+                    print(f"Warning: Could not extract JSON from action text: {action_text}")
+                    json_str = action_text
+
+                print(f"\n[DEBUG] Extracted JSON string: {json_str}")
+                action_data = json.loads(json_str)
+                tool_name = list(action_data.keys())[0]
+                tool_input = action_data[tool_name]
+                print(f"\n[DEBUG] Tool name: {tool_name}, Input: {tool_input}")
+
+                if tool_name in name_to_function_map:
+                    tool_function = name_to_function_map[tool_name]
+                    if tool_name == "patient":
+                        if not self.case_description:
+                            raise ValueError("Case description is not available for the patient tool.")
+                        
+                        # Pass the current message history
+                        tool_result = tool_function(tool_input, self.case_description, self.messages, model=self.current_model)
+                        print(f"\n[DEBUG] Patient tool result: {tool_result}")  # Debug log
+                        
+                        # Clean the response if output_tool_directly is True
+                        if self.output_tool_directly:
+                            # Remove any [Action] or [Observation] wrappers
+                            tool_result = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', tool_result)
+                            # Remove any JSON formatting
+                            tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)
+                            # Remove any remaining JSON structure
+                            tool_result = re.sub(r'^\s*{\s*"patient"\s*:\s*"|"\s*}\s*$', '', tool_result)
+                            # Clean up any extra whitespace
+                            tool_result = tool_result.strip()
+                            # Add "Patient: " prefix if not already present
+                            if not tool_result.startswith("Patient: "):
+                                tool_result = f"Patient: {tool_result}"
+                        
+                        print(f"\n[DEBUG] Final cleaned response: {tool_result}")
+                        
+                        # Add the patient's response to the message history
+                        self.messages.append({"role": "assistant", "content": tool_result})
+                        return tool_result
                     else:
-                        # Fallback if no clear JSON structure is found
-                        print(f"Warning: Could not extract JSON from action text: {action_text}")
-                        json_str = action_text # Attempt to parse directly
-
-                    action_data = json.loads(json_str)
-                    tool_name = list(action_data.keys())[0]
-                    tool_input = action_data[tool_name]
-
-                    # Execute the appropriate tool
-                    if tool_name in name_to_function_map:
-                        tool_function = name_to_function_map[tool_name]
-                        # Pass necessary context (case description, history) to the tool
-                        if tool_name == "patient":
-                             if not self.case_description:
-                                 raise ValueError("Case description is not available for the patient tool.")
-                             # Pass the current message history
-                             tool_result = tool_function(tool_input, self.case_description, self.messages)
-                             
-                             # Clean the response if output_tool_directly is True
-                             if self.output_tool_directly:
-                                 # Remove any [Action] or [Observation] wrappers
-                                 tool_result = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', tool_result)
-                                 # Remove any JSON formatting
-                                 tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)
-                                 # Remove any remaining JSON structure
-                                 tool_result = re.sub(r'^\s*{\s*"patient"\s*:\s*"|"\s*}\s*$', '', tool_result)
-                                 # Clean up any extra whitespace
-                                 tool_result = tool_result.strip()
-                                 # Add "Patient: " prefix if not already present
-                                 if not tool_result.startswith("Patient: "):
-                                     tool_result = f"Patient: {tool_result}"
-                             
-                             # Return the patient response directly without additional prefixing
-                             self.messages.append({"role": "assistant", "content": tool_result})
-                             return tool_result
-                        else:
-                             # Handle other tools if they are added later
-                             tool_result = tool_function(tool_input)
+                        # Handle other tools if they are added later
+                        tool_result = tool_function(tool_input)
 
                         tool_output = f"[Observation]: {tool_result}"
 
@@ -262,55 +267,29 @@ class MedicalMicrobiologyTutor:
                         self.messages.append({"role": "system", "content": tool_output})
 
                         # Get a new response from the LLM, now including the tool's observation
-                        final_response = chat_complete(self.messages)
+                        final_response = chat_complete(self.messages, model=self.current_model)
                         # Add this final assistant response to history
                         self.messages.append({"role": "assistant", "content": final_response})
                         return final_response
-                    else:
-                        # Handle case where the requested tool is not found
-                        tool_output = f"[Observation]: Error: Tool '{tool_name}' not found."
-                        self.messages.append({"role": "system", "content": tool_output})
-                        # Get response after error observation
-                        final_response = chat_complete(self.messages)
-                        self.messages.append({"role": "assistant", "content": final_response})
-                        return final_response
+                else:
+                    # Handle case where the requested tool is not found
+                    print(f"Warning: Tool '{tool_name}' not found")
+                    # Get a new response from the tutor
+                    retry_response = chat_complete(self.messages, model=self.current_model)
+                    self.messages.append({"role": "assistant", "content": retry_response})
+                    return retry_response
 
-                except json.JSONDecodeError as e:
-                    print(f"Error decoding JSON action: {e} - Action text: {action_text}")
-                    error_message = f"[Observation]: Error processing action - Invalid format: {e}"
-                    self.messages.append({"role": "system", "content": error_message})
-                    # Get response after error observation
-                    final_response = chat_complete(self.messages)
-                    self.messages.append({"role": "assistant", "content": final_response})
-                    return final_response
-                except Exception as e:
-                    print(f"Error executing tool '{tool_name}': {e}")
-                    error_message = f"[Observation]: Error executing tool '{tool_name}': {e}"
-                    self.messages.append({"role": "system", "content": error_message})
-                    # Get response after error observation
-                    final_response = chat_complete(self.messages)
-                    self.messages.append({"role": "assistant", "content": final_response})
-                    return final_response
-            else:
-                # Direct tutor response: optionally append similar feedback examples
-                examples_text = ""
-                if self.run_with_faiss:
-                    try:
-                        similar = retrieve_similar_examples(message, self.messages)
-                        if similar:
-                            examples_text = "\n\nSimilar examples with feedback:\n" + "\n---\n".join(similar)
-                    except Exception as e:
-                        # Gracefully handle FAISS/embedding errors so the tutor reply still works
-                        print(f"Error retrieving similar examples: {e}")
-                full_response = response_content + examples_text
-                self.messages.append({"role": "assistant", "content": full_response})
-                return full_response
+            except Exception as e:
+                print(f"Error executing tool: {e}")
+                # Just get a new response from the tutor
+                retry_response = chat_complete(self.messages, model=self.current_model)
+                self.messages.append({"role": "assistant", "content": retry_response})
+                return retry_response
 
         except Exception as e:
             print(f"Error during LLM call or processing: {e}")
-            # Return a user-friendly error message
             error_response = f"Sorry, an error occurred: {e}"
-            self.messages.append({"role": "assistant", "content": error_response}) # Log error response
+            self.messages.append({"role": "assistant", "content": error_response})
             return error_response
 
 

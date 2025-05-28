@@ -53,10 +53,41 @@ h1 {
     transition: background-color 0.2s;
 }
 
+.random-btn {
+    background-color: #6c757d;
+    color: white;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.random-btn:hover {
+    background-color: #5a6268;
+}
+
+@keyframes randomSelect {
+    0% {
+        background-color: #fff;
+    }
+
+    50% {
+        background-color: #e3f2fd;
+    }
+
+    100% {
+        background-color: #fff;
+    }
+}
+
+.random-selected {
+    animation: randomSelect 1s ease-in-out;
+}
+
 .case-setup button:hover {
     background-color: #0056b3;
 }
-
 
 #chatbox {
     height: 450px;
@@ -106,6 +137,64 @@ h1 {
     border-top: 1px solid #d5d8db;
     opacity: 0.8;
     transition: opacity 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.feedback-textboxes {
+    display: none;
+    /* Hidden by default */
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.feedback-textboxes.visible {
+    display: flex;
+}
+
+.feedback-textbox {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.feedback-textbox label {
+    font-size: 0.9em;
+    color: #555;
+}
+
+.feedback-textbox textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.9em;
+    min-height: 60px;
+}
+
+.feedback-submit {
+    align-self: flex-end;
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.feedback-submit:hover {
+    background-color: #0056b3;
+}
+
+.feedback-submit:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
 }
 
 .assistant-message:hover .feedback-container {
@@ -138,6 +227,31 @@ h1 {
     text-align: center;
     transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
     color: #333;
+}
+
+.feedback-buttons .cancel-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 3px 8px;
+    margin-left: 8px;
+    color: #dc3545;
+    transition: all 0.2s ease;
+}
+
+.feedback-buttons .cancel-btn:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+.feedback-buttons .cancel-btn:disabled {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .feedback-buttons .rating-btn:hover {
@@ -415,4 +529,26 @@ h1 {
     word-break: break-word;
     padding-left: 8px;
     border-left: 2px solid #dee2e6;
+}
+
+.case-setup select {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    color: #333;
+}
+
+/* Style for when random selection is active */
+.case-setup select.random-selected {
+    color: transparent;
+    text-shadow: 0 0 0 #333;
+}
+
+.case-setup select.random-selected option {
+    color: #333;
+}
+
+.case-setup select.random-selected option:checked {
+    color: transparent;
+    text-shadow: 0 0 0 #333;
 }

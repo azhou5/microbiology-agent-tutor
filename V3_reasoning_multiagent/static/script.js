@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendBtn = document.getElementById('send-btn');
     const startCaseBtn = document.getElementById('start-case-btn');
     const organismSelect = document.getElementById('organism-select');
+    const randomOrganismBtn = document.getElementById('random-organism-btn');
     const statusMessage = document.getElementById('status-message');
     const finishBtn = document.getElementById('finish-btn');
 
@@ -12,13 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessage(sender, messageContent, addFeedbackUI = false) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'assistant-message');
+        messageDiv.id = 'msg-' + Date.now(); // Add unique ID for the message
 
-        // Use innerHTML to allow basic formatting later if needed, but be cautious
         const messageTextSpan = document.createElement('span');
         messageTextSpan.textContent = messageContent;
         messageDiv.appendChild(messageTextSpan);
 
-        // Store the raw message content for feedback
         messageDiv.dataset.messageContent = messageContent;
 
         if (sender === 'assistant') {
@@ -44,31 +44,89 @@ document.addEventListener('DOMContentLoaded', () => {
                 ratingBtn.dataset.rating = i;
                 ratingButtonsDiv.appendChild(ratingBtn);
             }
+
+            // Add cancel button
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.title = 'Cancel rating';
+            cancelBtn.classList.add('feedback-btn', 'cancel-btn');
+            ratingButtonsDiv.appendChild(cancelBtn);
+
             feedbackContainer.appendChild(ratingButtonsDiv);
 
-            // Add click handler for popup feedback
-            ratingButtonsDiv.addEventListener('click', async (event) => {
+            // Create feedback textboxes container
+            const feedbackTextboxes = document.createElement('div');
+            feedbackTextboxes.classList.add('feedback-textboxes');
+
+            // Create "Why this score" textbox
+            const whyScoreBox = document.createElement('div');
+            whyScoreBox.classList.add('feedback-textbox');
+            whyScoreBox.innerHTML = `
+                <label for="feedback-text-${messageDiv.id}">Why this score?</label>
+                <textarea id="feedback-text-${messageDiv.id}" placeholder="Please explain your rating..."></textarea>
+            `;
+
+            // Create "Preferred response" textbox
+            const preferredResponseBox = document.createElement('div');
+            preferredResponseBox.classList.add('feedback-textbox');
+            preferredResponseBox.innerHTML = `
+                <label for="replacement-text-${messageDiv.id}">Preferred response (optional):</label>
+                <textarea id="replacement-text-${messageDiv.id}" placeholder="Enter your preferred response..."></textarea>
+            `;
+
+            // Create submit button
+            const submitButton = document.createElement('button');
+            submitButton.classList.add('feedback-submit');
+            submitButton.textContent = 'Submit Feedback';
+            submitButton.disabled = true;
+
+            feedbackTextboxes.appendChild(whyScoreBox);
+            feedbackTextboxes.appendChild(preferredResponseBox);
+            feedbackTextboxes.appendChild(submitButton);
+            feedbackContainer.appendChild(feedbackTextboxes);
+
+            // Add click handler for rating buttons
+            ratingButtonsDiv.addEventListener('click', (event) => {
                 const ratingBtn = event.target.closest('.rating-btn');
-                if (!ratingBtn) return;
+                const cancelBtn = event.target.closest('.cancel-btn');
 
-                const rating = ratingBtn.dataset.rating;
-                const buttonsInDiv = ratingButtonsDiv.querySelectorAll('.rating-btn');
-                buttonsInDiv.forEach(btn => btn.disabled = true);
-                ratingBtn.classList.add('rated');
-
-                let feedbackText = prompt(`You rated this response ${rating}/5. Why this score?`, "");
-                if (feedbackText === null) {
-                    buttonsInDiv.forEach(btn => btn.disabled = false);
-                    ratingBtn.classList.remove('rated');
-                    setStatus('Feedback cancelled.');
+                if (cancelBtn) {
+                    // Reset all buttons
+                    ratingButtonsDiv.querySelectorAll('.rating-btn').forEach(btn => {
+                        btn.classList.remove('rated');
+                        btn.disabled = false;
+                    });
+                    // Hide feedback textboxes
+                    feedbackTextboxes.classList.remove('visible');
+                    submitButton.disabled = true;
                     return;
                 }
 
-                let replacementText = prompt('Please enter your preferred response to replace the tutor output:', '');
-                if (replacementText === null) {
-                    buttonsInDiv.forEach(btn => btn.disabled = false);
-                    ratingBtn.classList.remove('rated');
-                    setStatus('Feedback cancelled.');
+                if (!ratingBtn) return;
+
+                // Reset all buttons
+                ratingButtonsDiv.querySelectorAll('.rating-btn').forEach(btn => {
+                    btn.classList.remove('rated');
+                    btn.disabled = false;
+                });
+
+                // Set the clicked button as rated
+                ratingBtn.classList.add('rated');
+                ratingBtn.disabled = true;
+
+                // Show feedback textboxes
+                feedbackTextboxes.classList.add('visible');
+                submitButton.disabled = false;
+            });
+
+            // Add submit handler
+            submitButton.addEventListener('click', async () => {
+                const feedbackText = document.getElementById(`feedback-text-${messageDiv.id}`).value;
+                const replacementText = document.getElementById(`replacement-text-${messageDiv.id}`).value;
+                const rating = ratingButtonsDiv.querySelector('.rated').dataset.rating;
+
+                if (!feedbackText.trim()) {
+                    setStatus('Please provide feedback for your rating.', true);
                     return;
                 }
 
@@ -81,8 +139,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             rating,
                             message: messageContent,
                             history: chatHistory,
-                            feedback_text: feedbackText || '',
-                            replacement_text: replacementText || ''
+                            feedback_text: feedbackText,
+                            replacement_text: replacementText
                         }),
                     });
 
@@ -93,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     setStatus('Feedback submitted — thank you!');
 
-                    // Instead of showing "thanks" message, show the rating and feedback
+                    // Show feedback summary
                     feedbackContainer.innerHTML = `
                         <div class="feedback-submitted">
                             <div class="feedback-rating">Rating: ${rating}/5</div>
@@ -116,8 +174,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (error) {
                     console.error(error);
                     setStatus(`Error: ${error.message}`, true);
-                    buttonsInDiv.forEach(btn => btn.disabled = false);
-                    ratingBtn.classList.remove('rated');
+                    // Reset the rating buttons
+                    ratingButtonsDiv.querySelectorAll('.rating-btn').forEach(btn => {
+                        btn.classList.remove('rated');
+                        btn.disabled = false;
+                    });
+                    feedbackTextboxes.classList.remove('visible');
+                    submitButton.disabled = true;
                 }
             });
 
@@ -125,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         chatbox.appendChild(messageDiv);
-        chatbox.scrollTop = chatbox.scrollHeight; // Auto-scroll to bottom
+        chatbox.scrollTop = chatbox.scrollHeight;
     }
 
     function setStatus(message, isError = false) {
@@ -140,8 +203,51 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = disabled ? 'Processing...' : '';
     }
 
+    // Function to get all options from the select element (excluding the random option)
+    function getAllOptions() {
+        const options = [];
+        const optgroups = organismSelect.getElementsByTagName('optgroup');
+
+        for (let group of optgroups) {
+            const groupOptions = group.getElementsByTagName('option');
+            for (let option of groupOptions) {
+                options.push(option);
+            }
+        }
+        return options;
+    }
+
+    // Function to select a random organism
+    function selectRandomOrganism() {
+        const options = getAllOptions();
+        if (options.length === 0) return;
+
+        const randomIndex = Math.floor(Math.random() * options.length);
+        const randomOption = options[randomIndex];
+
+        // Store the random selection in a data attribute
+        organismSelect.dataset.randomSelection = randomOption.value;
+
+        // Set the dropdown to show "Random Selection"
+        organismSelect.value = "random";
+
+        // Show a generic message
+        setStatus("Random organism selected. Click 'Start New Case' to begin.", false);
+    }
+
+    // Modify the start case handler to use the random selection if needed
     async function handleStartCase() {
-        const selectedOrganism = organismSelect.value;
+        let selectedOrganism = organismSelect.value;
+
+        // If "random" is selected, use the stored random selection
+        if (selectedOrganism === "random") {
+            selectedOrganism = organismSelect.dataset.randomSelection;
+            if (!selectedOrganism) {
+                setStatus('Please select an organism or use random selection.', true);
+                return;
+            }
+        }
+
         const selectedModel = document.getElementById('model-select').value;
         if (!selectedOrganism) {
             setStatus('Please select an organism.', true);
@@ -194,7 +300,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('model-select').disabled = false;
         }
     }
-
 
     async function handleSendMessage() {
         const message = userInput.value.trim();
@@ -321,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add event listeners for skip buttons
     document.querySelectorAll('.skip-btn').forEach(button => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function () {
             const questionName = this.getAttribute('data-question');
             // Uncheck all radio buttons for this question
             document.querySelectorAll(`input[name="${questionName}"]`).forEach(radio => {
@@ -333,4 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.textContent = 'Skipped';
         });
     });
+
+    // Add click handler for random selection button
+    randomOrganismBtn.addEventListener('click', selectRandomOrganism);
 }); 

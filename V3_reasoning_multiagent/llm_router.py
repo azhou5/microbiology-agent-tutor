@@ -19,10 +19,10 @@ if BACKEND == "azure":
         api_version    = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
     )
 
-    def chat_complete(messages, max_new_tokens=512):
+    def chat_complete(messages, model=None, max_new_tokens=512):
         """Return assistant string given a list of {'role','content'} dicts."""
         try: 
-            model_to_use = config.API_MODEL_NAME
+            model_to_use = model or config.API_MODEL_NAME
             rsp = _client.chat.completions.create(
                 model=model_to_use,
                 messages=messages
@@ -64,7 +64,8 @@ else:
         parts.append("Assistant:")           # queue for next answer
         return "\n".join(parts)
 
-    def chat_complete(messages, max_new_tokens=512):
+    def chat_complete(messages, model=None, max_new_tokens=512):
+        """Return assistant string given a list of {'role','content'} dicts."""
         prompt = _history_to_prompt(messages)
         tokens = _tok(prompt, return_tensors="pt")
         # Move inputs to the same device as model shards (MPS)

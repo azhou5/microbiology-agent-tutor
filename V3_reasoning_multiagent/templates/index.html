@@ -15,6 +15,7 @@
         <div class="case-setup">
             <label for="organism-select">Select Organism:</label>
             <select id="organism-select">
+                <option value="random">Random Selection</option>
                 <optgroup label="Bacteria">
                     <option value="staphylococcus aureus">Staphylococcus aureus</option>
                     <option value="escherichia coli">Escherichia coli</option>
@@ -37,6 +38,7 @@
                     <option value="taenia solium">Taenia solium</option>
                 </optgroup>
             </select>
+            <button id="random-organism-btn" class="random-btn">Random Selection</button>
             <label for="model-select">Select Model:</label>
             <select id="model-select">
                 <option value="gpt-4o" {% if current_model=='gpt-4o' %}selected{% endif %}>GPT-4</option>

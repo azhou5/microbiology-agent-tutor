@@ -124,7 +124,8 @@ if db is not None:
 
     # Create tables if they don't exist
     with app.app_context():
-        db.create_all()
+        #db.drop_all()  # Drop all existing tables
+        db.create_all()  # Recreate tables with current schema
 else:
     # Define empty model classes for when db is None
     class FeedbackEntry:
@@ -133,51 +134,58 @@ else:
         pass
 
 # --- Tutor Initialization ---
-# Instantiate the tutor globally or manage sessions if needed
-# For simplicity, using a single global instance here.
-# Be aware of concurrency issues if multiple users access this simultaneously without session management.
-tutor = MedicalMicrobiologyTutor(
-  output_tool_directly=True,
-  run_with_faiss=False,
-  reward_model_sampling=True
-)
+# Initialize tutor as None
+tutor = None
 
+def get_tutor(model_name=None):
+    """Get or create a tutor instance with the specified model."""
+    global tutor
+    if tutor is None or (model_name and tutor.current_model != model_name):
+        tutor = MedicalMicrobiologyTutor(
+            output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
+            run_with_faiss=config.USE_FAISS,
+            reward_model_sampling=config.REWARD_MODEL_SAMPLING,
+            model_name=model_name
+        )
+    return tutor
 
 # --- Routes ---
 @app.route('/')
 def index():
     """Serves the main HTML page."""
-    # Reset tutor state when the main page is loaded (for a fresh start)
-    # In a multi-user scenario, you'd handle sessions differently.
-    tutor.reset()
+    # Initialize tutor with default model if not already initialized
+    global tutor
+    if tutor is None:
+        tutor = get_tutor(CURRENT_MODEL)
+    else:
+        tutor.reset()
     return render_template('index.html', current_model=CURRENT_MODEL)
 
 @app.route('/start_case', methods=['POST'])
 def start_case():
     """Starts a new case with the selected organism."""
-    global CURRENT_MODEL
+    global CURRENT_MODEL, tutor
     try:
         data = request.get_json()
-        organism = data.get('organism', 'staphylococcus aureus') # Default if not provided
-        model = data.get('model', CURRENT_MODEL) # Default to current model if not provided
+        organism = data.get('organism')
+        model_name = data.get('model', CURRENT_MODEL)
         
-        logging.info(f"Starting new case with organism: {organism} and model: {model}")
+        logging.info(f"Starting new case with organism: {organism} and model: {model_name}")
         
-        if model != CURRENT_MODEL:
-            CURRENT_MODEL = model
+        if model_name != CURRENT_MODEL:
+            CURRENT_MODEL = model_name
             save_current_model(CURRENT_MODEL)
             if config.LLM_BACKEND == "azure":
                 config.API_MODEL_NAME = CURRENT_MODEL  # keep config in sync
         
-        # Update the tutor's model if it's different
-        if hasattr(tutor, 'update_model'):
-            tutor.update_model(CURRENT_MODEL)
+        # Get or create tutor instance with the specified model
+        tutor = get_tutor(CURRENT_MODEL)
             
         initial_message = tutor.start_new_case(organism=organism)
         # The tutor's messages list now contains the system prompt and the first assistant message
         return jsonify({
             "initial_message": initial_message,
-            "history": tutor.messages # Send initial history
+            "history": tutor.messages  # Send initial history
         })
     except Exception as e:
         logging.error(f"Error starting case: {e}", exc_info=True)
@@ -186,24 +194,26 @@ def start_case():
 @app.route('/chat', methods=['POST'])
 def chat():
     """Handles incoming chat messages from the user."""
+    global tutor
     try:
         data = request.get_json()
-        user_message = data.get('message')
-        if not user_message:
-            return jsonify({"error": "No message provided"}), 400
+        message = data.get('message')
+        model_name = data.get('model', CURRENT_MODEL)
+        
+        logging.info(f"Received user message: {message}")
 
-        logging.info(f"Received user message: {user_message}")
+        # Get or create tutor instance with the specified model
+        tutor = get_tutor(model_name)
 
         # The tutor.__call__ method updates its internal message list
-        tutor_response = tutor(user_message)
+        response = tutor(message)
 
-        logging.info(f"Sending tutor response: {tutor_response}")
+        logging.info(f"Sending tutor response: {response}")
 
-        # Return the latest response and the updated history
         return jsonify({
-            "response": tutor_response,
-            "history": tutor.messages # Send the full updated history
-            })
+            "response": response,
+            "history": tutor.messages  # Send the full updated history
+        })
     except Exception as e:
         logging.error(f"Error during chat processing: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
