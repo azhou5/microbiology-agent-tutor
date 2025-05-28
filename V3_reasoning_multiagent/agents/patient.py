@@ -11,10 +11,6 @@ import config
 
 def run_patient(input: str, case: str, history: list, run_with_faiss: bool = config.USE_FAISS, model: str = None) -> str:
     """Responds as the patient. When the user asks a question directed at the patient, you should use this tool to get the patient's response."""
-    if run_with_faiss==True:
-        if index is None:
-            # FAISS disabled or not loaded; return a dummy patient response
-            return "Patient agent running in dummy mode — no FAISS retrieval."
     
     # Format the recent history similar to how the index was created
     recent_context = ""
@@ -24,7 +20,7 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
             if isinstance(message, dict) and "role" in message and "content" in message:
                 recent_context += f"{message['role']}: {message['content']}\n"
     
-    if run_with_faiss==True:
+    if run_with_faiss == True and index is not None:
         # Combine recent history with current query for embedding
         embedding_text = recent_context 
         
@@ -32,7 +28,7 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
         embedding = get_embedding(embedding_text)
         
         # Search for similar messages
-        distances, indices = index.search(np.array([embedding]).astype('float32'), k=3)
+        distances, indices = index.search(np.array([embedding]).astype('float32'), k=4)
         
         # Get the 3 most similar examples
         similar_examples = [texts[idx] for idx in indices[0]]
@@ -43,7 +39,7 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
 
         When the student asks for specific information from the case about the patient, provide ONLY that information, as IF you ARE the patient. 
         For example: "How long has this been going on for?" leads to "Patient: Around 5 days."
-    If the information asked by the student is NOT present in the case, just say that the pt does not know/does not remember, or simply 'No'. 
+        If the information asked by the student is NOT present in the case, just say that the pt does not know/does not remember, or simply 'No'. 
         For example: "What did you scrape your knee on?" -> "Patient: I don't remember!". or "Did you also have a rash?" -> "No, I did not." 
         If the student asks: "What do you think might be going on" remember that you are a patient who does not know! At this point you can either just say "I don't know" Or try to throw them off. Don't give the right answer. 
         You should be concise and to the point. 
@@ -58,6 +54,7 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
         You should respond to the most recent query from the patient's perspective given the rules above. 
         You will be given some examples of similar exchanges between a patient and a tutor, as well as a manual rating of the quality of the response and feedback. 
         """
+        print(examples_text)
     else:
         system_prompt = f"""You are a patient. You are answering questions from a medical student. 
         You should respond in a way that is consistent with a patient's response. 

@@ -33,6 +33,16 @@ class CaseGeneratorRAGAgent(BaseAgent):
         Generate detailed, medically accurate cases that include subtle but important diagnostic clues. Each case should be
         challenging but solvable with proper clinical reasoning."""
         
+        # Output directory for saving generated cases
+        self.output_dir = f"Case_Outputs"
+        os.makedirs(self.output_dir, exist_ok=True)
+        
+        # Case cache file path
+        self.case_cache_file = os.path.join(self.output_dir, "case_cache.json")
+        
+        # Load existing case cache
+        self.case_cache = self._load_case_cache()
+        
         # Initialize Qdrant client
         self.qdrant_client = None
         if HAS_QDRANT:
@@ -55,10 +65,6 @@ class CaseGeneratorRAGAgent(BaseAgent):
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
         )
         
-        # Output directory for saving generated cases
-        self.output_dir = f"Outputs"
-        os.makedirs(self.output_dir, exist_ok=True)
-        
         # Case sections
         self.case_sections = {
             "patient_info": "",
@@ -73,25 +79,60 @@ class CaseGeneratorRAGAgent(BaseAgent):
         # Counter for Qdrant API calls
         self.qdrant_call_count = 0
 
+    def _load_case_cache(self) -> Dict[str, str]:
+        """Load the case cache from file."""
+        try:
+            if os.path.exists(self.case_cache_file):
+                with open(self.case_cache_file, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+                    print(f"Loaded case cache with {len(cache)} organisms")
+                    return cache
+            else:
+                print("No existing case cache found, starting with empty cache")
+                return {}
+        except Exception as e:
+            print(f"Error loading case cache: {str(e)}")
+            return {}
+
+    def _save_case_cache(self):
+        """Save the case cache to file."""
+        try:
+            with open(self.case_cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.case_cache, f, indent=2, ensure_ascii=False)
+            print(f"Saved case cache with {len(self.case_cache)} organisms")
+        except Exception as e:
+            print(f"Error saving case cache: {str(e)}")
+
+    def _normalize_organism_name(self, organism: str) -> str:
+        """Normalize organism name for consistent cache keys."""
+        return organism.lower().strip().replace(" ", "_")
+
     def generate_case(self, organism: str = None) -> str:
         """Generate a clinical case for the specified organism."""
         if organism:
             self.organism = organism.lower()
             self.collection = "union_collection"
         
+        # Normalize organism name for cache key
+        cache_key = self._normalize_organism_name(self.organism)
+        
         print(f"Generating case for {self.organism}...")
         
-        # Check if case already exists
-        case_file = os.path.join(self.output_dir, "case.txt")
-        try:
-            if os.path.exists(case_file):
-                with open(case_file, 'r') as f:
-                    case_text = f.read()
-                    if self.organism.lower() in case_text.lower():
-                        print(f"Found existing case for {self.organism}")
-                        return case_text
-        except Exception as e:
-            print(f"Error checking existing case: {str(e)}")
+        # Check if case already exists in cache
+        if cache_key in self.case_cache:
+            print(f"Found cached case for {self.organism}")
+            
+            # Also save to the old case.txt file for backward compatibility
+            case_file = os.path.join(self.output_dir, "case.txt")
+            try:
+                with open(case_file, 'w', encoding='utf-8') as f:
+                    f.write(self.case_cache[cache_key])
+            except Exception as e:
+                print(f"Error saving case to case.txt: {str(e)}")
+            
+            return self.case_cache[cache_key]
+        
+        print(f"No cached case found for {self.organism}, generating new case...")
         
         # Reset case sections
         self._reset_case_sections()
@@ -103,35 +144,78 @@ class CaseGeneratorRAGAgent(BaseAgent):
         # Check if Qdrant is available and working
         if not self.qdrant_client or not HAS_QDRANT:
             print("No Qdrant client available, using fallback case generation")
-            return self._fallback_case_generation()
+            case_text = self._fallback_case_generation()
+        else:
+            # Try to get context to validate connection
+            try:
+                test_context = self._get_rag_context(f"Information about {self.organism}")
+                if not test_context or len(test_context.strip()) < 20:
+                    print("Could not retrieve sufficient context, using fallback case generation")
+                    case_text = self._fallback_case_generation()
+                else:
+                    print("Successfully retrieved context, proceeding with RAG case generation")
+                    
+                    # Generate each section of the case
+                    self._generate_patient_info()
+                    self._generate_history_and_exam()
+                    self._generate_diagnostics()
+                    self._generate_diagnosis_and_treatment()
+                    
+                    # Combine all sections into a complete case
+                    case_text = self._combine_case_sections()
+                    
+            except Exception as e:
+                print(f"Error in RAG case generation: {str(e)}")
+                case_text = self._fallback_case_generation()
         
-        # Try to get context to validate connection
+        # Save the generated case to cache
+        self.case_cache[cache_key] = case_text
+        self._save_case_cache()
+        
+        # Also save to the old case.txt file for backward compatibility
+        case_file = os.path.join(self.output_dir, "case.txt")
         try:
-            test_context = self._get_rag_context(f"Information about {self.organism}")
-            if not test_context or len(test_context.strip()) < 20:
-                print("Could not retrieve sufficient context, using fallback case generation")
-                return self._fallback_case_generation()
-            
-            print("Successfully retrieved context, proceeding with RAG case generation")
-            
-            # Generate each section of the case
-            self._generate_patient_info()
-            self._generate_history_and_exam()
-            self._generate_diagnostics()
-            self._generate_diagnosis_and_treatment()
-            
-            # Combine all sections into a complete case
-            case_text = self._combine_case_sections()
-            
-            # Save the case to a file
-            with open(case_file, 'w') as f:
+            with open(case_file, 'w', encoding='utf-8') as f:
                 f.write(case_text)
-            
-            return case_text
-            
         except Exception as e:
-            print(f"Error in RAG case generation: {str(e)}")
-            return self._fallback_case_generation()
+            print(f"Error saving case to case.txt: {str(e)}")
+        
+        print(f"Generated and cached new case for {self.organism}")
+        return case_text
+
+    def get_cached_organisms(self) -> List[str]:
+        """Get a list of all organisms that have cached cases."""
+        return list(self.case_cache.keys())
+
+    def clear_cache(self, organism: str = None):
+        """Clear the cache for a specific organism or all organisms."""
+        if organism:
+            cache_key = self._normalize_organism_name(organism)
+            if cache_key in self.case_cache:
+                del self.case_cache[cache_key]
+                self._save_case_cache()
+                print(f"Cleared cache for {organism}")
+            else:
+                print(f"No cached case found for {organism}")
+        else:
+            self.case_cache = {}
+            self._save_case_cache()
+            print("Cleared all cached cases")
+
+    def regenerate_case(self, organism: str = None) -> str:
+        """Force regeneration of a case, bypassing the cache."""
+        if organism:
+            self.organism = organism.lower()
+        
+        cache_key = self._normalize_organism_name(self.organism)
+        
+        # Remove from cache if it exists
+        if cache_key in self.case_cache:
+            del self.case_cache[cache_key]
+            print(f"Removed cached case for {self.organism}")
+        
+        # Generate new case
+        return self.generate_case(self.organism)
 
     def _reset_case_sections(self):
         """Reset all case sections to empty strings."""
@@ -353,11 +437,6 @@ class CaseGeneratorRAGAgent(BaseAgent):
         
         # Combine all sections into a complete case
         case_text = self._combine_case_sections()
-        
-        # Save the case to a file
-        case_file = os.path.join(self.output_dir, "case.txt")
-        with open(case_file, 'w') as f:
-            f.write(case_text)
         
         return case_text
 

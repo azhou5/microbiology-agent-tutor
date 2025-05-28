@@ -12,7 +12,7 @@ import pickle
 import numpy as np
 import faiss
 from agents.patient import get_embedding  
-from Feedback.feedback_faiss import retrieve_similar_examples
+from Feedback.feedback_faiss import retrieve_similar_examples, index, texts
 import config
 
 
@@ -36,6 +36,9 @@ def generate_tool_descriptions(tools_dict):
     return "\n".join(descriptions)
 
 tool_descriptions = generate_tool_descriptions(name_to_function_map)
+
+
+
 
 # System message template remains largely the same, but references the updated tools
 system_message_template = """You are an expert microbiology instructor running a case with a student.You run in a loop of  [Action], [Observation].
@@ -159,12 +162,19 @@ class MedicalMicrobiologyTutor:
             else:
                 self.messages[0]["content"] = formatted_system_message
 
-    def start_new_case(self, organism=None):
+    def start_new_case(self, organism=None, force_regenerate=False):
         """Initialize a new case with the specified organism."""
         self.current_organism = organism or "staphylococcus aureus"
 
         # Get the case for the organism
-        self.case_description = get_case(self.current_organism)
+        if force_regenerate:
+            print(f"Force regenerating case for {self.current_organism}")
+            from agents.case_generator_rag import CaseGeneratorRAGAgent
+            case_generator = CaseGeneratorRAGAgent()
+            self.case_description = case_generator.regenerate_case(self.current_organism)
+        else:
+            self.case_description = get_case(self.current_organism)
+        
         if not self.case_description:
             return "Error: Could not load case for the specified organism."
 
@@ -184,6 +194,27 @@ class MedicalMicrobiologyTutor:
         except Exception as e:
             print(f"Error getting initial case presentation: {e}")
             return f"Error: Could not get initial case presentation. {e}"
+
+    def get_available_organisms(self):
+        """Get a list of organisms that have cached cases."""
+        try:
+            from agents.case_generator_rag import CaseGeneratorRAGAgent
+            case_generator = CaseGeneratorRAGAgent()
+            return case_generator.get_cached_organisms()
+        except Exception as e:
+            print(f"Error getting cached organisms: {e}")
+            return []
+
+    def clear_case_cache(self, organism=None):
+        """Clear the case cache for a specific organism or all organisms."""
+        try:
+            from agents.case_generator_rag import CaseGeneratorRAGAgent
+            case_generator = CaseGeneratorRAGAgent()
+            case_generator.clear_cache(organism)
+            return f"Cache cleared for {organism if organism else 'all organisms'}"
+        except Exception as e:
+            print(f"Error clearing cache: {e}")
+            return f"Error clearing cache: {e}"
 
     def reset(self):
         """Reset the tutor state for a new session."""
@@ -210,15 +241,59 @@ class MedicalMicrobiologyTutor:
         self.messages.append({"role": "user", "content": message})
 
         try:
-            response_content = chat_complete(self.messages, model=self.current_model)
-            print(f"\n[DEBUG] Initial LLM response: {response_content}")
+            # First, get initial response to check if it's a tool call or direct response
+            initial_response = chat_complete(self.messages, model=self.current_model)
+            print(f"\n[DEBUG] Initial LLM response: {initial_response}")
 
-            # If it's a direct response (no [Action]), return it
-            if "[Action]" not in response_content:
+            # If it's a direct response (no [Action]), add FAISS examples and regenerate
+            if "[Action]" not in initial_response:
+                # Add FAISS functionality for tutor direct responses
+                if self.run_with_faiss and index is not None:
+                    try:
+                        # Format the recent history similar to how the index was created
+                        recent_context = ""
+                        if self.messages:
+                            recent_context = "Chat history:\n"
+                            for msg in self.messages[-5:-1]:  # Get last 4 messages like in patient agent
+                                if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                                    recent_context += f"{msg['role']}: {msg['content']}\n"
+                        
+                        # Get embedding for the context (not including current user message in "rated message" since tutor hasn't responded yet)
+                        embedding_text = recent_context
+                        embedding = get_embedding(embedding_text)
+                        
+                        # Search for similar tutor examples
+                        distances, indices = index.search(np.array([embedding]).astype('float32'), k=4)
+                        
+                        # Get the most similar examples
+                        similar_examples = [texts[idx] for idx in indices[0]]
+                        examples_text = "\n\nSimilar tutor examples with feedback (including rated messages and expert feedback):\n" + "\n---\n".join(similar_examples)
+                        
+                        # Update system message to include examples
+                        original_system_content = self.messages[0]["content"]
+                        enhanced_system_content = original_system_content + examples_text + "\n\nYou should provide high-quality tutor responses based on the examples and feedback above."
+                        
+                        # Create enhanced messages for this specific call
+                        enhanced_messages = self.messages.copy()
+                        enhanced_messages[0]["content"] = enhanced_system_content
+                        
+                        # Get enhanced response with FAISS examples
+                        response_content = chat_complete(enhanced_messages, model=self.current_model)
+                        print(f"\n[DEBUG] Enhanced LLM response with FAISS: {response_content}")
+                        
+                    except Exception as e:
+                        print(f"Warning: FAISS retrieval failed, using original response: {e}")
+                        response_content = initial_response
+                else:
+                    response_content = initial_response
+                
                 self.messages.append({"role": "assistant", "content": response_content})
-                return response_content
+                print(examples_text)
 
-            # Handle [Action] response
+                return response_content
+            
+            # Handle [Action] response (tool calls) - no FAISS enhancement since rated message would be from tool
+            response_content = initial_response
             try:
                 # Extract the action text after [Action]
                 action_text = response_content.split("[Action]", 1)[1].strip()
