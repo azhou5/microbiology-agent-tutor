@@ -108,6 +108,8 @@ if db is not None:
         rated_message = db.Column(db.Text, nullable=False)
         feedback_text = db.Column(db.Text, nullable=True)
         replacement_text = db.Column(db.Text, nullable=True)
+        chat_history = db.Column(db.JSON, nullable=True)
+        case_id = db.Column(db.String(128), nullable=True)
 
     class CaseFeedbackEntry(db.Model):
         __tablename__ = 'case_feedback'
@@ -118,6 +120,7 @@ if db is not None:
         helpfulness_rating = db.Column(db.String(2), nullable=False)
         accuracy_rating = db.Column(db.String(2), nullable=False)
         comments = db.Column(db.Text, nullable=True)
+        case_id = db.Column(db.String(128), nullable=False)
 
     # Create tables if they don't exist
     with app.app_context():
@@ -236,7 +239,8 @@ def feedback():
             visible_history = history_from_client # Log whatever was sent if not a list
 
         # --- Get current organism ---
-        current_organism = tutor.current_organism or "Unknown" # Get from tutor instance
+        current_organism = tutor.current_organism or "Unknown"
+        case_id = data.get('case_id')
 
         if use_db:
             entry = FeedbackEntry(
@@ -245,7 +249,9 @@ def feedback():
                 rating=rating,
                 rated_message=message,
                 feedback_text=feedback_text,
-                replacement_text=replacement_text
+                replacement_text=replacement_text,
+                chat_history=visible_history,
+                case_id=case_id
             )
             db.session.add(entry)
             db.session.commit()
@@ -258,6 +264,7 @@ def feedback():
                 "rated_message": message,
                 "feedback_text": feedback_text,
                 "replacement_text": replacement_text,
+                "case_id": case_id,
                 "visible_chat_history": visible_history,
             }
             feedback_logger.info(json.dumps(log_entry, indent=2))
@@ -277,6 +284,7 @@ def case_feedback():
         helpfulness_rating = data.get('helpfulness')
         accuracy_rating = data.get('accuracy')
         comments = data.get('comments', '')
+        case_id = data.get('case_id')
         
         if not all([detail_rating, helpfulness_rating, accuracy_rating]):
             return jsonify({"error": "Missing required feedback ratings"}), 400
@@ -291,7 +299,8 @@ def case_feedback():
                 detail_rating=detail_rating,
                 helpfulness_rating=helpfulness_rating,
                 accuracy_rating=accuracy_rating,
-                comments=comments
+                comments=comments,
+                case_id=case_id
             )
             db.session.add(entry)
             db.session.commit()
@@ -303,7 +312,8 @@ def case_feedback():
                 "detail_rating": detail_rating,
                 "helpfulness_rating": helpfulness_rating,
                 "accuracy_rating": accuracy_rating,
-                "comments": comments
+                "comments": comments,
+                "case_id": case_id
             }
             case_feedback_logger.info(json.dumps(log_entry, indent=2))
         
