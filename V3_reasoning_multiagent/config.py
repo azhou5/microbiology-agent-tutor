@@ -10,8 +10,8 @@ TERMINAL_MODE = False
 
 # --- Database ---
 # Toggle which database to use: global (on Render) or local (for dev)
-USE_GLOBAL_DB = False
-USE_LOCAL_DB  = True
+USE_GLOBAL_DB = True
+USE_LOCAL_DB  = not USE_GLOBAL_DB
 
 GLOBAL_DATABASE_URL = os.getenv(
     "GLOBAL_DATABASE_URL",
