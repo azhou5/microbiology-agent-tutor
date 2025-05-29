@@ -93,6 +93,14 @@ if db is not None:
         comments = db.Column(db.Text, nullable=True)
         case_id = db.Column(db.String(128), nullable=False)
 
+    class ConversationLog(db.Model):
+        __tablename__ = 'conversation_log'
+        id = db.Column(db.Integer, primary_key=True)
+        case_id = db.Column(db.String(128), nullable=False, index=True)
+        timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+        role = db.Column(db.String(50), nullable=False)  # 'user', 'assistant', 'system'
+        content = db.Column(db.Text, nullable=False)
+
     # Create tables if they don't exist
     with app.app_context():
         try:
@@ -109,6 +117,9 @@ if db is not None:
                 'case_feedback': [
                     'id', 'timestamp', 'organism', 'detail_rating',
                     'helpfulness_rating', 'accuracy_rating', 'comments', 'case_id'
+                ],
+                'conversation_log': [
+                    'id', 'case_id', 'timestamp', 'role', 'content'
                 ]
             }
             
@@ -163,6 +174,13 @@ else:
             self.comments = comments
             self.case_id = case_id
 
+    class ConversationLog:
+        def __init__(self, case_id=None, timestamp=None, role=None, content=None):
+            self.case_id = case_id
+            self.timestamp = timestamp
+            self.role = role
+            self.content = content
+
 # --- Session-based Tutor Management ---
 
 def get_tutor_from_session():
@@ -171,6 +189,7 @@ def get_tutor_from_session():
     Initializes a new tutor if no session data is found.
     """
     model_name_from_session = session.get('tutor_model_name', 'o3-mini') # Default to o3-mini
+    current_organism_from_session = session.get('tutor_current_organism', None)
 
     tutor = MedicalMicrobiologyTutor(
         output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
@@ -179,25 +198,23 @@ def get_tutor_from_session():
         model_name=model_name_from_session
     )
 
-    tutor.messages = session.get('tutor_messages', [{"role": "system", "content": "Initializing..."}])
-    tutor.current_organism = session.get('tutor_current_organism', None)
-    tutor.case_description = session.get('tutor_case_description', None)
-    
-    if tutor.case_description and tutor.messages and tutor.messages[0]['content'] == "Initializing...":
-        tutor._update_system_message()
-        session['tutor_messages'] = tutor.messages
-    elif not tutor.messages: # Ensure messages list always exists
+    # Messages and case_description are no longer loaded from session here.
+    # They will be populated by the route handlers (e.g., /chat, /start_case)
+    # based on client data or by fetching anew.
+    tutor.current_organism = current_organism_from_session
+    # Ensure messages list always exists for the tutor object, even if minimal
+    if not tutor.messages:
         tutor.messages = [{"role": "system", "content": "Initializing..."}]
-        session['tutor_messages'] = tutor.messages
+
 
     return tutor
 
 def save_tutor_to_session(tutor):
-    """Saves the tutor's state to the current session."""
-    session['tutor_messages'] = tutor.messages
+    """Saves the tutor's essential state to the current session."""
+    # Only save minimal, essential data to keep cookie size small
     session['tutor_current_organism'] = tutor.current_organism
-    session['tutor_case_description'] = tutor.case_description
     session['tutor_model_name'] = tutor.current_model
+    # Do NOT save tutor.messages or tutor.case_description to the session
     session.modified = True
 
 # --- Routes ---
@@ -205,7 +222,9 @@ def save_tutor_to_session(tutor):
 def index():
     """Serves the main HTML page."""
     tutor = get_tutor_from_session()
-    return render_template('index.html', current_model=tutor.current_model or 'o3-mini')
+    return render_template('index.html', 
+                           current_model=tutor.current_model or 'o3-mini',
+                           in_context_learning=config.IN_CONTEXT_LEARNING)
 
 @app.route('/start_case', methods=['POST'])
 def start_case():
@@ -214,9 +233,14 @@ def start_case():
         data = request.get_json()
         organism = data.get('organism')
         model_name = 'o3-mini'  # Always use o3-mini for new cases as per current logic
+        client_case_id = data.get('case_id') # Added to receive case_id
 
-        logging.info(f"Starting new case with organism: {organism} and model: {model_name} (Session new: {session.new})")
+        logging.info(f"Starting new case with organism: {organism} and model: {model_name} (Session new: {session.new}, Case ID: {client_case_id})")
         
+        if not client_case_id:
+            logging.error(f"Case ID missing in start_case request for organism {organism}. (Session new: {session.new})")
+            return jsonify({"error": "Case ID is missing. Cannot start case."}), 400
+
         tutor = MedicalMicrobiologyTutor(
             output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
             run_with_faiss=config.USE_FAISS,
@@ -225,7 +249,34 @@ def start_case():
         )
             
         initial_message = tutor.start_new_case(organism=organism)
+        session['current_case_id'] = client_case_id # Store case_id in session
         save_tutor_to_session(tutor)
+
+        if db:
+            try:
+                # Log system message
+                if tutor.messages and tutor.messages[0]['role'] == 'system':
+                    system_log_entry = ConversationLog(
+                        case_id=client_case_id,
+                        role='system',
+                        content=tutor.messages[0]['content'],
+                        timestamp=datetime.utcnow()
+                    )
+                    db.session.add(system_log_entry)
+                
+                # Log initial assistant message
+                assistant_log_entry = ConversationLog(
+                    case_id=client_case_id,
+                    role='assistant',
+                    content=initial_message,
+                    timestamp=datetime.utcnow()
+                )
+                db.session.add(assistant_log_entry)
+                db.session.commit()
+                logging.info(f"Initial messages logged to DB for case_id: {client_case_id}")
+            except Exception as e:
+                db.session.rollback()
+                logging.error(f"Error logging initial messages to DB for case_id {client_case_id}: {e}", exc_info=True)
         
         return jsonify({
             "initial_message": initial_message,
@@ -237,70 +288,92 @@ def start_case():
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    """Handles incoming chat messages from the user, using session-based tutor."""
+    """Handles incoming chat messages from the user, reconstructing tutor state largely from client data."""
     try:
         data = request.get_json()
         message_text = data.get('message')
         client_history = data.get('history')
         client_organism_key = data.get('organism_key')
+        client_case_id = data.get('case_id') # Added to receive case_id
 
-        tutor = get_tutor_from_session()
-
-        if not tutor.case_description and client_history and len(client_history) > 0:
-            logging.warning(f"Chat attempt with empty session case. Client history length: {len(client_history)}. Attempting recovery. (Session new: {session.new})")
-            
-            recovered_organism_key_for_get_case = None
-
-            if client_organism_key:
-                logging.info(f"Using organism_key '{client_organism_key}' directly from client request for recovery. (Session new: {session.new})")
-                recovered_organism_key_for_get_case = client_organism_key
-            else:
-                logging.info(f"client_organism_key not provided. Attempting to parse from system message. (Session new: {session.new})")
-                system_message_from_client = next((msg for msg in client_history if msg.get("role") == "system" and "Initializing..." not in msg.get("content","") ), None)
-                if system_message_from_client:
-                    content_lines = system_message_from_client.get("content", "").split('\n')
-                    if content_lines:
-                        first_line = content_lines[0].strip()
-                        if first_line.startswith("# CLINICAL CASE:") and "INFECTION" in first_line.upper():
-                            try:
-                                organism_name_part = first_line.split(":")[1].replace("INFECTION", "", 1).strip()
-                                temp_key = organism_name_part.lower().replace(" ", "_")
-                                if "(malaria)" in temp_key:
-                                    temp_key = temp_key.replace("(malaria)","").strip()
-                                recovered_organism_key_for_get_case = temp_key
-                                logging.info(f"Tentatively recovered organism key '{recovered_organism_key_for_get_case}' from system message. (Session new: {session.new})")
-                            except IndexError:
-                                logging.warning(f"Could not parse organism from system message line: {first_line}. (Session new: {session.new})")
-            
-            if recovered_organism_key_for_get_case:
-                canonical_case_description = get_case(recovered_organism_key_for_get_case)
-                if canonical_case_description:
-                    logging.info(f"Successfully fetched canonical case for '{recovered_organism_key_for_get_case}'. (Session new: {session.new})")
-                    tutor.current_organism = recovered_organism_key_for_get_case 
-                    tutor.case_description = canonical_case_description
-                    tutor.messages = client_history
-                    tutor._update_system_message() 
-                    save_tutor_to_session(tutor)
-                    logging.info(f"Tutor state successfully recovered and saved. (Session new: {session.new})")
-                else:
-                    logging.error(f"Failed to fetch canonical case for '{recovered_organism_key_for_get_case}'. Aborting recovery. (Session new: {session.new})")
-                    return jsonify({"error": "Could not fully restore session. Please start a new case.", "needs_new_case": True}), 400
-            else:
-                logging.warning(f"Could not determine organism for recovery. (Session new: {session.new})")
-                return jsonify({"error": "No active case. Please start a new case.", "needs_new_case": True}), 400
+        tutor = get_tutor_from_session() # Gets model_name, and potentially stale current_organism
         
-        elif not tutor.case_description: 
-             logging.warning(f"Chat attempt without active case. (Session new: {session.new})")
+        active_case_id = client_case_id or session.get('current_case_id')
+        if not active_case_id:
+            logging.warning(f"Chat attempt without active case_id. (Session new: {session.new})")
+            return jsonify({"error": "No active case ID. Please start a new case.", "needs_new_case": True}), 400
+
+        # Prioritize client_organism_key for setting the current organism
+        if client_organism_key:
+            tutor.current_organism = client_organism_key
+        elif not tutor.current_organism: # If no organism from session and none from client
+            logging.warning(f"Chat attempt without any organism key. (Session new: {session.new})")
+            return jsonify({"error": "No active case. Organism key missing. Please start a new case.", "needs_new_case": True}), 400
+        
+        # Load case description if we have an organism but no description loaded on the tutor object yet
+        if tutor.current_organism and not tutor.case_description:
+            tutor.case_description = get_case(tutor.current_organism)
+            if not tutor.case_description:
+                logging.error(f"Failed to fetch canonical case for '{tutor.current_organism}' during chat. (Session new: {session.new})")
+                return jsonify({"error": f"Could not load case details for {tutor.current_organism}. Please try starting a new case.", "needs_new_case": True}), 400
+        elif not tutor.case_description: # Still no case description (e.g., organism key was missing or get_case failed)
+             logging.warning(f"Chat attempt without active case (case description missing for organism '{tutor.current_organism}'). (Session new: {session.new})")
              return jsonify({"error": "No active case. Please start a new case.", "needs_new_case": True}), 400
 
-        logging.info(f"Received user message: {message_text} (Session new: {session.new})")
-        response_content = tutor(message_text)
-        save_tutor_to_session(tutor)
-        logging.info(f"Sending tutor response for organism {tutor.current_organism} (Session new: {session.new})")
+        # Use client_history to populate tutor.messages
+        if client_history and isinstance(client_history, list): # len(client_history) > 0 can be implied if system message always exists
+            tutor.messages = client_history
+        else:
+            # If client history is missing or invalid, ensure a basic structure for messages
+            # This might indicate a problem on the client side or an unusual request sequence.
+            logging.warning(f"Client history not provided or invalid in /chat for organism {tutor.current_organism}. Re-initializing messages. (Session new: {session.new})")
+            tutor.messages = [{"role": "system", "content": "Initializing..."}]
+
+        # Always update the system message after setting case_description and messages
+        # This ensures the system prompt within tutor.messages[0] is correct.
+        tutor._update_system_message()
+
+        logging.info(f"Received user message: {message_text} for organism {tutor.current_organism} (Session new: {session.new}, Case ID: {active_case_id})")
+        
+        # Log user message before calling tutor
+        if db:
+            try:
+                user_log_entry = ConversationLog(
+                    case_id=active_case_id,
+                    role='user',
+                    content=message_text,
+                    timestamp=datetime.utcnow()
+                )
+                db.session.add(user_log_entry)
+                db.session.commit() # Commit here or after assistant response
+            except Exception as e:
+                db.session.rollback()
+                logging.error(f"Error logging user message to DB for case_id {active_case_id}: {e}", exc_info=True)
+
+        response_content = tutor(message_text) # tutor() appends user message to its messages and gets response
+        
+        # Log assistant response
+        if db:
+            try:
+                assistant_log_entry = ConversationLog(
+                    case_id=active_case_id,
+                    role='assistant',
+                    content=response_content,
+                    timestamp=datetime.utcnow()
+                )
+                db.session.add(assistant_log_entry)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logging.error(f"Error logging assistant message to DB for case_id {active_case_id}: {e}", exc_info=True)
+
+        save_tutor_to_session(tutor) # Saves only minimal state (organism, model_name)
+        
+        logging.info(f"Sending tutor response for organism {tutor.current_organism} (Session new: {session.new}, Case ID: {active_case_id})")
 
         return jsonify({
             "response": response_content,
-            "history": tutor.messages
+            "history": tutor.messages # Return the full, updated history to the client
         })
     except Exception as e:
         logging.error(f"Error during chat processing: {e} (Session new: {session.new})", exc_info=True)
@@ -418,6 +491,7 @@ def case_feedback():
         session.pop('tutor_current_organism', None)
         session.pop('tutor_case_description', None)
         session.pop('tutor_model_name', None)
+        session.pop('current_case_id', None) # Clear case_id from session
         logging.info(f"Tutor state cleared from session after case feedback. (Session new: {session.new})")
 
         return jsonify({"status": "Case feedback received"}), 200
@@ -457,6 +531,37 @@ def admin_feedback():
         "</body></html>"
     )
     return html
+
+@app.route('/admin/live_chats')
+def admin_live_chats():
+    """Displays live chat conversations from the database."""
+    if not db:
+        return "Database is not configured.", 500
+
+    try:
+        # Query all conversation logs, ordered by case_id and then by timestamp
+        logs = ConversationLog.query.order_by(ConversationLog.case_id, ConversationLog.timestamp).all()
+        
+        # Group logs by case_id
+        conversations = {}
+        for log_entry in logs:
+            if log_entry.case_id not in conversations:
+                conversations[log_entry.case_id] = []
+            conversations[log_entry.case_id].append({
+                'role': log_entry.role,
+                'content': log_entry.content,
+                'timestamp': log_entry.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
+            })
+        
+        # Sort conversations by the timestamp of the first message in each case, descending (most recent first)
+        sorted_conversations = sorted(conversations.items(), 
+                                      key=lambda item: datetime.strptime(item[1][0]['timestamp'], "%Y-%m-%d %H:%M:%S UTC") if item[1] else datetime.min, 
+                                      reverse=True)
+        
+        return render_template('admin_live_chats.html', conversations=sorted_conversations)
+    except Exception as e:
+        logging.error(f"Error fetching live chats: {e}", exc_info=True)
+        return f"Error fetching live chats: {e}", 500
 
 @app.cli.command("shell")
 def shell():

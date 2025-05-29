@@ -110,6 +110,10 @@
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Make the in_context_learning flag available to script.js
+        window.in_context_learning = {{ in_context_learning | tojson }};
+    </script>
 </body>
 
 </html>

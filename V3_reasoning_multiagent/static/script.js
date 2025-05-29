@@ -132,10 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const replacementText = document.getElementById(`replacement-text-${messageDiv.id}`).value;
                 const rating = ratingButtonsDiv.querySelector('.rated').dataset.rating;
 
-                if (!feedbackText.trim()) {
-                    setStatus('Please provide feedback for your rating.', true);
-                    return;
-                }
+                // Allow empty feedback text
+                // if (!feedbackText.trim()) {
+                //     setStatus('Please provide feedback for your rating.', true);
+                //     return;
+                // }
 
                 setStatus('Sending feedback...');
                 try {
@@ -149,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             feedback_text: feedbackText,
                             replacement_text: replacementText,
                             case_id: currentCaseId,
-                            organism: organismSelect.dataset.randomSelection
+                            organism: currentOrganismKey
                         }),
                     });
 
@@ -164,11 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     feedbackContainer.innerHTML = `
                         <div class="feedback-submitted">
                             <div class="feedback-rating">Rating: ${rating}/4</div>
-                            ${feedbackText ? `<div class="feedback-section">
+                            ${feedbackText.trim() ? `<div class="feedback-section">
                                 <div class="feedback-label">Why this score:</div>
                                 <div class="feedback-text">${feedbackText}</div>
                             </div>` : ''}
-                            ${replacementText ? `<div class="feedback-section">
+                            ${replacementText.trim() ? `<div class="feedback-section">
                                 <div class="feedback-label">Preferred response:</div>
                                 <div class="feedback-text">${replacementText}</div>
                             </div>` : ''}
@@ -176,12 +177,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
 
                     // If user provided a replacement, show it
-                    if (replacementText) {
+                    if (replacementText.trim()) {
+
+                        if (in_context_learning) {
+
+                            // integrate feedback into the chat history so that the LLM can adjust in real time!
+                            const feedbackContextMessage = {
+                                role: 'system', // Using 'system' to provide strong context/correction
+                                content: `Context: The user provided feedback on the assistant's immediately preceding response.\nRating: ${rating}/4.\nUser's reason: "${feedbackText}"\nThe user suggested the following as a better response, which will follow as the new assistant turn: "${replacementText}"`
+                            };
+                            chatHistory.push(feedbackContextMessage);
+                        }
+                        // add the replacement text to the UI and chat history
+
                         addMessage('assistant', replacementText, true);
                         chatHistory.push({ role: 'assistant', content: replacementText });
-
-                        // No need to explicitly sync history - it will be sent with the next message
-                        // The server automatically syncs history from every message request
                     }
                 } catch (error) {
                     console.error(error);
@@ -324,7 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     message: message,
                     history: chatHistory,
-                    organism_key: currentOrganismKey // <-- Send the stored organism key
+                    organism_key: currentOrganismKey, // <-- Send the stored organism key
+                    case_id: currentCaseId // <-- Send the current case ID
                 }),
             });
 
@@ -438,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     sendBtn.disabled = true;
                     finishBtn.disabled = true;
                     currentOrganismKey = null; // <-- Clear here too when case ends
+                    currentCaseId = null; // <-- Clear caseId when case ends
                     chatHistory = []; // Also clear history for a truly new start
                 }
             })
