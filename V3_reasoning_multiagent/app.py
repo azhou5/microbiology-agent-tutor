@@ -215,7 +215,7 @@ def start_case():
         organism = data.get('organism')
         model_name = 'o3-mini'  # Always use o3-mini for new cases as per current logic
 
-        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Starting new case with organism: {organism} and model: {model_name}")
+        logging.info(f"Starting new case with organism: {organism} and model: {model_name} (Session new: {session.new})")
         
         tutor = MedicalMicrobiologyTutor(
             output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
@@ -225,14 +225,14 @@ def start_case():
         )
             
         initial_message = tutor.start_new_case(organism=organism)
-        save_tutor_to_session(tutor) # Save the new tutor state to session
+        save_tutor_to_session(tutor)
         
         return jsonify({
             "initial_message": initial_message,
             "history": tutor.messages
         })
     except Exception as e:
-        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error starting case: {e}", exc_info=True)
+        logging.error(f"Error starting case for organism {organism}: {e} (Session new: {session.new})", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/chat', methods=['POST'])
@@ -246,17 +246,16 @@ def chat():
 
         tutor = get_tutor_from_session()
 
-        # Enhanced recovery logic
         if not tutor.case_description and client_history and len(client_history) > 0:
-            logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Chat attempt with empty session case. Client history length: {len(client_history)}. Attempting recovery.")
+            logging.warning(f"Chat attempt with empty session case. Client history length: {len(client_history)}. Attempting recovery. (Session new: {session.new})")
             
             recovered_organism_key_for_get_case = None
 
             if client_organism_key:
-                logging.info(f"Session {session.sid if session.sid else 'unknown'}: Using organism_key '{client_organism_key}' directly from client request for recovery.")
+                logging.info(f"Using organism_key '{client_organism_key}' directly from client request for recovery. (Session new: {session.new})")
                 recovered_organism_key_for_get_case = client_organism_key
             else:
-                logging.info(f"Session {session.sid if session.sid else 'unknown'}: client_organism_key not provided. Attempting to parse from system message.")
+                logging.info(f"client_organism_key not provided. Attempting to parse from system message. (Session new: {session.new})")
                 system_message_from_client = next((msg for msg in client_history if msg.get("role") == "system" and "Initializing..." not in msg.get("content","") ), None)
                 if system_message_from_client:
                     content_lines = system_message_from_client.get("content", "").split('\n')
@@ -269,42 +268,42 @@ def chat():
                                 if "(malaria)" in temp_key:
                                     temp_key = temp_key.replace("(malaria)","").strip()
                                 recovered_organism_key_for_get_case = temp_key
-                                logging.info(f"Session {session.sid if session.sid else 'unknown'}: Tentatively recovered organism key '{recovered_organism_key_for_get_case}' from system message.")
+                                logging.info(f"Tentatively recovered organism key '{recovered_organism_key_for_get_case}' from system message. (Session new: {session.new})")
                             except IndexError:
-                                logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Could not parse organism from system message line: {first_line}")
+                                logging.warning(f"Could not parse organism from system message line: {first_line}. (Session new: {session.new})")
             
             if recovered_organism_key_for_get_case:
                 canonical_case_description = get_case(recovered_organism_key_for_get_case)
                 if canonical_case_description:
-                    logging.info(f"Session {session.sid if session.sid else 'unknown'}: Successfully fetched canonical case for '{recovered_organism_key_for_get_case}'.")
+                    logging.info(f"Successfully fetched canonical case for '{recovered_organism_key_for_get_case}'. (Session new: {session.new})")
                     tutor.current_organism = recovered_organism_key_for_get_case 
                     tutor.case_description = canonical_case_description
                     tutor.messages = client_history
                     tutor._update_system_message() 
                     save_tutor_to_session(tutor)
-                    logging.info(f"Session {session.sid if session.sid else 'unknown'}: Tutor state successfully recovered and saved.")
+                    logging.info(f"Tutor state successfully recovered and saved. (Session new: {session.new})")
                 else:
-                    logging.error(f"Session {session.sid if session.sid else 'unknown'}: Failed to fetch canonical case for '{recovered_organism_key_for_get_case}'. Aborting recovery.")
+                    logging.error(f"Failed to fetch canonical case for '{recovered_organism_key_for_get_case}'. Aborting recovery. (Session new: {session.new})")
                     return jsonify({"error": "Could not fully restore session. Please start a new case.", "needs_new_case": True}), 400
             else:
-                logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Could not determine organism for recovery.")
+                logging.warning(f"Could not determine organism for recovery. (Session new: {session.new})")
                 return jsonify({"error": "No active case. Please start a new case.", "needs_new_case": True}), 400
         
         elif not tutor.case_description: 
-             logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Chat attempt without active case.")
+             logging.warning(f"Chat attempt without active case. (Session new: {session.new})")
              return jsonify({"error": "No active case. Please start a new case.", "needs_new_case": True}), 400
 
-        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Received user message: {message_text}")
+        logging.info(f"Received user message: {message_text} (Session new: {session.new})")
         response_content = tutor(message_text)
         save_tutor_to_session(tutor)
-        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Sending tutor response: {response_content}")
+        logging.info(f"Sending tutor response for organism {tutor.current_organism} (Session new: {session.new})")
 
         return jsonify({
             "response": response_content,
             "history": tutor.messages
         })
     except Exception as e:
-        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error during chat processing: {e}", exc_info=True)
+        logging.error(f"Error during chat processing: {e} (Session new: {session.new})", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/feedback', methods=['POST'])
@@ -359,15 +358,15 @@ def feedback():
                 "replacement_text": replacement_text,
                 "case_id": case_id_from_client,
                 "visible_chat_history": visible_history,
-                "session_id": session.sid if session.sid else 'unknown'
+                "session_is_new": session.new
             }
             feedback_logger.info(json.dumps(log_entry, indent=2))
 
-        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Received feedback: {rating}/5 for message snippet: '{message_content[:50]}...' (Organism: {tutor.current_organism})")
+        logging.info(f"Received feedback: {rating}/5 for message snippet: '{message_content[:50]}...' (Organism: {tutor.current_organism}, Session new: {session.new})")
         # If replacement text is provided, the client already appends it and the next /chat call will sync the history
         return jsonify({"status": "Feedback received"}), 200
     except Exception as e:
-        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error processing feedback: {e}", exc_info=True)
+        logging.error(f"Error processing feedback: {e} (Session new: {session.new})", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/case_feedback', methods=['POST'])
@@ -408,22 +407,22 @@ def case_feedback():
                 "accuracy_rating": accuracy_rating,
                 "comments": comments,
                 "case_id": case_id_from_client,
-                "session_id": session.sid if session.sid else 'unknown'
+                "session_is_new": session.new
             }
             case_feedback_logger.info(json.dumps(log_entry, indent=2))
         
-        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Received case feedback for {current_organism_for_log} case - Detail: {detail_rating}/5, Helpfulness: {helpfulness_rating}/5, Accuracy: {accuracy_rating}/5")
+        logging.info(f"Received case feedback for {current_organism_for_log} case - Detail: {detail_rating}/5, Helpfulness: {helpfulness_rating}/5, Accuracy: {accuracy_rating}/5 (Session new: {session.new})")
         # After case feedback, typically the session might be cleared or reset for a new case.
         # For now, let's just clear the tutor related parts of the session.
         session.pop('tutor_messages', None)
         session.pop('tutor_current_organism', None)
         session.pop('tutor_case_description', None)
         session.pop('tutor_model_name', None)
-        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Tutor state cleared from session after case feedback.")
+        logging.info(f"Tutor state cleared from session after case feedback. (Session new: {session.new})")
 
         return jsonify({"status": "Case feedback received"}), 200
     except Exception as e:
-        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error processing case feedback: {e}", exc_info=True)
+        logging.error(f"Error processing case feedback: {e} (Session new: {session.new})", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 # --- Admin Feedback Route ---
