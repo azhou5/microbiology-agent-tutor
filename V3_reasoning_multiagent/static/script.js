@@ -179,23 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         addMessage('assistant', replacementText, true);
                         chatHistory.push({ role: 'assistant', content: replacementText });
 
-                        // Sync the updated history with the server
-                        try {
-                            const syncResponse = await fetch('/chat', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    message: "SYNC_HISTORY",
-                                    history: chatHistory
-                                }),
-                            });
-
-                            if (!syncResponse.ok) {
-                                console.error('Failed to sync history with server');
-                            }
-                        } catch (error) {
-                            console.error('Error syncing history:', error);
-                        }
+                        // No need to explicitly sync history - it will be sent with the next message
+                        // The server automatically syncs history from every message request
                     }
                 } catch (error) {
                     console.error(error);
@@ -334,8 +319,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Send only the new message, server uses its internal history
-                body: JSON.stringify({ message: message }),
+                // Send both the message and current history for server sync
+                body: JSON.stringify({
+                    message: message,
+                    history: chatHistory  // Include full history for server to sync if needed
+                }),
             });
 
             if (!response.ok) {

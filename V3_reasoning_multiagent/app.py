@@ -219,8 +219,8 @@ def index():
     global tutor
     if tutor is None:
         tutor = get_tutor(CURRENT_MODEL)
-    else:
-        tutor.reset()
+    # Don't reset the tutor here - it clears the case context!
+    # The reset should only happen when explicitly starting a new case
     return render_template('index.html', current_model=CURRENT_MODEL)
 
 @app.route('/start_case', methods=['POST'])
@@ -276,6 +276,59 @@ def chat():
 
         # Get existing tutor instance or create new one if needed
         tutor = get_tutor(model_name)
+        
+        # Check if tutor has lost its case context (e.g., after server restart)
+        if (tutor.case_description is None or 
+            len(tutor.messages) <= 1 or 
+            tutor.messages[0]["content"] == "Initializing..."):
+            
+            logging.warning("Tutor has lost case context, attempting to recover from client history")
+            
+            if history and len(history) > 1:
+                # Try to recover the case context from the history
+                # Look for the system message with case content
+                for msg in history:
+                    if msg.get("role") == "system" and "case" in msg.get("content", "").lower() and msg.get("content") != "Initializing...":
+                        # Found a system message with case content
+                        tutor.messages = history
+                        
+                        # Extract the case description from the system message
+                        content = msg.get("content", "")
+                        # The case is usually after "Here is the case:" in the system message
+                        case_marker = "Here is the case:"
+                        if case_marker in content:
+                            case_start = content.find(case_marker) + len(case_marker)
+                            tutor.case_description = content[case_start:].strip()
+                        
+                        # Extract organism from system message if possible
+                        # This is a simple heuristic - you might need to adjust based on your case format
+                        if "organism:" in content.lower():
+                            # Try to extract organism name
+                            start = content.lower().find("organism:") + 9
+                            end = content.find("\n", start)
+                            if end == -1:
+                                end = len(content)
+                            organism_guess = content[start:end].strip()
+                            tutor.current_organism = organism_guess
+                        
+                        # Also try to extract organism from case description
+                        if tutor.case_description and not tutor.current_organism:
+                            # Look for common organism mentions in the case
+                            case_lower = tutor.case_description.lower()
+                            for organism in ["staphylococcus aureus", "streptococcus pneumoniae", "escherichia coli", 
+                                           "clostridium difficile", "mycobacterium tuberculosis"]:
+                                if organism in case_lower:
+                                    tutor.current_organism = organism
+                                    break
+                        
+                        logging.info(f"Recovered case context from client history. Organism: {tutor.current_organism}")
+                        break
+                else:
+                    # Couldn't find case in history, return error
+                    return jsonify({
+                        "error": "Case context lost. Please start a new case.",
+                        "needs_new_case": True
+                    }), 400
 
         # The tutor.__call__ method updates its internal message list
         response = tutor(message)
