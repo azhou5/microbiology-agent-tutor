@@ -197,6 +197,7 @@ class MedicalMicrobiologyTutor:
     def start_new_case(self, organism=None, force_regenerate=False):
         """Initialize a new case with the specified organism."""
         self.current_organism = organism or "staphylococcus aureus"
+        print(f"Starting new case with organism: {self.current_organism}")  # Debug log
 
         # Get the case for the organism
         if force_regenerate:

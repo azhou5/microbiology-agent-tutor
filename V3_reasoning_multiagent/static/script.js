@@ -9,6 +9,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const finishBtn = document.getElementById('finish-btn');
 
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
+    let currentCaseId = null; // Store the current case ID
+
+    // Function to generate a unique case ID
+    function generateCaseId() {
+        return 'case_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
 
     function addMessage(sender, messageContent, addFeedbackUI = false) {
         const messageDiv = document.createElement('div');
@@ -140,7 +146,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             message: messageContent,
                             history: chatHistory,
                             feedback_text: feedbackText,
-                            replacement_text: replacementText
+                            replacement_text: replacementText,
+                            case_id: currentCaseId,
+                            organism: organismSelect.dataset.randomSelection
                         }),
                     });
 
@@ -246,6 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Generate new case ID for this session
+        currentCaseId = generateCaseId();
+
         setStatus('Starting new case...');
         startCaseBtn.disabled = true;
         organismSelect.disabled = true;
@@ -258,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     organism: selectedOrganism,
+                    case_id: currentCaseId,
                     model: 'o3-mini'  // Always use o3-mini
                 }),
             });
@@ -376,6 +388,16 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Please select a rating for all three questions.');
             return;
         }
+
+        // Create feedback data object
+        const feedbackData = {
+            detail: detailRating,
+            helpfulness: helpfulnessRating,
+            accuracy: accuracyRating,
+            comments: comments,
+            case_id: currentCaseId,
+            organism: organismSelect.dataset.randomSelection
+        };
 
         // Submit the feedback
         fetch('/case_feedback', {
