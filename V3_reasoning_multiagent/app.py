@@ -260,6 +260,16 @@ def chat():
     try:
         data = request.get_json()
         message = data.get('message')
+        history = data.get('history')  # Get the history from the request
+        
+        # Handle history sync request
+        if message == "SYNC_HISTORY" and history:
+            if tutor is not None:
+                # Update tutor's message history
+                tutor.messages = history
+                return jsonify({"status": "History synced successfully"})
+            return jsonify({"error": "Tutor not initialized"}), 400
+            
         model_name = 'o3-mini'  # Always use o3-mini
         
         logging.info(f"Received user message: {message}")
