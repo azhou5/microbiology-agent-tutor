@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Create rating prompt
             const ratingPrompt = document.createElement('span');
-            ratingPrompt.textContent = "Rate this response (1-5):";
+            ratingPrompt.textContent = "Rate this response (1-4):";
             ratingPrompt.classList.add('feedback-prompt');
             feedbackContainer.appendChild(ratingPrompt);
 
@@ -36,10 +36,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ratingButtonsDiv.classList.add('feedback-buttons');
 
             // Create rating buttons
-            for (let i = 1; i <= 5; i++) {
+            for (let i = 1; i <= 4; i++) {
                 const ratingBtn = document.createElement('button');
                 ratingBtn.textContent = i;
-                ratingBtn.title = `Rate ${i} out of 5`;
+                ratingBtn.title = `Rate ${i} out of 4`;
                 ratingBtn.classList.add('feedback-btn', 'rating-btn');
                 ratingBtn.dataset.rating = i;
                 ratingButtonsDiv.appendChild(ratingBtn);
@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Show feedback summary
                     feedbackContainer.innerHTML = `
                         <div class="feedback-submitted">
-                            <div class="feedback-rating">Rating: ${rating}/5</div>
+                            <div class="feedback-rating">Rating: ${rating}/4</div>
                             ${feedbackText ? `<div class="feedback-section">
                                 <div class="feedback-label">Why this score:</div>
                                 <div class="feedback-text">${feedbackText}</div>
@@ -237,19 +237,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Modify the start case handler to use the random selection if needed
     async function handleStartCase() {
-        let selectedOrganism = organismSelect.value;
-
-        // If "random" is selected, use the stored random selection
-        if (selectedOrganism === "random") {
-            selectedOrganism = organismSelect.dataset.randomSelection;
-            if (!selectedOrganism) {
-                setStatus('Please select an organism or use random selection.', true);
-                return;
-            }
-        }
+        // Always select a random organism
+        selectRandomOrganism();
+        let selectedOrganism = organismSelect.dataset.randomSelection;
 
         if (!selectedOrganism) {
-            setStatus('Please select an organism.', true);
+            setStatus('Error selecting random organism. Please try again.', true);
             return;
         }
 
@@ -353,6 +346,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Finish Case button
     finishBtn.addEventListener('click', function () {
+        // Get the current organism from the select element
+        const correctOrganism = organismSelect.dataset.randomSelection;
+
+        // Update the organism display in the modal
+        const organismDisplay = document.getElementById('correct-organism');
+        if (organismDisplay && correctOrganism) {
+            // Format the organism name (capitalize first letter of each word)
+            const formattedOrganism = correctOrganism.split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+            organismDisplay.textContent = formattedOrganism;
+        }
+
         // Show the feedback modal
         feedbackModal.style.display = 'block';
     });

@@ -97,7 +97,7 @@ if use_db:
 else:
     logging.info("Database disabled, using file logging")
 
-# — Models —
+# --- Models ---
 if db is not None:
     class FeedbackEntry(db.Model):
         __tablename__ = 'feedback'
@@ -168,11 +168,29 @@ if db is not None:
             db.create_all()
             logging.info("Database tables created successfully.")
 else:
-    # Define empty model classes for when db is None
+    # Define model classes for when db is None
     class FeedbackEntry:
-        pass
+        def __init__(self, timestamp=None, organism=None, rating=None, rated_message=None, 
+                     feedback_text=None, replacement_text=None, chat_history=None, case_id=None):
+            self.timestamp = timestamp
+            self.organism = organism
+            self.rating = rating
+            self.rated_message = rated_message
+            self.feedback_text = feedback_text
+            self.replacement_text = replacement_text
+            self.chat_history = chat_history
+            self.case_id = case_id
+
     class CaseFeedbackEntry:
-        pass
+        def __init__(self, timestamp=None, organism=None, detail_rating=None, 
+                     helpfulness_rating=None, accuracy_rating=None, comments=None, case_id=None):
+            self.timestamp = timestamp
+            self.organism = organism
+            self.detail_rating = detail_rating
+            self.helpfulness_rating = helpfulness_rating
+            self.accuracy_rating = accuracy_rating
+            self.comments = comments
+            self.case_id = case_id
 
 # --- Tutor Initialization ---
 # Initialize tutor as None
@@ -181,13 +199,16 @@ tutor = None
 def get_tutor(model_name=None):
     """Get or create a tutor instance with the specified model."""
     global tutor
-    if tutor is None or (model_name and tutor.current_model != model_name):
+    if tutor is None:
         tutor = MedicalMicrobiologyTutor(
             output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
             run_with_faiss=config.USE_FAISS,
             reward_model_sampling=config.REWARD_MODEL_SAMPLING,
             model_name=model_name
         )
+    elif model_name and tutor.current_model != model_name:
+        # Only update the model if it's different
+        tutor.current_model = model_name
     return tutor
 
 # --- Routes ---
@@ -243,7 +264,7 @@ def chat():
         
         logging.info(f"Received user message: {message}")
 
-        # Get or create tutor instance with the specified model
+        # Get existing tutor instance or create new one if needed
         tutor = get_tutor(model_name)
 
         # The tutor.__call__ method updates its internal message list
@@ -290,7 +311,12 @@ def feedback():
             visible_history = history_from_client # Log whatever was sent if not a list
 
         # --- Get current organism ---
-        current_organism = tutor.current_organism or "Unknown"
+        # Try to get organism from tutor first
+        current_organism = None
+        if tutor is not None:
+            current_organism = tutor.current_organism
+        
+      
         case_id = data.get('case_id')
 
         if use_db:

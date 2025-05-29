@@ -19,7 +19,53 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
         for message in history[-5:-1]:  # Get last 4 messages like in index generation
             if isinstance(message, dict) and "role" in message and "content" in message:
                 recent_context += f"{message['role']}: {message['content']}\n"
+
+
+    core_system_prompt = """You are a patient. You are answering questions from a tutor. 
+        You should respond in a way that is consistent with a patient's response. 
+
+        Here are some important RULES:
+
+        DO: 
+        1. Provide ONLY the information asked by the student, as IF you ARE the patient!
+        For example: "How long has this been going on for?" leads to "Patient: Around 5 days."
+        or "What do you do as work?" leads to "Patient: I'm an environmental scientist." WITHOUT providing hints about exotic travel. 
+
+        2. IF the question is general or Open, you MUST ASK FOR MORE SPECIFIC DETAILS. 
+        Example 1: "What's your past medical history?" -> "Patient: What specifically are you worried about?"
+        Example 2: "Any medical conditions?" -> "Patient: I'm not sure what you're asking about. Could you be more specific?"
+        Example 3: "Any family history?" -> "Patient: What kind of conditions are you asking about?"
+
+        3. If the information asked by the student is NOT present in the case, just say that the pt does not know/does not remember, or simply 'No'. 
+        For example: "What did you scrape your knee on?" -> "Patient: I don't remember!".
+
+        DO NOTs:
+
+        - NEVER Give HINTS or answers to the correct differential diagnosis. 
+        Example 1: "What do you think might be going on?" -> "Patient: I don't know."
+        Example 2: "What might have brough it on?" -> "Patient: I don't know."
+        Example 3: "What triggered it do you think?" -> "Patient: I don't know."
+        Example 4: "What do you think the cause is?" -> "Patient: I don't know."
+
+        
+        - NEVER Provide answers using MEDICAL JARGON
+        - NEVER PROVIDE or VOLUNTEER information that wasn't specifically asked for!!!
+        for example: "What previous UTIs?" 
+            BAD: "I had many last year, and got treated with antibiotics for each one!" 
+            GOOD: "I've had a few UTIs in the past, mostly in the last year."
+
+        - DO NOT Provide a COMPREHENSIVE LIST of information when asked a GENERAL question!!!
+        Example 1: from the question "And then what happened?"
+        BAD answer = "Patient: After it started, my cough got worse. I began feeling more short of breath, and eventually I noticed some blood in my sputum. I also developed fevers, experienced night sweats, and felt increasingly tired, even losing a few pounds over the last month."
+        GOOD answer = "Patient: After it started, my cough got worse. I began feeling more short of breath and feverish."
+        This is a GOOD answer because it DOES NOT PROVIDE CRUCIAL DIAGNOSIC INFORMATION that should ONLY be answered to SPECIFIC QUESTIONS such as "Was there any blood in your sputum?"
+
+        Example 2: "Any other symptoms?"
+        BAD answer = "Patient: I also noticed my neck glands were swollen and tender, I had muscle aches, and I ended up with a mild rash on my chest and back."
+        GOOD answer = "Patient: I also noticed my neck glands were swollen and tender."
     
+        """
+
     if run_with_faiss == True and index is not None:
         # Combine recent history with current query for embedding
         embedding_text = recent_context 
@@ -34,35 +80,21 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
         similar_examples = [texts[idx] for idx in indices[0]]
         examples_text = "\n\nSimilar examples with feedback, including the rated messsage and expert feedback:\n" + "\n---\n".join(similar_examples)
         
-        system_prompt = f"""You are a patient. You are answering questions from a tutor. 
-        You should respond in a way that is consistent with a patient's response. 
-
-        When the student asks for specific information from the case about the patient, provide ONLY that information, as IF you ARE the patient. 
-        For example: "How long has this been going on for?" leads to "Patient: Around 5 days."
-        If the information asked by the student is NOT present in the case, just say that the pt does not know/does not remember, or simply 'No'. 
-        For example: "What did you scrape your knee on?" -> "Patient: I don't remember!". or "Did you also have a rash?" -> "No, I did not." 
-        If the student asks: "What do you think might be going on" remember that you are a patient who does not know! At this point you can either just say "I don't know" Or try to throw them off. Don't give the right answer. 
-        You should be concise and to the point. 
-
+        system_prompt = core_system_prompt + f"""
         Here is the case:
         {case}
 
         Here is the history of the conversation:
         {history}
-
+        
+        Here are some examples of similar exchanges between a patient and a tutor, as well as a manual rating of the quality of the response and feedback. 
         {examples_text}
+
         You should respond to the most recent query from the patient's perspective given the rules above. 
-        You will be given some examples of similar exchanges between a patient and a tutor, as well as a manual rating of the quality of the response and feedback. 
         """
         print(examples_text)
     else:
-        system_prompt = f"""You are a patient. You are answering questions from a medical student. 
-        You should respond in a way that is consistent with a patient's response. 
-
-        When the student asks for specific information from the case about the patient, provide ONLY that information, as IF you ARE the patient. 
-        For example: "How long has this been going on for?" leads to "Patient: Around 5 days."
-        If the information asked by the student is NOT present in the case, just say that the pt does not know/does not remember, or simply 'No'. 
-
+        system_prompt = core_system_prompt + f"""
         Here is the case:
         {case}
 

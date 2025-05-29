@@ -14,7 +14,7 @@
 
         <div class="case-setup">
             <label for="organism-select">Select Organism:</label>
-            <select id="organism-select">
+            <select id="organism-select" class="hidden-select">
                 <option value="random">Random Selection</option>
                 <optgroup label="Bacteria">
                     <option value="staphylococcus aureus">Staphylococcus aureus</option>
@@ -58,6 +58,10 @@
     <div id="feedback-modal" class="modal">
         <div class="modal-content">
             <h2>Case Feedback</h2>
+            <div class="case-summary">
+                <h3>Case Summary</h3>
+                <p>The correct organism for this case was: <strong id="correct-organism"></strong></p>
+            </div>
             <p>Please rate your experience with this case:</p>
 
             <div class="feedback-question">
@@ -66,8 +70,7 @@
                     <label><input type="radio" name="detail" value="1"> 1 (Not detailed)</label>
                     <label><input type="radio" name="detail" value="2"> 2</label>
                     <label><input type="radio" name="detail" value="3"> 3</label>
-                    <label><input type="radio" name="detail" value="4"> 4</label>
-                    <label><input type="radio" name="detail" value="5"> 5 (Very detailed)</label>
+                    <label><input type="radio" name="detail" value="4"> 4 (Very detailed)</label>
                 </div>
                 <button class="skip-btn" data-question="detail">Skip</button>
             </div>
@@ -78,8 +81,7 @@
                     <label><input type="radio" name="helpfulness" value="1"> 1 (Not helpful)</label>
                     <label><input type="radio" name="helpfulness" value="2"> 2</label>
                     <label><input type="radio" name="helpfulness" value="3"> 3</label>
-                    <label><input type="radio" name="helpfulness" value="4"> 4</label>
-                    <label><input type="radio" name="helpfulness" value="5"> 5 (Very helpful)</label>
+                    <label><input type="radio" name="helpfulness" value="4"> 4 (Very helpful)</label>
                 </div>
                 <button class="skip-btn" data-question="helpfulness">Skip</button>
             </div>
@@ -90,8 +92,7 @@
                     <label><input type="radio" name="accuracy" value="1"> 1 (Not accurate)</label>
                     <label><input type="radio" name="accuracy" value="2"> 2</label>
                     <label><input type="radio" name="accuracy" value="3"> 3</label>
-                    <label><input type="radio" name="accuracy" value="4"> 4</label>
-                    <label><input type="radio" name="accuracy" value="5"> 5 (Very accurate)</label>
+                    <label><input type="radio" name="accuracy" value="4"> 4 (Very accurate)</label>
                 </div>
                 <button class="skip-btn" data-question="accuracy">Skip</button>
             </div>

@@ -7,6 +7,7 @@ import dotenv
 import sys
 import json
 from agents.patient import run_patient
+from agents.hint import run_hint
 import re
 import pickle
 import numpy as np
@@ -14,6 +15,7 @@ import faiss
 from agents.patient import get_embedding  
 from Feedback.feedback_faiss import retrieve_similar_examples, index, texts
 import config
+from datetime import datetime
 
 
 dotenv.load_dotenv()
@@ -24,6 +26,7 @@ from llm_router import chat_complete
 # Tool mapping - only includes 'patient' now
 name_to_function_map: dict[str, Callable] = {
     "patient": run_patient,
+    "hint": run_hint,
     # "finish": finish, # Removed finish tool
 }
 
@@ -45,10 +48,10 @@ system_message_template = """You are an expert microbiology instructor running a
 [Action] is the tool you choose to solve the current problem. This should be a JSON object containing the tool name with corresponding tool input.
 [Observation] will be the result of running those actions.
 
-Note: Only use [Action] when you need to interact with the patient tool. For all other responses (including the initial presenting complaint), respond directly without using [Action].
+Note: Only use [Action] when you need to interact with the patient tool or hint tool. For all other responses (including the initial presenting complaint), respond directly without using [Action].
 
 For each iteration, you should ONLY respond with:
-1. An [Action] specifying the tool to use (only when using the patient tool)
+1. An [Action] specifying the tool to use (only when using the patient tool or hint tool)
 OR
 A direct response as the tutor
 
@@ -57,23 +60,35 @@ Available tools:
 {tool_descriptions}
 
 When the question is directed to the patient, you MUST use the patient tool.
+When the student asks for a hint or seems stuck, you should use the hint tool.
 
 Example usage:
 [User Input]: When did your fever start?
 [Action]: {{"patient": "When did your fever start?"}}
 
+[User Input]: I'm not sure what to ask next
+[Action]: {{"hint": "I'm not sure what to ask next"}}
+
 You may also respond yourself as the tutor when handling case flow (and doing anything that does not involve the patient), and your personal specifications will be provided below.
 
+
    PHASE 1: Information gathering
-    1) Start the case by providing an initial presenting complaint. This is a very short punchy first issue the patient comes in with.
-    For example: "Preceptor: A 62 year old female presents with increasing redness, swelling, and pain in her left knee."
-    Don't add any more output to this, as the student knows to ask more questions.
-    2) When the student asks for specific information from the case about the patient, route it to the patient. Then, reeport the patient agen'ts response, with the following format:
-    "Patient: <patient response>"
-    3) When the student asks for vital signs, or physical examination, or specific investigations, respond as the Tutor, providing ONLY the information asked for. For example: "What are her vital signs?" -> "Tutor: Her vital signs are ... ".
+    1) When the student asks for specific SYMPTOMS from the case about the patient, route it to the PATIENT. 
+    Example 1: "How long have you had this?" -> [Action]: {{"patient": "How long have you had this?"}}
+    Example 2: "Any past medical history?" -> [Action]: {{"patient": "Any past medical history?"}}
+    Example 3: "How long for?" -> [Action]: {{"patient": "How long for?"}}
+    Example 4: "When did it start?" -> [Action]: {{"patient": "When did it start?"}}
+    Example 5: "Any other symptoms?" -> [Action]: {{"patient": "Any other symptoms?"}}
+
+    2) When the student asks for PHYSICAL examination, VITAL signs, or INVESTIGATIONS, respond as the TUTOR, asking for CLARIFICATION!!!
+    => DO NOT PROVIDE INFORMATION THAT IS NOT ASKED FOR SPECIFICALLY!!!
+    Example 1: "What are her tests results?" -> "Tutor: What tests are you specifically asking for?"
+    Example 2: "Let's perform a physical examination?" -> "Tutor: What exactly are you looking for?"
+    Example 3: "What is her temperature?" -> "Tutor: Her temperature is [X]?"
+
 
     PHASE 2: Problem representation
-    4) When the key points from the history, vitals and the physical examination have been gathered, OR when the student starts providing differential diagnoses, ask the student to provide first a **PROBLEM REPRESENTATION**, which is essentially a diagnostically important summary of this patient's case so far that includes all the key information.
+    3) When the key points from the history, vitals and the physical examination have been gathered, OR when the student starts providing differential diagnoses, ask the student to provide first a **PROBLEM REPRESENTATION**, which is essentially a diagnostically important summary of this patient's case so far that includes all the key information.
     If the problem representation is not perfect, provide the correct one (without revealing the diagnosis) and keep going with the case.
 
     PHASE 3: Differential diagnosis reasoning
@@ -111,7 +126,12 @@ You may also respond yourself as the tutor when handling case flow (and doing an
     PHASE 8: FEEDBACK & CONCLUSION
     14) At this point, the case is over. Provide feedback on the student explaining what they did well, what they were wrong about or missed.
 
+    Here are some important RULES:
+    - NEVER REVEAL THE DIAGNOSIS TO THE STUDENT in ANY way, or even HINT at the potential correct diagnosis. 
+    - If the student asks a GENERAL questions, ask for CLARIFICATION. 
+    For example: "Show me the tests" -> "Tutor: What tests are you specifically asking for?", or "What's the physical examiation?" -> "Tutor: What specifically are you asking about?" etc. 
 
+    
     Here is the case:
     {case}
 """
@@ -162,6 +182,29 @@ class MedicalMicrobiologyTutor:
             else:
                 self.messages[0]["content"] = formatted_system_message
 
+    def _generate_initial_presentation(self):
+        """Generate the initial case presentation using a dedicated LLM call."""
+        prompt = f"""Here is a clinical case:
+        {self.case_description}
+
+        Generate a one-line initial presentation of this case.
+        Focus on the patient's demographics and chief complaint.
+        Use this exact format: "A [age]-year-old [sex] presents with [chief complaint]."
+        
+        MAKE THIS INITIAL PRESENTATION PURPOSEFULLY INCOMPLETE! You MUST NOT PROVIDE the CLICHING SYMPTOMS for the diagnosis. 
+        For example:
+        "A 72-year-old male presents with a 5-day history of productive cough and fever"
+        "A 45-year-old female presents with increasing redness, swelling, and pain in her left knee"
+
+        Keep it concise and focused on the most important presenting complaint."""
+                
+        try:
+            response = chat_complete([{"role": "user", "content": prompt}], model=self.current_model)
+            return response.strip()
+        except Exception as e:
+            print(f"Error generating initial presentation: {e}")
+            return "A patient presents for evaluation."
+
     def start_new_case(self, organism=None, force_regenerate=False):
         """Initialize a new case with the specified organism."""
         self.current_organism = organism or "staphylococcus aureus"
@@ -182,9 +225,9 @@ class MedicalMicrobiologyTutor:
         self.messages = []  # Clear messages first
         self._update_system_message()  # This will create the system message
         
-        # Get initial case presentation from the LLM
+        # Get initial case presentation using the dedicated method
         try:
-            initial_response = chat_complete(self.messages, model=self.current_model)
+            initial_response = self._generate_initial_presentation()
             # Add both the system message and initial response to history
             self.messages = [
                 {"role": "system", "content": self.messages[0]["content"]},
@@ -217,13 +260,33 @@ class MedicalMicrobiologyTutor:
             return f"Error clearing cache: {e}"
 
     def reset(self):
-        """Reset the tutor state for a new session."""
+        """Reset the tutor state for a new session. Only call this when explicitly starting a new case."""
         # Reset messages to initial state (or just clear them)
         self.messages = [{"role": "system", "content": "Initializing..."}]
         self.current_organism = None
         self.case_description = None
         self.last_user_message = ""
-        # self.history = [] # Reset history if used
+
+    # Add conversation history logging
+    CONVERSATION_LOG_FILE = 'conversation_history.txt'
+
+    def log_conversation_history(self, messages, user_input=None):
+        """Log the conversation history to a file."""
+        try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(self.CONVERSATION_LOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(f"\n{'='*50}\n")
+                f.write(f"Timestamp: {timestamp}\n")
+                if user_input:
+                    f.write(f"User Input: {user_input}\n")
+                f.write("Current Conversation History:\n")
+                for msg in messages:
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')
+                    f.write(f"{role.upper()}: {content}\n")
+                f.write(f"{'='*50}\n")
+        except Exception as e:
+            print(f"Error logging conversation history: {e}")
 
     def __call__(self, task):
         """Process a user message (task) and return the tutor's response."""
@@ -239,6 +302,9 @@ class MedicalMicrobiologyTutor:
         print(f"\n[DEBUG] User message: {message}")
 
         self.messages.append({"role": "user", "content": message})
+        
+        # Log conversation history after adding user message
+        self.log_conversation_history(self.messages, message)
 
         try:
             # First, get initial response to check if it's a tool call or direct response
@@ -277,9 +343,11 @@ class MedicalMicrobiologyTutor:
                         enhanced_messages = self.messages.copy()
                         enhanced_messages[0]["content"] = enhanced_system_content
                         
+                        print(examples_text)
                         # Get enhanced response with FAISS examples
                         response_content = chat_complete(enhanced_messages, model=self.current_model)
                         print(f"\n[DEBUG] Enhanced LLM response with FAISS: {response_content}")
+                        
                         
                     except Exception as e:
                         print(f"Warning: FAISS retrieval failed, using original response: {e}")
@@ -288,8 +356,10 @@ class MedicalMicrobiologyTutor:
                     response_content = initial_response
                 
                 self.messages.append({"role": "assistant", "content": response_content})
-                print(examples_text)
+                
 
+                # Log conversation history after adding assistant response
+                self.log_conversation_history(self.messages)
                 return response_content
             
             # Handle [Action] response (tool calls) - no FAISS enhancement since rated message would be from tool
@@ -344,6 +414,21 @@ class MedicalMicrobiologyTutor:
                         
                         # Add the patient's response to the message history
                         self.messages.append({"role": "assistant", "content": tool_result})
+                        # Log conversation history after adding patient response
+                        self.log_conversation_history(self.messages)
+                        return tool_result
+                    elif tool_name == "hint":
+                        if not self.case_description:
+                            raise ValueError("Case description is not available for the hint tool.")
+                        
+                        # Pass the current message history and case description
+                        tool_result = tool_function(tool_input, self.case_description, self.messages, model=self.current_model)
+                        print(f"\n[DEBUG] Hint tool result: {tool_result}")  # Debug log
+                        
+                        # Add the hint response to the message history
+                        self.messages.append({"role": "assistant", "content": tool_result})
+                        # Log conversation history after adding hint response
+                        self.log_conversation_history(self.messages)
                         return tool_result
                     else:
                         # Handle other tools if they are added later
@@ -358,6 +443,8 @@ class MedicalMicrobiologyTutor:
                         final_response = chat_complete(self.messages, model=self.current_model)
                         # Add this final assistant response to history
                         self.messages.append({"role": "assistant", "content": final_response})
+                        # Log conversation history after adding assistant response
+                        self.log_conversation_history(self.messages)
                         return final_response
                 else:
                     # Handle case where the requested tool is not found
@@ -365,6 +452,8 @@ class MedicalMicrobiologyTutor:
                     # Get a new response from the tutor
                     retry_response = chat_complete(self.messages, model=self.current_model)
                     self.messages.append({"role": "assistant", "content": retry_response})
+                    # Log conversation history after adding assistant response
+                    self.log_conversation_history(self.messages)
                     return retry_response
 
             except Exception as e:
@@ -372,12 +461,16 @@ class MedicalMicrobiologyTutor:
                 # Just get a new response from the tutor
                 retry_response = chat_complete(self.messages, model=self.current_model)
                 self.messages.append({"role": "assistant", "content": retry_response})
+                # Log conversation history after adding assistant response
+                self.log_conversation_history(self.messages)
                 return retry_response
 
         except Exception as e:
             print(f"Error during LLM call or processing: {e}")
             error_response = f"Sorry, an error occurred: {e}"
             self.messages.append({"role": "assistant", "content": error_response})
+            # Log conversation history after adding error response
+            self.log_conversation_history(self.messages, error_response)
             return error_response
 
 

@@ -29,10 +29,11 @@ h1 {
 .case-setup {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 15px;
     margin-bottom: 15px;
     padding-bottom: 15px;
     border-bottom: 1px solid #eee;
+    justify-content: center;
 }
 
 .case-setup label {
@@ -391,6 +392,30 @@ h1 {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+.case-summary {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border-left: 4px solid #007bff;
+}
+
+.case-summary h3 {
+    margin-top: 0;
+    color: #333;
+    font-size: 1.2em;
+}
+
+.case-summary p {
+    margin-bottom: 0;
+    color: #555;
+}
+
+#correct-organism {
+    color: #007bff;
+    font-size: 1.1em;
+}
+
 .feedback-question {
     margin-bottom: 20px;
     position: relative;
@@ -551,4 +576,17 @@ h1 {
 .case-setup select.random-selected option:checked {
     color: transparent;
     text-shadow: 0 0 0 #333;
+}
+
+/* Hide organism selection */
+.case-setup label[for="organism-select"],
+.case-setup .hidden-select,
+.case-setup #random-organism-btn {
+    display: none;
+}
+
+/* Adjust spacing for hidden elements */
+.case-setup {
+    justify-content: center;
+    gap: 15px;
 }
