@@ -4,69 +4,40 @@ load_dotenv()  # Load environment variables from .env
 import json
 import logging
 from datetime import datetime
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
-from tutor import MedicalMicrobiologyTutor # Assuming tutor.py is in the same directory
+from tutor import MedicalMicrobiologyTutor
+from agents.case import get_case
 import config
+import secrets
+
+# --- Flask App Initialization ---
+app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
 # --- Use DB flag ---
 use_db = config.USE_GLOBAL_DB or config.USE_LOCAL_DB
 
 # --- Configuration ---
 FEEDBACK_LOG_FILE = 'feedback.log'
-CASE_FEEDBACK_LOG_FILE = 'case_feedback.log'  # New log file for case feedback
-MODEL_STATE_FILE = 'model_state.json'  # File to store the selected model
+CASE_FEEDBACK_LOG_FILE = 'case_feedback.log'
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
-
-def get_current_model():
-    """Get the current model from the state file or default to config."""
-    try:
-        if os.path.exists(MODEL_STATE_FILE):
-            with open(MODEL_STATE_FILE, 'r') as f:
-                state = json.load(f)
-                selected = state.get('model', config.API_MODEL_NAME)
-                # Sync only when using the Azure backend
-                if config.LLM_BACKEND == "azure":
-                    config.API_MODEL_NAME = selected
-                return selected
-    except Exception as e:
-        logging.error(f"Error reading model state: {e}")
-    return config.API_MODEL_NAME
-
-def save_current_model(model):
-    """Save the current model to the state file."""
-    try:
-        with open(MODEL_STATE_FILE, 'w') as f:
-            json.dump({'model': model}, f)
-            # Keep config module in sync at runtime (only for Azure backend)
-            if config.LLM_BACKEND == "azure":
-                config.API_MODEL_NAME = model
-    except Exception as e:
-        logging.error(f"Error saving model state: {e}")
-
-# Global model variable initialized from state file or config
-CURRENT_MODEL = get_current_model()
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 file_handler = logging.FileHandler(FEEDBACK_LOG_FILE)
 file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-# Use a distinct logger name for feedback to avoid conflicts if tutor.py also uses logging
 feedback_logger = logging.getLogger('feedback')
 feedback_logger.addHandler(file_handler)
 feedback_logger.setLevel(logging.INFO)
-feedback_logger.propagate = False # Prevent feedback logs from appearing in the main console log
+feedback_logger.propagate = False
 
-# Setup case feedback logger
 case_feedback_handler = logging.FileHandler(CASE_FEEDBACK_LOG_FILE)
 case_feedback_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 case_feedback_logger = logging.getLogger('case_feedback')
 case_feedback_logger.addHandler(case_feedback_handler)
 case_feedback_logger.setLevel(logging.INFO)
 case_feedback_logger.propagate = False
-
-# --- Flask App Initialization ---
-app = Flask(__name__)
 
 # — Database setup —
 db = None
@@ -192,178 +163,168 @@ else:
             self.comments = comments
             self.case_id = case_id
 
-# --- Tutor Initialization ---
-# Initialize tutor as None
-tutor = None
+# --- Session-based Tutor Management ---
 
-def get_tutor(model_name=None):
-    """Get or create a tutor instance with the specified model."""
-    global tutor
-    if tutor is None:
+def get_tutor_from_session():
+    """
+    Retrieves or creates a MedicalMicrobiologyTutor instance based on session data.
+    Initializes a new tutor if no session data is found.
+    """
+    model_name_from_session = session.get('tutor_model_name', 'o3-mini') # Default to o3-mini
+
+    tutor = MedicalMicrobiologyTutor(
+        output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
+        run_with_faiss=config.USE_FAISS,
+        reward_model_sampling=config.REWARD_MODEL_SAMPLING,
+        model_name=model_name_from_session
+    )
+
+    tutor.messages = session.get('tutor_messages', [{"role": "system", "content": "Initializing..."}])
+    tutor.current_organism = session.get('tutor_current_organism', None)
+    tutor.case_description = session.get('tutor_case_description', None)
+    
+    if tutor.case_description and tutor.messages and tutor.messages[0]['content'] == "Initializing...":
+        tutor._update_system_message()
+        session['tutor_messages'] = tutor.messages
+    elif not tutor.messages: # Ensure messages list always exists
+        tutor.messages = [{"role": "system", "content": "Initializing..."}]
+        session['tutor_messages'] = tutor.messages
+
+    return tutor
+
+def save_tutor_to_session(tutor):
+    """Saves the tutor's state to the current session."""
+    session['tutor_messages'] = tutor.messages
+    session['tutor_current_organism'] = tutor.current_organism
+    session['tutor_case_description'] = tutor.case_description
+    session['tutor_model_name'] = tutor.current_model
+    session.modified = True
+
+# --- Routes ---
+@app.route('/')
+def index():
+    """Serves the main HTML page."""
+    tutor = get_tutor_from_session()
+    return render_template('index.html', current_model=tutor.current_model or 'o3-mini')
+
+@app.route('/start_case', methods=['POST'])
+def start_case():
+    """Starts a new case with the selected organism, managed in session."""
+    try:
+        data = request.get_json()
+        organism = data.get('organism')
+        model_name = 'o3-mini'  # Always use o3-mini for new cases as per current logic
+
+        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Starting new case with organism: {organism} and model: {model_name}")
+        
         tutor = MedicalMicrobiologyTutor(
             output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
             run_with_faiss=config.USE_FAISS,
             reward_model_sampling=config.REWARD_MODEL_SAMPLING,
             model_name=model_name
         )
-    elif model_name and tutor.current_model != model_name:
-        # Only update the model if it's different
-        tutor.current_model = model_name
-    return tutor
-
-# --- Routes ---
-@app.route('/')
-def index():
-    """Serves the main HTML page."""
-    # Initialize tutor with default model if not already initialized
-    global tutor
-    if tutor is None:
-        tutor = get_tutor(CURRENT_MODEL)
-    # Don't reset the tutor here - it clears the case context!
-    # The reset should only happen when explicitly starting a new case
-    return render_template('index.html', current_model=CURRENT_MODEL)
-
-@app.route('/start_case', methods=['POST'])
-def start_case():
-    """Starts a new case with the selected organism."""
-    global CURRENT_MODEL, tutor
-    try:
-        data = request.get_json()
-        organism = data.get('organism')
-        model_name = 'o3-mini'  # Always use o3-mini
-        
-        logging.info(f"Starting new case with organism: {organism} and model: {model_name}")
-        
-        if model_name != CURRENT_MODEL:
-            CURRENT_MODEL = model_name
-            save_current_model(CURRENT_MODEL)
-            if config.LLM_BACKEND == "azure":
-                config.API_MODEL_NAME = CURRENT_MODEL  # keep config in sync
-        
-        # Get or create tutor instance with the specified model
-        tutor = get_tutor(CURRENT_MODEL)
             
         initial_message = tutor.start_new_case(organism=organism)
-        # The tutor's messages list now contains the system prompt and the first assistant message
+        save_tutor_to_session(tutor) # Save the new tutor state to session
+        
         return jsonify({
             "initial_message": initial_message,
-            "history": tutor.messages  # Send initial history
+            "history": tutor.messages
         })
     except Exception as e:
-        logging.error(f"Error starting case: {e}", exc_info=True)
+        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error starting case: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    """Handles incoming chat messages from the user."""
-    global tutor
+    """Handles incoming chat messages from the user, using session-based tutor."""
     try:
         data = request.get_json()
-        message = data.get('message')
-        history = data.get('history')  # Get the history from the request
-        
-        # Handle history sync request
-        if message == "SYNC_HISTORY" and history:
-            if tutor is not None:
-                # Update tutor's message history
-                tutor.messages = history
-                return jsonify({"status": "History synced successfully"})
-            return jsonify({"error": "Tutor not initialized"}), 400
-            
-        model_name = 'o3-mini'  # Always use o3-mini
-        
-        logging.info(f"Received user message: {message}")
+        message_text = data.get('message')
+        client_history = data.get('history')
+        client_organism_key = data.get('organism_key')
 
-        # Get existing tutor instance or create new one if needed
-        tutor = get_tutor(model_name)
-        
-        # Check if tutor has lost its case context (e.g., after server restart)
-        if (tutor.case_description is None or 
-            len(tutor.messages) <= 1 or 
-            tutor.messages[0]["content"] == "Initializing..."):
+        tutor = get_tutor_from_session()
+
+        # Enhanced recovery logic
+        if not tutor.case_description and client_history and len(client_history) > 0:
+            logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Chat attempt with empty session case. Client history length: {len(client_history)}. Attempting recovery.")
             
-            logging.warning("Tutor has lost case context, attempting to recover from client history")
+            recovered_organism_key_for_get_case = None
+
+            if client_organism_key:
+                logging.info(f"Session {session.sid if session.sid else 'unknown'}: Using organism_key '{client_organism_key}' directly from client request for recovery.")
+                recovered_organism_key_for_get_case = client_organism_key
+            else:
+                logging.info(f"Session {session.sid if session.sid else 'unknown'}: client_organism_key not provided. Attempting to parse from system message.")
+                system_message_from_client = next((msg for msg in client_history if msg.get("role") == "system" and "Initializing..." not in msg.get("content","") ), None)
+                if system_message_from_client:
+                    content_lines = system_message_from_client.get("content", "").split('\n')
+                    if content_lines:
+                        first_line = content_lines[0].strip()
+                        if first_line.startswith("# CLINICAL CASE:") and "INFECTION" in first_line.upper():
+                            try:
+                                organism_name_part = first_line.split(":")[1].replace("INFECTION", "", 1).strip()
+                                temp_key = organism_name_part.lower().replace(" ", "_")
+                                if "(malaria)" in temp_key:
+                                    temp_key = temp_key.replace("(malaria)","").strip()
+                                recovered_organism_key_for_get_case = temp_key
+                                logging.info(f"Session {session.sid if session.sid else 'unknown'}: Tentatively recovered organism key '{recovered_organism_key_for_get_case}' from system message.")
+                            except IndexError:
+                                logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Could not parse organism from system message line: {first_line}")
             
-            if history and len(history) > 1:
-                # Try to recover the case context from the history
-                # Look for the system message with case content
-                for msg in history:
-                    if msg.get("role") == "system" and "case" in msg.get("content", "").lower() and msg.get("content") != "Initializing...":
-                        # Found a system message with case content
-                        tutor.messages = history
-                        
-                        # Extract the case description from the system message
-                        content = msg.get("content", "")
-                        # The case is usually after "Here is the case:" in the system message
-                        case_marker = "Here is the case:"
-                        if case_marker in content:
-                            case_start = content.find(case_marker) + len(case_marker)
-                            tutor.case_description = content[case_start:].strip()
-                        
-                        # Extract organism from system message if possible
-                        # This is a simple heuristic - you might need to adjust based on your case format
-                        if "organism:" in content.lower():
-                            # Try to extract organism name
-                            start = content.lower().find("organism:") + 9
-                            end = content.find("\n", start)
-                            if end == -1:
-                                end = len(content)
-                            organism_guess = content[start:end].strip()
-                            tutor.current_organism = organism_guess
-                        
-                        # Also try to extract organism from case description
-                        if tutor.case_description and not tutor.current_organism:
-                            # Look for common organism mentions in the case
-                            case_lower = tutor.case_description.lower()
-                            for organism in ["staphylococcus aureus", "streptococcus pneumoniae", "escherichia coli", 
-                                           "clostridium difficile", "mycobacterium tuberculosis"]:
-                                if organism in case_lower:
-                                    tutor.current_organism = organism
-                                    break
-                        
-                        logging.info(f"Recovered case context from client history. Organism: {tutor.current_organism}")
-                        break
+            if recovered_organism_key_for_get_case:
+                canonical_case_description = get_case(recovered_organism_key_for_get_case)
+                if canonical_case_description:
+                    logging.info(f"Session {session.sid if session.sid else 'unknown'}: Successfully fetched canonical case for '{recovered_organism_key_for_get_case}'.")
+                    tutor.current_organism = recovered_organism_key_for_get_case 
+                    tutor.case_description = canonical_case_description
+                    tutor.messages = client_history
+                    tutor._update_system_message() 
+                    save_tutor_to_session(tutor)
+                    logging.info(f"Session {session.sid if session.sid else 'unknown'}: Tutor state successfully recovered and saved.")
                 else:
-                    # Couldn't find case in history, return error
-                    return jsonify({
-                        "error": "Case context lost. Please start a new case.",
-                        "needs_new_case": True
-                    }), 400
+                    logging.error(f"Session {session.sid if session.sid else 'unknown'}: Failed to fetch canonical case for '{recovered_organism_key_for_get_case}'. Aborting recovery.")
+                    return jsonify({"error": "Could not fully restore session. Please start a new case.", "needs_new_case": True}), 400
+            else:
+                logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Could not determine organism for recovery.")
+                return jsonify({"error": "No active case. Please start a new case.", "needs_new_case": True}), 400
+        
+        elif not tutor.case_description: 
+             logging.warning(f"Session {session.sid if session.sid else 'unknown'}: Chat attempt without active case.")
+             return jsonify({"error": "No active case. Please start a new case.", "needs_new_case": True}), 400
 
-        # The tutor.__call__ method updates its internal message list
-        response = tutor(message)
-
-        logging.info(f"Sending tutor response: {response}")
+        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Received user message: {message_text}")
+        response_content = tutor(message_text)
+        save_tutor_to_session(tutor)
+        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Sending tutor response: {response_content}")
 
         return jsonify({
-            "response": response,
-            "history": tutor.messages  # Send the full updated history
+            "response": response_content,
+            "history": tutor.messages
         })
     except Exception as e:
-        logging.error(f"Error during chat processing: {e}", exc_info=True)
+        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error during chat processing: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/feedback', methods=['POST'])
 def feedback():
-    """Receives and logs feedback from the user."""
+    """Receives and logs feedback, associating with session's organism if available."""
     try:
         data = request.get_json()
-        rating = data.get('rating') # '1'-'5'
-        message = data.get('message') # The specific assistant message being rated
-        history_from_client = data.get('history') # Full chat history [{role: ..., content: ...}, ...] from client at time of feedback
-        feedback_text = data.get('feedback_text', '') # Optional text
-        replacement_text = data.get('replacement_text', '') # New: user's preferred response
+        rating = data.get('rating')
+        message_content = data.get('message') # The specific assistant message being rated
+        history_from_client = data.get('history')
+        feedback_text = data.get('feedback_text', '')
+        replacement_text = data.get('replacement_text', '')
+        case_id_from_client = data.get('case_id') # case_id is client-generated
 
-        if not rating or not message or history_from_client is None: # Check history presence
+        if not rating or not message_content or history_from_client is None:
              return jsonify({"error": "Missing feedback data (rating, message, or history)"}), 400
 
-        # --- Filter the history ---
-        # Keep only the content of user and assistant messages for logging clarity
         visible_history = []
         if isinstance(history_from_client, list):
             for msg in history_from_client:
-                # Include only user messages and final assistant responses in the log
-                # Exclude system prompts, observations, etc.
                 if isinstance(msg, dict) and msg.get('role') in ['user', 'assistant']:
                     visible_history.append({
                         "role": msg.get('role'),
@@ -371,99 +332,99 @@ def feedback():
                     })
         else:
             logging.warning("Received history is not a list, logging as is.")
-            visible_history = history_from_client # Log whatever was sent if not a list
+            visible_history = history_from_client
 
-        # --- Get current organism ---
-        # Try to get organism from tutor first
-        current_organism = None
-        if tutor is not None:
-            current_organism = tutor.current_organism
-        
-      
-        case_id = data.get('case_id')
+        tutor = get_tutor_from_session() # Get tutor to access current_organism
 
         if use_db:
             entry = FeedbackEntry(
                 timestamp=datetime.utcnow(),
-                organism=current_organism,
+                organism=tutor.current_organism, # From session
                 rating=rating,
-                rated_message=message,
+                rated_message=message_content,
                 feedback_text=feedback_text,
                 replacement_text=replacement_text,
-                chat_history=visible_history,
-                case_id=case_id
+                chat_history=visible_history, # Log client's view of history at feedback time
+                case_id=case_id_from_client
             )
             db.session.add(entry)
             db.session.commit()
         else:
-            # Fallback to file logging
             log_entry = {
                 "timestamp": datetime.now().isoformat(),
-                "organism": current_organism,
+                "organism": tutor.current_organism, # From session
                 "rating": rating,
-                "rated_message": message,
+                "rated_message": message_content,
                 "feedback_text": feedback_text,
                 "replacement_text": replacement_text,
-                "case_id": case_id,
+                "case_id": case_id_from_client,
                 "visible_chat_history": visible_history,
+                "session_id": session.sid if session.sid else 'unknown'
             }
             feedback_logger.info(json.dumps(log_entry, indent=2))
 
-        logging.info(f"Received feedback: {rating}/5 for message snippet: '{message[:50]}...' (Organism: {current_organism})")
+        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Received feedback: {rating}/5 for message snippet: '{message_content[:50]}...' (Organism: {tutor.current_organism})")
+        # If replacement text is provided, the client already appends it and the next /chat call will sync the history
         return jsonify({"status": "Feedback received"}), 200
     except Exception as e:
-        logging.error(f"Error processing feedback: {e}", exc_info=True)
+        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error processing feedback: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/case_feedback', methods=['POST'])
 def case_feedback():
-    """Receives and logs overall case feedback from the user."""
+    """Receives and logs overall case feedback, associating with session's organism."""
     try:
         data = request.get_json()
         detail_rating = data.get('detail')
         helpfulness_rating = data.get('helpfulness')
         accuracy_rating = data.get('accuracy')
         comments = data.get('comments', '')
-        case_id = data.get('case_id')
+        case_id_from_client = data.get('case_id')
         
         if not all([detail_rating, helpfulness_rating, accuracy_rating]):
             return jsonify({"error": "Missing required feedback ratings"}), 400
             
-        # Get current organism
-        current_organism = tutor.current_organism or "Unknown"
+        tutor = get_tutor_from_session()
+        current_organism_for_log = tutor.current_organism or "Unknown"
 
         if use_db:
             entry = CaseFeedbackEntry(
                 timestamp=datetime.utcnow(),
-                organism=current_organism,
+                organism=current_organism_for_log, # From session
                 detail_rating=detail_rating,
                 helpfulness_rating=helpfulness_rating,
                 accuracy_rating=accuracy_rating,
                 comments=comments,
-                case_id=case_id
+                case_id=case_id_from_client
             )
             db.session.add(entry)
             db.session.commit()
         else:
-            # Fallback to file logging
             log_entry = {
                 "timestamp": datetime.now().isoformat(),
-                "organism": current_organism,
+                "organism": current_organism_for_log, # From session
                 "detail_rating": detail_rating,
                 "helpfulness_rating": helpfulness_rating,
                 "accuracy_rating": accuracy_rating,
                 "comments": comments,
-                "case_id": case_id
+                "case_id": case_id_from_client,
+                "session_id": session.sid if session.sid else 'unknown'
             }
             case_feedback_logger.info(json.dumps(log_entry, indent=2))
         
-        logging.info(f"Received case feedback for {current_organism} case - Detail: {detail_rating}/5, Helpfulness: {helpfulness_rating}/5, Accuracy: {accuracy_rating}/5")
+        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Received case feedback for {current_organism_for_log} case - Detail: {detail_rating}/5, Helpfulness: {helpfulness_rating}/5, Accuracy: {accuracy_rating}/5")
+        # After case feedback, typically the session might be cleared or reset for a new case.
+        # For now, let's just clear the tutor related parts of the session.
+        session.pop('tutor_messages', None)
+        session.pop('tutor_current_organism', None)
+        session.pop('tutor_case_description', None)
+        session.pop('tutor_model_name', None)
+        logging.info(f"Session {session.sid if session.sid else 'unknown'}: Tutor state cleared from session after case feedback.")
+
         return jsonify({"status": "Case feedback received"}), 200
     except Exception as e:
-        logging.error(f"Error processing case feedback: {e}", exc_info=True)
+        logging.error(f"Session {session.sid if session.sid else 'unknown'}: Error processing case feedback: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
-
-
 
 # --- Admin Feedback Route ---
 @app.route('/admin/feedback')
@@ -498,13 +459,11 @@ def admin_feedback():
     )
     return html
 
-
 @app.cli.command("shell")
 def shell():
     """Run a Flask interactive shell with app context."""
     import code
     code.interact(local=dict(globals(), **locals()))
-
 
 if __name__ == '__main__':
     import config

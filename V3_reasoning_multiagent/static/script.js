@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
     let currentCaseId = null; // Store the current case ID
+    let currentOrganismKey = null; // <-- Add this global variable
 
     // Function to generate a unique case ID
     function generateCaseId() {
@@ -257,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Generate new case ID for this session
+        currentOrganismKey = selectedOrganism; // <-- Store the organism key
         currentCaseId = generateCaseId();
 
         setStatus('Starting new case...');
@@ -271,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    organism: selectedOrganism,
+                    organism: currentOrganismKey, // Use the stored key
                     case_id: currentCaseId,
                     model: 'o3-mini'  // Always use o3-mini
                 }),
@@ -299,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Keep input disabled if start fails
             disableInput(true);
             finishBtn.disabled = true; // Keep finish button disabled on error
+            currentOrganismKey = null; // Clear on error too
         } finally {
             // Re-enable start button regardless of success/failure to allow retries/new cases
             startCaseBtn.disabled = false;
@@ -311,18 +313,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!message) return;
 
         addMessage('user', message);
-        chatHistory.push({ role: 'user', content: message }); // Update local history
-        userInput.value = ''; // Clear input field
-        disableInput(true); // Disable input while waiting for response
+        chatHistory.push({ role: 'user', content: message });
+        userInput.value = '';
+        disableInput(true);
 
         try {
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Send both the message and current history for server sync
                 body: JSON.stringify({
                     message: message,
-                    history: chatHistory  // Include full history for server to sync if needed
+                    history: chatHistory,
+                    organism_key: currentOrganismKey // <-- Send the stored organism key
                 }),
             });
 
@@ -435,6 +437,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     userInput.disabled = true;
                     sendBtn.disabled = true;
                     finishBtn.disabled = true;
+                    currentOrganismKey = null; // <-- Clear here too when case ends
+                    chatHistory = []; // Also clear history for a truly new start
                 }
             })
             .catch(error => {
