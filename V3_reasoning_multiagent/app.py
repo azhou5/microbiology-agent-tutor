@@ -288,7 +288,8 @@ def start_case():
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    """Handles incoming chat messages from the user, reconstructing tutor state largely from client data."""
+    chat_start_time = datetime.now()
+    logging.info(f"[CHAT_PERF] /chat route started at {chat_start_time}")
     try:
         data = request.get_json()
         message_text = data.get('message')
@@ -296,46 +297,45 @@ def chat():
         client_organism_key = data.get('organism_key')
         client_case_id = data.get('case_id') # Added to receive case_id
 
+        get_tutor_start_time = datetime.now()
         tutor = get_tutor_from_session() # Gets model_name, and potentially stale current_organism
+        logging.info(f"[CHAT_PERF] get_tutor_from_session took: {datetime.now() - get_tutor_start_time}")
         
         active_case_id = client_case_id or session.get('current_case_id')
         if not active_case_id:
             logging.warning(f"Chat attempt without active case_id. (Session new: {session.new})")
             return jsonify({"error": "No active case ID. Please start a new case.", "needs_new_case": True}), 400
 
-        # Prioritize client_organism_key for setting the current organism
         if client_organism_key:
             tutor.current_organism = client_organism_key
-        elif not tutor.current_organism: # If no organism from session and none from client
+        elif not tutor.current_organism:
             logging.warning(f"Chat attempt without any organism key. (Session new: {session.new})")
             return jsonify({"error": "No active case. Organism key missing. Please start a new case.", "needs_new_case": True}), 400
         
-        # Load case description if we have an organism but no description loaded on the tutor object yet
+        case_load_start_time = datetime.now()
         if tutor.current_organism and not tutor.case_description:
             tutor.case_description = get_case(tutor.current_organism)
             if not tutor.case_description:
                 logging.error(f"Failed to fetch canonical case for '{tutor.current_organism}' during chat. (Session new: {session.new})")
                 return jsonify({"error": f"Could not load case details for {tutor.current_organism}. Please try starting a new case.", "needs_new_case": True}), 400
-        elif not tutor.case_description: # Still no case description (e.g., organism key was missing or get_case failed)
+        elif not tutor.case_description:
              logging.warning(f"Chat attempt without active case (case description missing for organism '{tutor.current_organism}'). (Session new: {session.new})")
              return jsonify({"error": "No active case. Please start a new case.", "needs_new_case": True}), 400
+        logging.info(f"[CHAT_PERF] Case description loading/check took: {datetime.now() - case_load_start_time}")
 
-        # Use client_history to populate tutor.messages
-        if client_history and isinstance(client_history, list): # len(client_history) > 0 can be implied if system message always exists
+        if client_history and isinstance(client_history, list):
             tutor.messages = client_history
         else:
-            # If client history is missing or invalid, ensure a basic structure for messages
-            # This might indicate a problem on the client side or an unusual request sequence.
             logging.warning(f"Client history not provided or invalid in /chat for organism {tutor.current_organism}. Re-initializing messages. (Session new: {session.new})")
             tutor.messages = [{"role": "system", "content": "Initializing..."}]
 
-        # Always update the system message after setting case_description and messages
-        # This ensures the system prompt within tutor.messages[0] is correct.
+        update_system_msg_start_time = datetime.now()
         tutor._update_system_message()
+        logging.info(f"[CHAT_PERF] _update_system_message took: {datetime.now() - update_system_msg_start_time}")
 
         logging.info(f"Received user message: {message_text} for organism {tutor.current_organism} (Session new: {session.new}, Case ID: {active_case_id})")
         
-        # Log user message before calling tutor
+        db_log_user_start_time = datetime.now()
         if db:
             try:
                 user_log_entry = ConversationLog(
@@ -349,10 +349,13 @@ def chat():
             except Exception as e:
                 db.session.rollback()
                 logging.error(f"Error logging user message to DB for case_id {active_case_id}: {e}", exc_info=True)
+        logging.info(f"[CHAT_PERF] DB log (user) took: {datetime.now() - db_log_user_start_time}")
 
-        response_content = tutor(message_text) # tutor() appends user message to its messages and gets response
+        tutor_call_start_time = datetime.now()
+        response_content = tutor(message_text)
+        logging.info(f"[CHAT_PERF] tutor(message_text) full call took: {datetime.now() - tutor_call_start_time}")
         
-        # Log assistant response
+        db_log_assistant_start_time = datetime.now()
         if db:
             try:
                 assistant_log_entry = ConversationLog(
@@ -366,14 +369,18 @@ def chat():
             except Exception as e:
                 db.session.rollback()
                 logging.error(f"Error logging assistant message to DB for case_id {active_case_id}: {e}", exc_info=True)
+        logging.info(f"[CHAT_PERF] DB log (assistant) took: {datetime.now() - db_log_assistant_start_time}")
 
-        save_tutor_to_session(tutor) # Saves only minimal state (organism, model_name)
+        save_session_start_time = datetime.now()
+        save_tutor_to_session(tutor)
+        logging.info(f"[CHAT_PERF] save_tutor_to_session took: {datetime.now() - save_session_start_time}")
         
         logging.info(f"Sending tutor response for organism {tutor.current_organism} (Session new: {session.new}, Case ID: {active_case_id})")
+        logging.info(f"[CHAT_PERF] /chat route completed in: {datetime.now() - chat_start_time}")
 
         return jsonify({
             "response": response_content,
-            "history": tutor.messages # Return the full, updated history to the client
+            "history": tutor.messages
         })
     except Exception as e:
         logging.error(f"Error during chat processing: {e} (Session new: {session.new})", exc_info=True)

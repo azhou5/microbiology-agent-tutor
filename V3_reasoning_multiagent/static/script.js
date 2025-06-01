@@ -7,10 +7,98 @@ document.addEventListener('DOMContentLoaded', () => {
     const randomOrganismBtn = document.getElementById('random-organism-btn');
     const statusMessage = document.getElementById('status-message');
     const finishBtn = document.getElementById('finish-btn');
+    const feedbackModal = document.getElementById('feedback-modal');
+    const closeFeedbackBtn = document.getElementById('close-feedback-btn');
+    const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
+    const correctOrganismSpan = document.getElementById('correct-organism');
 
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
     let currentCaseId = null; // Store the current case ID
-    let currentOrganismKey = null; // <-- Add this global variable
+    let currentOrganismKey = null;
+
+    const LOCAL_STORAGE_HISTORY_KEY = 'microbiologyTutorChatHistory';
+    const LOCAL_STORAGE_CASE_ID_KEY = 'microbiologyTutorCaseId';
+    const LOCAL_STORAGE_ORGANISM_KEY = 'microbiologyTutorOrganismKey';
+
+    function saveConversationState() {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(chatHistory));
+            localStorage.setItem(LOCAL_STORAGE_CASE_ID_KEY, currentCaseId);
+            if (currentOrganismKey) { // Only save if not null
+                localStorage.setItem(LOCAL_STORAGE_ORGANISM_KEY, currentOrganismKey);
+            }
+        } catch (e) {
+            console.error("Error saving conversation state to localStorage:", e);
+            setStatus("Could not save conversation. Your browser might be blocking localStorage or it's full.", true);
+        }
+    }
+
+    function loadConversationState() {
+        try {
+            const savedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
+            const savedCaseId = localStorage.getItem(LOCAL_STORAGE_CASE_ID_KEY);
+            const savedOrganismKey = localStorage.getItem(LOCAL_STORAGE_ORGANISM_KEY);
+
+            if (savedHistory && savedCaseId && savedOrganismKey) {
+                chatHistory = JSON.parse(savedHistory);
+                currentCaseId = savedCaseId;
+                currentOrganismKey = savedOrganismKey;
+
+                if (chatHistory.length > 0) {
+                    chatbox.innerHTML = ''; // Clear any default messages
+                    chatHistory.forEach(msg => {
+                        // For assistant messages, determine if feedback UI should be re-added.
+                        // This is tricky, as feedback state isn't saved. For simplicity,
+                        // re-add feedback UI for all past assistant messages, assuming it wasn't submitted.
+                        // Or, choose not to re-add interactive feedback UI for reloaded messages.
+                        // For now, let's re-add it for consistency, user can ignore if already submitted.
+                        if (msg.role !== 'system') {
+                            addMessage(msg.role, msg.content, msg.role === 'assistant');
+                        }
+                    });
+                    disableInput(false); // Enable input fields
+                    finishBtn.disabled = false; // Enable finish button
+                    setStatus(`Resumed case. Case ID: ${currentCaseId}`);
+
+                    // Try to reflect the loaded organism in the select (if it's still part of the UI)
+                    if (organismSelect) {
+                        // First, ensure the 'random' option isn't mistakenly selected
+                        if (organismSelect.value === 'random' && currentOrganismKey !== 'random') {
+                            const allOptions = getAllOptions();
+                            const matchedOption = allOptions.find(opt => opt.value === currentOrganismKey);
+                            if (matchedOption) {
+                                organismSelect.value = currentOrganismKey;
+                                // Visually deselect 'random' button if it exists and was active
+                                if (randomOrganismBtn && randomOrganismBtn.classList.contains('active')) {
+                                    randomOrganismBtn.classList.remove('active');
+                                    organismSelect.classList.remove('random-selected');
+                                }
+                            }
+                        } else if (organismSelect.value !== currentOrganismKey) {
+                            organismSelect.value = currentOrganismKey; // if it's a direct match
+                        }
+                    }
+                    return true; // Indicate state was loaded
+                }
+            }
+        } catch (e) {
+            console.error("Error loading conversation state from localStorage:", e);
+            setStatus("Could not load previous conversation. Starting fresh.", true);
+            clearConversationState(); // Clear potentially corrupted state
+        }
+        return false; // Indicate no state was loaded
+    }
+
+    function clearConversationState() {
+        try {
+            localStorage.removeItem(LOCAL_STORAGE_HISTORY_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_CASE_ID_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_ORGANISM_KEY);
+            console.log("Conversation state cleared from localStorage.");
+        } catch (e) {
+            console.error("Error clearing conversation state from localStorage:", e);
+        }
+    }
 
     // Function to generate a unique case ID
     function generateCaseId() {
@@ -130,7 +218,13 @@ document.addEventListener('DOMContentLoaded', () => {
             submitButton.addEventListener('click', async () => {
                 const feedbackText = document.getElementById(`feedback-text-${messageDiv.id}`).value;
                 const replacementText = document.getElementById(`replacement-text-${messageDiv.id}`).value;
-                const rating = ratingButtonsDiv.querySelector('.rated').dataset.rating;
+                const ratingElement = ratingButtonsDiv.querySelector('.rated');
+
+                if (!ratingElement) {
+                    setStatus('Please select a rating first.', true);
+                    return;
+                }
+                const rating = ratingElement.dataset.rating;
 
                 // Allow empty feedback text
                 // if (!feedbackText.trim()) {
@@ -222,7 +316,11 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = disabled;
         sendBtn.disabled = disabled;
         // Don't disable the finish button here, as we want to control it separately
-        statusMessage.textContent = disabled ? 'Processing...' : '';
+        if (disabled && !statusMessage.textContent.includes("Error")) { // only show processing if not an error
+            setStatus('Processing...');
+        } else if (!disabled && statusMessage.textContent === 'Processing...') {
+            setStatus('');
+        }
     }
 
     // Function to get all options from the select element (excluding the random option)
@@ -244,86 +342,118 @@ document.addEventListener('DOMContentLoaded', () => {
         const options = getAllOptions();
         if (options.length === 0) return;
 
+        // Clear any visual indication of a specific selection
+        organismSelect.value = 'random'; // Set dropdown to "Random Selection"
+        organismSelect.classList.add('random-selected'); // Style for random
+        randomOrganismBtn.classList.add('active'); // Style button as active
+
         const randomIndex = Math.floor(Math.random() * options.length);
         const randomOption = options[randomIndex];
 
         // Store the random selection in a data attribute
-        organismSelect.dataset.randomSelection = randomOption.value;
+        organismSelect.dataset.randomlySelectedValue = randomOption.value;
+        organismSelect.dataset.randomlySelectedText = randomOption.textContent;
 
-        // Set the dropdown to show "Random Selection"
-        organismSelect.value = "random";
-
-        // Show a generic message
-        setStatus("Random organism selected. Click 'Start New Case' to begin.", false);
+        // Update the button text to show the randomly selected organism
+        randomOrganismBtn.textContent = `Random: ${randomOption.textContent}`;
     }
 
-    // Modify the start case handler to use the random selection if needed
+    if (randomOrganismBtn) {
+        randomOrganismBtn.addEventListener('click', selectRandomOrganism);
+    }
+
+    // Initialize random selection on page load if "Random Selection" is default
+    if (organismSelect && organismSelect.value === 'random') {
+        selectRandomOrganism(); // Make an initial random selection
+    }
+
+    // Event listener for organism select change
+    if (organismSelect) {
+        organismSelect.addEventListener('change', () => {
+            if (organismSelect.value !== 'random') {
+                // If a specific organism is chosen, deselect the random button
+                if (randomOrganismBtn) {
+                    randomOrganismBtn.classList.remove('active');
+                    randomOrganismBtn.textContent = 'Random Selection'; // Reset button text
+                }
+                organismSelect.classList.remove('random-selected');
+                delete organismSelect.dataset.randomlySelectedValue; // Clear stored random value
+                delete organismSelect.dataset.randomlySelectedText;
+            } else {
+                // If "Random Selection" is chosen again, trigger random selection
+                selectRandomOrganism();
+            }
+        });
+    }
+
     async function handleStartCase() {
-        // Always select a random organism
-        selectRandomOrganism();
-        let selectedOrganism = organismSelect.dataset.randomSelection;
+        clearConversationState(); // Clear any previous persisted state when starting a new case.
+        chatHistory = [];
+        chatbox.innerHTML = ''; // Clear chatbox
+        currentCaseId = generateCaseId(); // Generate a new case ID for each new case
 
-        if (!selectedOrganism) {
-            setStatus('Error selecting random organism. Please try again.', true);
+        let selectedOrganism = organismSelect.value;
+        if (selectedOrganism === 'random' && organismSelect.dataset.randomlySelectedValue) {
+            selectedOrganism = organismSelect.dataset.randomlySelectedValue;
+            setStatus(`Starting new randomly selected case...`);
+        } else if (selectedOrganism === 'random') {
+            setStatus('Please select an organism or use "Random Selection" to pick one.', true);
             return;
+        } else {
+            setStatus(`Starting new case...`);
         }
+        currentOrganismKey = selectedOrganism; // Set the global currentOrganismKey
 
-        currentOrganismKey = selectedOrganism; // <-- Store the organism key
-        currentCaseId = generateCaseId();
-
-        setStatus('Starting new case...');
-        startCaseBtn.disabled = true;
-        organismSelect.disabled = true;
-        chatbox.innerHTML = ''; // Clear previous chat
-        chatHistory = []; // Reset history
+        disableInput(true);
+        finishBtn.disabled = true; // Disable finish button until case starts
 
         try {
             const response = await fetch('/start_case', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    organism: currentOrganismKey, // Use the stored key
-                    case_id: currentCaseId,
-                    model: 'o3-mini'  // Always use o3-mini
-                }),
+                body: JSON.stringify({ organism: currentOrganismKey, case_id: currentCaseId }),
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                const err = await response.json();
+                throw new Error(err.error || `HTTP ${response.status}`);
             }
 
             const data = await response.json();
-            chatHistory = data.history || []; // Initialize history from server
-            if (data.initial_message) {
-                addMessage('assistant', data.initial_message, true);
-            } else {
-                setStatus('Received empty initial message from server.', true);
+            if (data.error) {
+                throw new Error(data.error);
             }
-            disableInput(false); // Enable chat input
-            finishBtn.disabled = false; // Enable the finish button
-            setStatus('Case started. You can now chat.');
 
+            chatHistory = data.history || []; // Initialize with history from server (includes system prompt)
+
+            // The initial message is already part of the history from the server
+            // So, we just need to render the history
+            chatbox.innerHTML = ''; // Clear previous messages if any (e.g. "Processing...")
+            chatHistory.forEach(msg => {
+                if (msg.role !== 'system') {
+                    addMessage(msg.role, msg.content, msg.role === 'assistant');
+                }
+            });
+
+            setStatus(`Case started. Case ID: ${currentCaseId}`);
+            disableInput(false);
+            finishBtn.disabled = false; // Enable finish button now
+            saveConversationState(); // Save state after successful start
         } catch (error) {
-            console.error('Error starting case:', error);
-            setStatus(`Error starting case: ${error.message}`, true);
-            // Keep input disabled if start fails
-            disableInput(true);
-            finishBtn.disabled = true; // Keep finish button disabled on error
-            currentOrganismKey = null; // Clear on error too
-        } finally {
-            // Re-enable start button regardless of success/failure to allow retries/new cases
-            startCaseBtn.disabled = false;
-            organismSelect.disabled = false;
+            console.error(error);
+            setStatus(`Error: ${error.message}`, true);
+            disableInput(false); // Re-enable input if start fails
+            currentOrganismKey = null; // Reset organism key on failure
+            currentCaseId = null; // Reset case ID
         }
     }
 
     async function handleSendMessage() {
-        const message = userInput.value.trim();
-        if (!message) return;
+        const messageText = userInput.value.trim();
+        if (!messageText) return;
 
-        addMessage('user', message);
-        chatHistory.push({ role: 'user', content: message });
+        addMessage('user', messageText);
+        chatHistory.push({ role: 'user', content: messageText });
         userInput.value = '';
         disableInput(true);
 
@@ -332,160 +462,173 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: message,
+                    message: messageText,
                     history: chatHistory,
-                    organism_key: currentOrganismKey, // <-- Send the stored organism key
-                    case_id: currentCaseId // <-- Send the current case ID
+                    organism_key: currentOrganismKey,
+                    case_id: currentCaseId
                 }),
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                const errData = await response.json();
+                if (errData.needs_new_case) {
+                    setStatus("Session expired or case mismatch. Please start a new case.", true);
+                    disableInput(true); // Keep disabled
+                    finishBtn.disabled = true;
+                    clearConversationState(); // Clear invalid state
+                } else {
+                    throw new Error(errData.error || `HTTP ${response.status}`);
+                }
+                return; // Stop processing if needs_new_case or other error
             }
 
             const data = await response.json();
-            chatHistory = data.history || chatHistory; // Update history from server response
-            addMessage('assistant', data.response, true);
-            setStatus(''); // Clear status
+            if (data.error) { // Handle application-specific errors from /chat
+                throw new Error(data.error);
+            }
 
+            addMessage('assistant', data.response, true); // Add feedback UI for assistant messages
+            chatHistory = data.history; // Update history with the full history from server
+
+            disableInput(false);
+            setStatus(''); // Clear "Processing..."
+            saveConversationState(); // Save state after successful message exchange
         } catch (error) {
-            console.error('Error sending message:', error);
-            addMessage('system', `Error: ${error.message}`); // Show error in chat
+            console.error(error);
             setStatus(`Error: ${error.message}`, true);
-        } finally {
-            disableInput(false); // Re-enable input
+            disableInput(false); // Keep disabled on error to prevent further input until resolved or new case.
+            // Or, re-enable if you want user to be able to try again: enableInput(false);
         }
     }
 
-    // --- Event Listeners ---
-    startCaseBtn.addEventListener('click', handleStartCase);
-    sendBtn.addEventListener('click', handleSendMessage);
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !sendBtn.disabled) {
-            handleSendMessage();
-        }
-    });
+    if (startCaseBtn) {
+        startCaseBtn.addEventListener('click', handleStartCase);
+    }
 
-    // Initial state
-    setStatus('Select an organism and click "Start New Case".');
+    if (sendBtn) {
+        sendBtn.addEventListener('click', handleSendMessage);
+    }
 
-    // Feedback modal elements
-    const feedbackModal = document.getElementById('feedback-modal');
-    const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
-    const closeFeedbackBtn = document.getElementById('close-feedback-btn');
+    if (userInput) {
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !sendBtn.disabled) {
+                handleSendMessage();
+            }
+        });
+    }
 
-    // Finish Case button
-    finishBtn.addEventListener('click', function () {
-        // Get the current organism from the select element
-        const correctOrganism = organismSelect.dataset.randomSelection;
+    // --- Finish Case and Feedback Modal Logic ---
+    if (finishBtn) {
+        finishBtn.addEventListener('click', () => {
+            if (currentOrganismKey) {
+                correctOrganismSpan.textContent = currentOrganismKey;
+            } else {
+                correctOrganismSpan.textContent = "Unknown (case not fully started or error occurred)";
+            }
+            feedbackModal.style.display = 'block';
+        });
+    }
 
-        // Update the organism display in the modal
-        const organismDisplay = document.getElementById('correct-organism');
-        if (organismDisplay && correctOrganism) {
-            // Format the organism name (capitalize first letter of each word)
-            const formattedOrganism = correctOrganism.split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(' ');
-            organismDisplay.textContent = formattedOrganism;
-        }
-
-        // Show the feedback modal
-        feedbackModal.style.display = 'block';
-    });
-
-    // Submit case feedback
-    submitFeedbackBtn.addEventListener('click', function () {
-        // Get selected ratings
-        const detailRating = document.querySelector('input[name="detail"]:checked')?.value;
-        const helpfulnessRating = document.querySelector('input[name="helpfulness"]:checked')?.value;
-        const accuracyRating = document.querySelector('input[name="accuracy"]:checked')?.value;
-        const comments = document.getElementById('feedback-comments').value;
-
-        // Validate that all ratings are selected
-        if (!detailRating || !helpfulnessRating || !accuracyRating) {
-            alert('Please select a rating for all three questions.');
-            return;
-        }
-
-        // Create feedback data object
-        const feedbackData = {
-            detail: detailRating,
-            helpfulness: helpfulnessRating,
-            accuracy: accuracyRating,
-            comments: comments,
-            case_id: currentCaseId,
-            organism: organismSelect.dataset.randomSelection
-        };
-
-        // Submit the feedback
-        fetch('/case_feedback', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(feedbackData)
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    statusMessage.textContent = 'Error submitting case feedback: ' + data.error;
-                } else {
-                    // Close the modal
-                    feedbackModal.style.display = 'none';
-
-                    // Reset the form
-                    document.querySelectorAll('input[type="radio"]').forEach(radio => {
-                        radio.checked = false;
-                    });
-                    document.getElementById('feedback-comments').value = '';
-
-                    // Show thank you message
-                    statusMessage.textContent = 'Thank you for your feedback! You can start a new case.';
-
-                    // Reset the chat
-                    chatbox.innerHTML = '';
-                    userInput.disabled = true;
-                    sendBtn.disabled = true;
-                    finishBtn.disabled = true;
-                    currentOrganismKey = null; // <-- Clear here too when case ends
-                    currentCaseId = null; // <-- Clear caseId when case ends
-                    chatHistory = []; // Also clear history for a truly new start
-                }
-            })
-            .catch(error => {
-                statusMessage.textContent = 'Error submitting case feedback: ' + error;
-                console.error('Error submitting case feedback:', error);
-            });
-    });
-
-    // Close feedback modal
-    closeFeedbackBtn.addEventListener('click', function () {
-        feedbackModal.style.display = 'none';
-    });
-
-    // Close modal when clicking outside
-    window.addEventListener('click', function (event) {
-        if (event.target === feedbackModal) {
+    if (closeFeedbackBtn) {
+        closeFeedbackBtn.addEventListener('click', () => {
             feedbackModal.style.display = 'none';
-        }
-    });
+        });
+    }
 
-    // Add event listeners for skip buttons
+    if (submitFeedbackBtn) {
+        submitFeedbackBtn.addEventListener('click', async () => {
+            const detailRating = document.querySelector('input[name="detail"]:checked');
+            const helpfulnessRating = document.querySelector('input[name="helpfulness"]:checked');
+            const accuracyRating = document.querySelector('input[name="accuracy"]:checked');
+            const comments = document.getElementById('feedback-comments').value;
+
+            if (!detailRating || !helpfulnessRating || !accuracyRating) {
+                alert('Please provide a rating for all categories (detail, helpfulness, accuracy) or use skip.');
+                return;
+            }
+
+            const feedbackData = {
+                detail: detailRating.value,
+                helpfulness: helpfulnessRating.value,
+                accuracy: accuracyRating.value,
+                comments: comments,
+                case_id: currentCaseId, // Use the current case ID
+                organism: currentOrganismKey // Log the organism for this case
+            };
+
+            setStatus('Submitting case feedback...');
+            try {
+                const response = await fetch('/case_feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(feedbackData),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `HTTP ${response.status}`);
+                }
+
+                setStatus('Case feedback submitted! Thank you. You can start a new case.');
+                feedbackModal.style.display = 'none';
+
+                // Reset UI for a new case
+                chatbox.innerHTML = '<p class="status">Case finished. Select an organism and start a new case.</p>';
+                disableInput(true); // Disable main chat input
+                finishBtn.disabled = true; // Disable finish button
+                userInput.value = '';
+
+                // Clear the stored conversation state
+                clearConversationState();
+                chatHistory = [];
+                currentCaseId = null;
+                currentOrganismKey = null;
+
+                // Reset feedback form for next time
+                document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+                document.getElementById('feedback-comments').value = '';
+                document.querySelectorAll('.skip-btn').forEach(btn => btn.disabled = false);
+
+            } catch (error) {
+                console.error('Error submitting case feedback:', error);
+                setStatus(`Error submitting case feedback: ${error.message}`, true);
+            }
+        });
+    }
+
+    // Skip buttons for feedback
     document.querySelectorAll('.skip-btn').forEach(button => {
         button.addEventListener('click', function () {
-            const questionName = this.getAttribute('data-question');
-            // Uncheck all radio buttons for this question
-            document.querySelectorAll(`input[name="${questionName}"]`).forEach(radio => {
-                radio.checked = false;
+            const questionName = this.dataset.question;
+            const radioButtons = document.querySelectorAll(`input[name="${questionName}"]`);
+            let isAnyChecked = false;
+            radioButtons.forEach(radio => {
+                if (radio.checked) {
+                    isAnyChecked = true;
+                }
+                radio.checked = false; // Uncheck all
+                radio.disabled = true; // Disable them
             });
-            // Disable the skip button
-            this.disabled = true;
-            // Add a visual indicator that this question was skipped
-            this.textContent = 'Skipped';
+
+            // Find the "not applicable" or a default value if you add one, e.g., 0 or "skipped"
+            // For now, we'll just disable and uncheck.
+            // If you have a specific "skipped" value, check that radio button.
+
+            this.textContent = isAnyChecked ? 'Skipped (Reset)' : 'Skipped';
+            this.disabled = true; // Disable skip button after skipping or allow re-enable?
+            // For now, let's allow one skip.
         });
     });
 
-    // Add click handler for random selection button
-    randomOrganismBtn.addEventListener('click', selectRandomOrganism);
-}); 
+    // Load any saved conversation state when the page loads
+    if (!loadConversationState()) {
+        // If no state was loaded, ensure input is disabled until a case is started
+        disableInput(true);
+        finishBtn.disabled = true;
+    }
+});
+
+// Make the in_context_learning flag available (assuming it's set globally by your template)
+// This line should be outside DOMContentLoaded if it's set by Flask template directly in a <script> tag
+// window.in_context_learning = window.in_context_learning || false;
+// It's already in your HTML, so it should be fine. 

@@ -380,16 +380,23 @@ h1 {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 .modal-content {
     background-color: #fefefe;
-    margin: 10% auto;
-    padding: 20px;
+    padding: 25px;
     border-radius: 8px;
     width: 80%;
     max-width: 600px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
 }
 
 .case-summary {
@@ -589,4 +596,41 @@ h1 {
 .case-setup {
     justify-content: center;
     gap: 15px;
+}
+
+.instructions {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px 20px;
+    margin: 15px 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.instructions h2 {
+    color: #2c3e50;
+    font-size: 1.2em;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.instructions ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.instructions li {
+    color: #495057;
+    margin-bottom: 6px;
+    line-height: 1.3;
+    font-size: 0.95em;
+}
+
+.instructions li:last-child {
+    margin-bottom: 0;
+}
+
+.instructions strong {
+    color: #2c3e50;
+    font-weight: 600;
 }

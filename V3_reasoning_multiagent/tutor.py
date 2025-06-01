@@ -16,6 +16,7 @@ from agents.patient import get_embedding
 from Feedback.feedback_faiss import retrieve_similar_examples, index, texts
 import config
 from datetime import datetime
+import logging
 
 
 dotenv.load_dotenv()
@@ -262,6 +263,7 @@ class MedicalMicrobiologyTutor:
 
     def log_conversation_history(self, messages, user_input=None):
         """Log the conversation history to a file."""
+        log_conv_start_time = datetime.now()
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(self.CONVERSATION_LOG_FILE, 'a', encoding='utf-8') as f:
@@ -277,91 +279,90 @@ class MedicalMicrobiologyTutor:
                 f.write(f"{'='*50}\n")
         except Exception as e:
             print(f"Error logging conversation history: {e}")
+        logging.info(f"[TUTOR_PERF] log_conversation_history took: {datetime.now() - log_conv_start_time}")
 
     def __call__(self, task):
         """Process a user message (task) and return the tutor's response."""
+        call_start_time = datetime.now()
+        logging.info(f"[TUTOR_PERF] __call__ started at {call_start_time}")
+
         if isinstance(task, str):
-            message = task
+            message_content = task
         elif hasattr(task, 'instruction'):
-            message = task.instruction
+            message_content = task.instruction
         else:
             print(f"Warning: Unexpected task format: {type(task)}")
-            message = str(task)
+            message_content = str(task)
 
-        self.last_user_message = message
-        print(f"\n[DEBUG] User message: {message}")
+        self.last_user_message = message_content
+        print(f"\n[DEBUG] User message: {message_content}")
 
-        self.messages.append({"role": "user", "content": message})
-        
-        # Log conversation history after adding user message
-        self.log_conversation_history(self.messages, message)
+        should_append_user_message = True
+        if self.messages and len(self.messages) > 0:
+            last_msg = self.messages[-1]
+            if last_msg.get("role") == "user" and last_msg.get("content") == message_content:
+                should_append_user_message = False
+
+        if should_append_user_message:
+            self.messages.append({"role": "user", "content": message_content})
+
+        log_user_msg_time = datetime.now()
+        self.log_conversation_history(self.messages, user_input=message_content if should_append_user_message else None)
+        logging.info(f"[TUTOR_PERF] log_conversation_history (user msg) took: {datetime.now() - log_user_msg_time}")
 
         try:
-            # First, get initial response to check if it's a tool call or direct response
+            initial_llm_call_start_time = datetime.now()
             initial_response = chat_complete(self.messages, model=self.current_model)
+            logging.info(f"[TUTOR_PERF] Initial LLM call (chat_complete) took: {datetime.now() - initial_llm_call_start_time}")
             print(f"\n[DEBUG] Initial LLM response: {initial_response}")
 
-            # If it's a direct response (no [Action]), add FAISS examples and regenerate
             if "[Action]" not in initial_response:
-                # Add FAISS functionality for tutor direct responses
                 if self.run_with_faiss and index is not None:
+                    faiss_start_time = datetime.now()
                     try:
-                        # Format the recent history similar to how the index was created
                         recent_context = ""
                         if self.messages:
                             recent_context = "Chat history:\n"
-                            for msg in self.messages[-5:-1]:  # Get last 4 messages like in patient agent
+                            for msg in self.messages[-5:-1]:
                                 if isinstance(msg, dict) and "role" in msg and "content" in msg:
                                     recent_context += f"{msg['role']}: {msg['content']}\n"
                         
-                        # Get embedding for the context (not including current user message in "rated message" since tutor hasn't responded yet)
                         embedding_text = recent_context
                         embedding = get_embedding(embedding_text)
-                        
-                        # Search for similar tutor examples
                         distances, indices = index.search(np.array([embedding]).astype('float32'), k=4)
-                        
-                        # Get the most similar examples
                         similar_examples = [texts[idx] for idx in indices[0]]
                         examples_text = "\n\nSimilar tutor examples with feedback (including rated messages and expert feedback):\n" + "\n---\n".join(similar_examples)
                         
-                        # Update system message to include examples
                         original_system_content = self.messages[0]["content"]
                         enhanced_system_content = original_system_content + examples_text + "\n\nYou should provide high-quality tutor responses based on the examples and feedback above."
-                        
-                        # Create enhanced messages for this specific call
                         enhanced_messages = self.messages.copy()
                         enhanced_messages[0]["content"] = enhanced_system_content
                         
                         print(examples_text)
-                        # Get enhanced response with FAISS examples
+                        enhanced_llm_call_start_time = datetime.now()
                         response_content = chat_complete(enhanced_messages, model=self.current_model)
+                        logging.info(f"[TUTOR_PERF] Enhanced LLM call with FAISS took: {datetime.now() - enhanced_llm_call_start_time}")
                         print(f"\n[DEBUG] Enhanced LLM response with FAISS: {response_content}")
-                        
-                        
                     except Exception as e:
                         print(f"Warning: FAISS retrieval failed, using original response: {e}")
                         response_content = initial_response
+                    logging.info(f"[TUTOR_PERF] FAISS processing and optional enhanced call took: {datetime.now() - faiss_start_time}")
                 else:
                     response_content = initial_response
                 
                 self.messages.append({"role": "assistant", "content": response_content})
-                
-
-                # Log conversation history after adding assistant response
+                log_assistant_msg_time = datetime.now()
                 self.log_conversation_history(self.messages)
+                logging.info(f"[TUTOR_PERF] log_conversation_history (assistant direct) took: {datetime.now() - log_assistant_msg_time}")
+                logging.info(f"[TUTOR_PERF] __call__ (direct response path) completed in: {datetime.now() - call_start_time}")
                 return response_content
             
-            # Handle [Action] response (tool calls) - no FAISS enhancement since rated message would be from tool
+            action_processing_start_time = datetime.now()
             response_content = initial_response
             try:
-                # Extract the action text after [Action]
                 action_text = response_content.split("[Action]", 1)[1].strip()
                 print(f"\n[DEBUG] Action text: {action_text}")
                 
-                # Try to parse the JSON, handling both formats:
-                # 1. {"patient": "question"}
-                # 2. ```json {"patient": "question"}```
                 json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', action_text, re.DOTALL | re.IGNORECASE)
                 if json_match:
                     json_str = json_match.group(1) or json_match.group(2)
@@ -378,89 +379,93 @@ class MedicalMicrobiologyTutor:
 
                 if tool_name in name_to_function_map:
                     tool_function = name_to_function_map[tool_name]
+                    tool_call_start_time = datetime.now()
                     if tool_name == "patient":
                         if not self.case_description:
                             raise ValueError("Case description is not available for the patient tool.")
                         
-                        # Pass the current message history
                         tool_result = tool_function(tool_input, self.case_description, self.messages, model=self.current_model)
                         print(f"\n[DEBUG] Patient tool result: {tool_result}")  # Debug log
                         
-                        # Clean the response if output_tool_directly is True
                         if self.output_tool_directly:
-                            # Remove any [Action] or [Observation] wrappers
                             tool_result = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', tool_result)
-                            # Remove any JSON formatting
                             tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)
-                            # Remove any remaining JSON structure
                             tool_result = re.sub(r'^\s*{\s*"patient"\s*:\s*"|"\s*}\s*$', '', tool_result)
-                            # Clean up any extra whitespace
                             tool_result = tool_result.strip()
-                            # Add "Patient: " prefix if not already present
                             if not tool_result.startswith("Patient: "):
                                 tool_result = f"Patient: {tool_result}"
                         
                         print(f"\n[DEBUG] Final cleaned response: {tool_result}")
-                        
-                        # Add the patient's response to the message history
                         self.messages.append({"role": "assistant", "content": tool_result})
-                        # Log conversation history after adding patient response
+                        log_patient_resp_time = datetime.now()
                         self.log_conversation_history(self.messages)
+                        logging.info(f"[TUTOR_PERF] log_conversation_history (patient tool) took: {datetime.now() - log_patient_resp_time}")
+                        logging.info(f"[TUTOR_PERF] Patient tool processing (incl. LLM & logging) took: {datetime.now() - tool_call_start_time}")
+                        logging.info(f"[TUTOR_PERF] __call__ (patient tool path) completed in: {datetime.now() - call_start_time}")
                         return tool_result
                     elif tool_name == "hint":
                         if not self.case_description:
                             raise ValueError("Case description is not available for the hint tool.")
                         
-                        # Pass the current message history and case description
                         tool_result = tool_function(tool_input, self.case_description, self.messages, model=self.current_model)
                         print(f"\n[DEBUG] Hint tool result: {tool_result}")  # Debug log
                         
-                        # Add the hint response to the message history
                         self.messages.append({"role": "assistant", "content": tool_result})
-                        # Log conversation history after adding hint response
+                        log_hint_resp_time = datetime.now()
                         self.log_conversation_history(self.messages)
+                        logging.info(f"[TUTOR_PERF] log_conversation_history (hint tool) took: {datetime.now() - log_hint_resp_time}")
+                        logging.info(f"[TUTOR_PERF] Hint tool processing (incl. LLM & logging) took: {datetime.now() - tool_call_start_time}")
+                        logging.info(f"[TUTOR_PERF] __call__ (hint tool path) completed in: {datetime.now() - call_start_time}")
                         return tool_result
                     else:
-                        # Handle other tools if they are added later
                         tool_result = tool_function(tool_input)
 
                         tool_output = f"[Observation]: {tool_result}"
 
-                        # Add the action's result (observation) back into the message history
                         self.messages.append({"role": "system", "content": tool_output})
-
-                        # Get a new response from the LLM, now including the tool's observation
+                        final_llm_call_start_time = datetime.now()
                         final_response = chat_complete(self.messages, model=self.current_model)
-                        # Add this final assistant response to history
+                        logging.info(f"[TUTOR_PERF] Final LLM call (after other tool) took: {datetime.now() - final_llm_call_start_time}")
                         self.messages.append({"role": "assistant", "content": final_response})
-                        # Log conversation history after adding assistant response
+                        log_final_resp_time = datetime.now()
                         self.log_conversation_history(self.messages)
+                        logging.info(f"[TUTOR_PERF] log_conversation_history (other tool) took: {datetime.now() - log_final_resp_time}")
+                        logging.info(f"[TUTOR_PERF] Other tool processing took: {datetime.now() - tool_call_start_time}")
+                        logging.info(f"[TUTOR_PERF] __call__ (other tool path) completed in: {datetime.now() - call_start_time}")
                         return final_response
                 else:
-                    # Handle case where the requested tool is not found
                     print(f"Warning: Tool '{tool_name}' not found")
-                    # Get a new response from the tutor
+                    retry_llm_call_start_time = datetime.now()
                     retry_response = chat_complete(self.messages, model=self.current_model)
+                    logging.info(f"[TUTOR_PERF] Retry LLM call (tool not found) took: {datetime.now() - retry_llm_call_start_time}")
                     self.messages.append({"role": "assistant", "content": retry_response})
-                    # Log conversation history after adding assistant response
+                    log_retry_resp_time = datetime.now()
                     self.log_conversation_history(self.messages)
+                    logging.info(f"[TUTOR_PERF] log_conversation_history (tool not found) took: {datetime.now() - log_retry_resp_time}")
+                    logging.info(f"[TUTOR_PERF] __call__ (tool not found path) completed in: {datetime.now() - call_start_time}")
                     return retry_response
 
             except Exception as e:
                 print(f"Error executing tool: {e}")
-                # Just get a new response from the tutor
+                error_llm_call_start_time = datetime.now()
                 retry_response = chat_complete(self.messages, model=self.current_model)
+                logging.info(f"[TUTOR_PERF] LLM call (error executing tool) took: {datetime.now() - error_llm_call_start_time}")
                 self.messages.append({"role": "assistant", "content": retry_response})
-                # Log conversation history after adding assistant response
+                log_error_resp_time = datetime.now()
                 self.log_conversation_history(self.messages)
+                logging.info(f"[TUTOR_PERF] log_conversation_history (error executing tool) took: {datetime.now() - log_error_resp_time}")
+                logging.info(f"[TUTOR_PERF] __call__ (error executing tool path) completed in: {datetime.now() - call_start_time}")
                 return retry_response
+            logging.info(f"[TUTOR_PERF] Action processing block took: {datetime.now() - action_processing_start_time}")
 
         except Exception as e:
             print(f"Error during LLM call or processing: {e}")
             error_response = f"Sorry, an error occurred: {e}"
             self.messages.append({"role": "assistant", "content": error_response})
-            # Log conversation history after adding error response
+            log_generic_error_time = datetime.now()
             self.log_conversation_history(self.messages, error_response)
+            logging.info(f"[TUTOR_PERF] log_conversation_history (generic error) took: {datetime.now() - log_generic_error_time}")
+            logging.info(f"[TUTOR_PERF] __call__ (generic error path) completed in: {datetime.now() - call_start_time}")
             return error_response
 
 
