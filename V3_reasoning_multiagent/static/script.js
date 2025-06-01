@@ -12,6 +12,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
     const correctOrganismSpan = document.getElementById('correct-organism');
 
+    // --- Temporary Debugging: Monitor feedbackModal.style.display changes ---
+    if (feedbackModal) {
+        let currentDisplay = feedbackModal.style.display;
+        Object.defineProperty(feedbackModal.style, 'display', {
+            get: function () {
+                return currentDisplay;
+            },
+            set: function (value) {
+                console.log('[DEBUG_MODAL_STYLE] feedbackModal.style.display is being set to:', value);
+                if (value === 'block' || value === 'flex') {
+                    console.error('[DEBUG_MODAL_STYLE] ATTENTION: feedbackModal.style.display is being set to \'block\' or \'flex\'. Call stack:');
+                    console.log(new Error().stack);
+                    // debugger; // Temporarily comment out debugger for smoother testing of this fix
+                }
+                currentDisplay = value;
+            },
+            configurable: true
+        });
+    } else {
+        console.error('[DEBUG_MODAL_STYLE] feedbackModal element not found!');
+    }
+    // --- End Temporary Debugging ---
+
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
     let currentCaseId = null; // Store the current case ID
     let currentOrganismKey = null;
@@ -34,59 +57,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadConversationState() {
+        console.log("[DEBUG_RENDER] Attempting to load conversation state from localStorage.");
         try {
             const savedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
             const savedCaseId = localStorage.getItem(LOCAL_STORAGE_CASE_ID_KEY);
             const savedOrganismKey = localStorage.getItem(LOCAL_STORAGE_ORGANISM_KEY);
 
+            console.log("[DEBUG_RENDER] Loaded from localStorage:",
+                { savedHistoryJSON: savedHistory, savedCaseId, savedOrganismKey });
+
             if (savedHistory && savedCaseId && savedOrganismKey) {
                 chatHistory = JSON.parse(savedHistory);
                 currentCaseId = savedCaseId;
                 currentOrganismKey = savedOrganismKey;
+                console.log("[DEBUG_RENDER] Parsed history and set caseId/organismKey:",
+                    { chatHistoryLength: chatHistory.length, currentCaseId, currentOrganismKey });
 
                 if (chatHistory.length > 0) {
-                    chatbox.innerHTML = ''; // Clear any default messages
+                    chatbox.innerHTML = '';
                     chatHistory.forEach(msg => {
-                        // For assistant messages, determine if feedback UI should be re-added.
-                        // This is tricky, as feedback state isn't saved. For simplicity,
-                        // re-add feedback UI for all past assistant messages, assuming it wasn't submitted.
-                        // Or, choose not to re-add interactive feedback UI for reloaded messages.
-                        // For now, let's re-add it for consistency, user can ignore if already submitted.
                         if (msg.role !== 'system') {
-                            addMessage(msg.role, msg.content, msg.role === 'assistant');
+                            addMessage(msg.role, msg.content, false);
                         }
                     });
-                    disableInput(false); // Enable input fields
-                    finishBtn.disabled = false; // Enable finish button
+                    disableInput(false);
+                    finishBtn.disabled = false;
+                    console.log("[DEBUG_RENDER] UI enabled, finishBtn enabled.");
                     setStatus(`Resumed case. Case ID: ${currentCaseId}`);
-
-                    // Try to reflect the loaded organism in the select (if it's still part of the UI)
                     if (organismSelect) {
-                        // First, ensure the 'random' option isn't mistakenly selected
                         if (organismSelect.value === 'random' && currentOrganismKey !== 'random') {
                             const allOptions = getAllOptions();
                             const matchedOption = allOptions.find(opt => opt.value === currentOrganismKey);
                             if (matchedOption) {
                                 organismSelect.value = currentOrganismKey;
-                                // Visually deselect 'random' button if it exists and was active
                                 if (randomOrganismBtn && randomOrganismBtn.classList.contains('active')) {
                                     randomOrganismBtn.classList.remove('active');
                                     organismSelect.classList.remove('random-selected');
                                 }
                             }
                         } else if (organismSelect.value !== currentOrganismKey) {
-                            organismSelect.value = currentOrganismKey; // if it's a direct match
+                            organismSelect.value = currentOrganismKey;
                         }
                     }
-                    return true; // Indicate state was loaded
+                    console.log("[DEBUG_RENDER] loadConversationState successfully loaded and applied state.");
+                    return true;
+                } else {
+                    console.log("[DEBUG_RENDER] Saved history was empty after parsing or not enough data to resume.");
                 }
+            } else {
+                console.log("[DEBUG_RENDER] No complete saved state found in localStorage (history, caseId, or organismKey missing).");
             }
         } catch (e) {
-            console.error("Error loading conversation state from localStorage:", e);
+            console.error("[DEBUG_RENDER] Error loading conversation state from localStorage:", e);
             setStatus("Could not load previous conversation. Starting fresh.", true);
-            clearConversationState(); // Clear potentially corrupted state
+            clearConversationState();
         }
-        return false; // Indicate no state was loaded
+        console.log("[DEBUG_RENDER] loadConversationState did NOT load or apply a previous state.");
+        return false;
     }
 
     function clearConversationState() {
@@ -520,19 +547,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Finish Case and Feedback Modal Logic ---
     if (finishBtn) {
         finishBtn.addEventListener('click', () => {
+            console.log("[DEBUG_RENDER] finishBtn clicked. Current Organism Key:", currentOrganismKey);
             if (currentOrganismKey) {
                 correctOrganismSpan.textContent = currentOrganismKey;
             } else {
                 correctOrganismSpan.textContent = "Unknown (case not fully started or error occurred)";
             }
-            feedbackModal.style.display = 'block';
+            console.log("[DEBUG_RENDER] Displaying feedback modal via finishBtn click.");
+            feedbackModal.style.display = 'flex';
         });
     }
 
     if (closeFeedbackBtn) {
         closeFeedbackBtn.addEventListener('click', () => {
-            feedbackModal.style.display = 'none';
+            console.log("[DEBUG_MODAL_CLOSE] closeFeedbackBtn clicked!");
+            if (feedbackModal) {
+                feedbackModal.style.display = 'none';
+                console.log("[DEBUG_MODAL_CLOSE] feedbackModal.style.display set to 'none'.");
+            } else {
+                console.error("[DEBUG_MODAL_CLOSE] feedbackModal element not found when trying to close!");
+            }
         });
+    } else {
+        console.error("[DEBUG_MODAL_CLOSE] closeFeedbackBtn element not found to attach listener!");
     }
 
     if (submitFeedbackBtn) {
@@ -623,8 +660,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load any saved conversation state when the page loads
     if (!loadConversationState()) {
         // If no state was loaded, ensure input is disabled until a case is started
+        console.log("[DEBUG_RENDER] No state loaded on initial page setup. Disabling input and finishBtn.");
         disableInput(true);
         finishBtn.disabled = true;
+    } else {
+        console.log("[DEBUG_RENDER] State WAS loaded on initial page setup. Input and finishBtn should be active.");
     }
 });
 
