@@ -537,10 +537,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (userInput) {
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !sendBtn.disabled) {
+        // Modified for <textarea>: Enter to send, Shift+Enter for newline
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !sendBtn.disabled) {
+                e.preventDefault(); // Prevent adding a newline character in the textarea
                 handleSendMessage();
             }
+            // If only Enter is pressed (without Shift), and sendBtn is disabled, 
+            // or if Shift+Enter is pressed, the default textarea behavior (newline) will occur.
         });
     }
 

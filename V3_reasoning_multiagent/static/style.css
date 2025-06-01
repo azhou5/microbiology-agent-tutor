@@ -331,6 +331,7 @@ h1 {
 #input-area {
     display: flex;
     gap: 10px;
+    align-items: flex-start;
 }
 
 #user-input {
@@ -338,6 +339,14 @@ h1 {
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    font-family: inherit;
+    font-size: 1em;
+    line-height: 1.4;
+    min-height: calc(1.4em + 20px + 2px);
+    resize: vertical;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    box-sizing: border-box;
 }
 
 #send-btn {
