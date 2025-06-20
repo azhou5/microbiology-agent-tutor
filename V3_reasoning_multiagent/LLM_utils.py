@@ -19,13 +19,21 @@ from dotenv import load_dotenv
 try:
     # Get the path to the current file
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    env_path = os.path.join(current_dir, "dot_env_microtutor.txt")
+    specific_env_path = os.path.join(current_dir, "dot_env_microtutor.txt")
     
-    if os.path.exists(env_path):
-        print(f"LLM_utils: Loading environment variables from {env_path}")
-        load_dotenv(env_path)
+    if os.path.exists(specific_env_path):
+        print(f"LLM_utils: Loading environment variables from {specific_env_path}")
+        load_dotenv(dotenv_path=specific_env_path)
     else:
-        print(f"LLM_utils: Warning - Environment file not found at {env_path}")
+        print(f"LLM_utils: Specific environment file not found at {specific_env_path}.")
+        # load_dotenv() will search for a .env file and load it if found.
+        # It returns True if a file was loaded.
+        # This is safe for production environments like Render, as it won't
+        # overwrite already existing environment variables by default.
+        if load_dotenv():
+            print("LLM_utils: Loaded environment variables from a .env file.")
+        else:
+            print("LLM_utils: No .env file found. Assuming environment variables are pre-set (e.g., in Render).")
 except Exception as e:
     print(f"LLM_utils: Error loading environment variables: {str(e)}")
 

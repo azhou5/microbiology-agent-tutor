@@ -8,4 +8,4 @@ AZ
 RC
 
 - [√] find website where hosted and check if continuous deployment
-- [] work out how to collect feedback log across multiple website uses => json download button at end of each session / synching across users!!
+- [√] work out how to collect feedback log across multiple website uses => json download button at end of each session / synching across users!!
