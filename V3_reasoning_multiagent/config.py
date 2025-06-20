@@ -2,7 +2,9 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Construct path to the .env file in the same directory as this script
+dotenv_path = os.path.join(os.path.dirname(__file__), 'dot_env_microtutor.txt')
+load_dotenv(dotenv_path=dotenv_path)
 
 # --- Defaults ---
 DEFAULT_ORGANISM = os.getenv("DEFAULT_ORGANISM", "staphylococcus aureus")
@@ -31,7 +33,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
 # --- Model & backend ---
 LLM_BACKEND = "azure"          # or "openai", etc.
-API_MODEL_NAME = "gpt-4o"      # default Azure model
+API_MODEL_NAME = "o3-mini-0131"      # default Azure model
 LOCAL_MODEL_NAME = "distilgpt2"
 
 # --- Feature flags ---

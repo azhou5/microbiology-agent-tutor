@@ -3,35 +3,40 @@ import os
 # Allow duplicate OpenMP runtimes to avoid libomp initialization errors on macOS
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import re
-from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv
 import config
 import sys
+from LLM_utils import LLMManager
 
 
 
 BACKEND  = config.LLM_BACKEND
 
 if BACKEND == "azure":
-    from openai import AzureOpenAI
-    _client = AzureOpenAI(
-        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key        = os.getenv("AZURE_OPENAI_API_KEY"),
-        api_version    = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-    )
+    llm_manager = LLMManager(use_azure=True)
 
-    def chat_complete(messages, model=None, max_new_tokens=512):
-        """Return assistant string given a list of {'role','content'} dicts."""
-        try: 
+    def chat_complete(system_prompt: str, user_prompt: str, model: str = None, max_new_tokens: int = 512):
+        """Return assistant string given a system and user prompt."""
+        try:
             model_to_use = model or config.API_MODEL_NAME
-            rsp = _client.chat.completions.create(
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            response = llm_manager.generate_response(
+                message=messages,
                 model=model_to_use,
-                messages=messages
+                max_tokens=max_new_tokens
             )
-            print(f"Response: {rsp.choices[0].message.content}")
-            return rsp.choices[0].message.content
+            if response:
+                print(f"Response: {response}")
+                return response
+            else:
+                print("Error: LLM returned an empty response.")
+                return "Sorry, there was an error communicating with the language model. Please try again."
         except Exception as e:
             print(f"Error: {e}")
-            sys.exit(1)
+            return f"An unexpected error occurred: {e}"
 
 else:
     # --- Local HF model ---

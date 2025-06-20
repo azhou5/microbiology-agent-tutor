@@ -1,12 +1,10 @@
-from openai import AzureOpenAI
-import os
-import dotenv
 import numpy as np
 import faiss
 import pickle
 import sys
 from Feedback.feedback_faiss import retrieve_similar_examples, get_embedding, index, texts
 import config
+from llm_router import chat_complete
 
 
 def run_patient(input: str, case: str, history: list, run_with_faiss: bool = config.USE_FAISS, model: str = None) -> str:
@@ -106,15 +104,10 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
         You should respond to the most recent query from the patient's perspective given the rules above. 
         """
 
-    client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"), 
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+    response = chat_complete(
+        system_prompt=system_prompt,
+        user_prompt=input,
+        model=model or config.API_MODEL_NAME
     )
 
-    response = client.chat.completions.create(
-        model=model or config.API_MODEL_NAME,  # Use passed model or default to config
-        messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": input}],
-    )
-
-    return response.choices[0].message.content
+    return response

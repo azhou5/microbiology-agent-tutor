@@ -22,6 +22,7 @@ import logging
 dotenv.load_dotenv()
 
 from llm_router import chat_complete
+from llm_router import llm_manager
 
 
 # Tool mapping - only includes 'patient' now
@@ -189,7 +190,9 @@ class MedicalMicrobiologyTutor:
         Keep it concise and focused on the most important presenting complaint."""
                 
         try:
-            response = chat_complete([{"role": "user", "content": prompt}], model=self.current_model)
+            # Provide a minimal system prompt for this single-turn call
+            system_prompt = "You are a helpful assistant that generates clinical case presentations."
+            response = chat_complete(system_prompt=system_prompt, user_prompt=prompt, model=self.current_model)
             return response.strip()
         except Exception as e:
             print(f"Error generating initial presentation: {e}")
@@ -312,8 +315,9 @@ class MedicalMicrobiologyTutor:
 
         try:
             initial_llm_call_start_time = datetime.now()
-            initial_response = chat_complete(self.messages, model=self.current_model)
-            logging.info(f"[TUTOR_PERF] Initial LLM call (chat_complete) took: {datetime.now() - initial_llm_call_start_time}")
+            # Use the full message history for multi-turn chat
+            initial_response = llm_manager.generate_response(self.messages, model=self.current_model)
+            logging.info(f"[TUTOR_PERF] Initial LLM call (generate_response) took: {datetime.now() - initial_llm_call_start_time}")
             print(f"\n[DEBUG] Initial LLM response: {initial_response}")
 
             if "[Action]" not in initial_response:
@@ -340,7 +344,7 @@ class MedicalMicrobiologyTutor:
                         
                         print(examples_text)
                         enhanced_llm_call_start_time = datetime.now()
-                        response_content = chat_complete(enhanced_messages, model=self.current_model)
+                        response_content = llm_manager.generate_response(enhanced_messages, model=self.current_model)
                         logging.info(f"[TUTOR_PERF] Enhanced LLM call with FAISS took: {datetime.now() - enhanced_llm_call_start_time}")
                         print(f"\n[DEBUG] Enhanced LLM response with FAISS: {response_content}")
                     except Exception as e:
@@ -407,7 +411,10 @@ class MedicalMicrobiologyTutor:
                         if not self.case_description:
                             raise ValueError("Case description is not available for the hint tool.")
                         
-                        tool_result = tool_function(tool_input, self.case_description, self.messages, model=self.current_model)
+                        # This tool call seems to expect system and user prompts.
+                        # Assuming it can be adapted to the new chat_complete signature.
+                        # If run_hint is more complex, it might need its own refactoring.
+                        tool_result = run_hint(tool_input, self.case_description, self.messages, model=self.current_model)
                         print(f"\n[DEBUG] Hint tool result: {tool_result}")  # Debug log
                         
                         self.messages.append({"role": "assistant", "content": tool_result})
@@ -424,7 +431,7 @@ class MedicalMicrobiologyTutor:
 
                         self.messages.append({"role": "system", "content": tool_output})
                         final_llm_call_start_time = datetime.now()
-                        final_response = chat_complete(self.messages, model=self.current_model)
+                        final_response = llm_manager.generate_response(self.messages, model=self.current_model)
                         logging.info(f"[TUTOR_PERF] Final LLM call (after other tool) took: {datetime.now() - final_llm_call_start_time}")
                         self.messages.append({"role": "assistant", "content": final_response})
                         log_final_resp_time = datetime.now()
@@ -436,7 +443,7 @@ class MedicalMicrobiologyTutor:
                 else:
                     print(f"Warning: Tool '{tool_name}' not found")
                     retry_llm_call_start_time = datetime.now()
-                    retry_response = chat_complete(self.messages, model=self.current_model)
+                    retry_response = llm_manager.generate_response(self.messages, model=self.current_model)
                     logging.info(f"[TUTOR_PERF] Retry LLM call (tool not found) took: {datetime.now() - retry_llm_call_start_time}")
                     self.messages.append({"role": "assistant", "content": retry_response})
                     log_retry_resp_time = datetime.now()
@@ -448,7 +455,7 @@ class MedicalMicrobiologyTutor:
             except Exception as e:
                 print(f"Error executing tool: {e}")
                 error_llm_call_start_time = datetime.now()
-                retry_response = chat_complete(self.messages, model=self.current_model)
+                retry_response = llm_manager.generate_response(self.messages, model=self.current_model)
                 logging.info(f"[TUTOR_PERF] LLM call (error executing tool) took: {datetime.now() - error_llm_call_start_time}")
                 self.messages.append({"role": "assistant", "content": retry_response})
                 log_error_resp_time = datetime.now()
