@@ -15,29 +15,37 @@ BACKEND  = config.LLM_BACKEND
 if BACKEND == "azure":
     llm_manager = LLMManager(use_azure=True)
 
-    def chat_complete(system_prompt: str, user_prompt: str, model: str = None, max_new_tokens: int = 512):
-        """Return assistant string given a system and user prompt."""
-        try:
-            model_to_use = model or config.API_MODEL_NAME
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-            response = llm_manager.generate_response(
-                message=messages,
-                model=model_to_use,
-                max_tokens=max_new_tokens
-            )
-            # Return the response if it's a non-empty string, otherwise return None.
-            if response and response.strip():
-                print(f"Response: {response}")
-                return response
-            else:
-                print("Error: LLM returned an empty or whitespace response.")
-                return None # Signal failure to the caller
-        except Exception as e:
-            print(f"Error in chat_complete: {e}")
-            return None # Signal failure
+    def chat_complete(system_prompt: str, user_prompt: str, model: str = None, max_new_tokens: int = 512, max_retries: int = 3):
+        """
+        Return assistant string given a system and user prompt.
+        Retries up to `max_retries` times if the LLM returns an empty response.
+        """
+        for attempt in range(max_retries):
+            try:
+                model_to_use = model or config.API_MODEL_NAME
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+                response = llm_manager.generate_response(
+                    message=messages,
+                    model=model_to_use,
+                    max_tokens=max_new_tokens
+                )
+                # Return the response if it's a non-empty string.
+                if response and response.strip():
+                    # print(f"Response: {response}") # Optional: keep for debugging
+                    return response
+                else:
+                    print(f"Warning: LLM returned an empty or whitespace response. Retrying... (Attempt {attempt + 1}/{max_retries})")
+                    # Optional: Add a small delay before retrying
+                    # time.sleep(0.5) 
+
+            except Exception as e:
+                print(f"Error in chat_complete on attempt {attempt + 1}/{max_retries}: {e}")
+        
+        print(f"Error: LLM failed to return a valid response after {max_retries} attempts.")
+        return None # Signal failure to the caller after all retries fail
 
 else:
     # --- Local HF model ---

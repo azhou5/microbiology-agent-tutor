@@ -150,6 +150,37 @@ class MedicalMicrobiologyTutor:
         self.current_organism = None
         self.case_description = None # To store the current case details
         self.last_user_message = "" # Keep track of the last user message if needed for context
+        self.initial_presentations = self._load_initial_presentations()
+        self.hpi_data = self._load_hpi_data()
+
+    def _load_initial_presentations(self):
+        """Loads pre-generated initial case sentences from a JSON file."""
+        try:
+            # Assuming this script is run from the V3_reasoning_multiagent directory
+            with open('Case_Outputs/ambiguous_with_ages.json', 'r') as f:
+                presentations = json.load(f)
+                logging.info("Successfully loaded pre-generated initial presentations.")
+                return presentations
+        except FileNotFoundError:
+            logging.warning("ambiguous_with_ages.json not found. Will fall back to LLM generation.")
+            return {}
+        except json.JSONDecodeError:
+            logging.error("Error decoding ambiguous_with_ages.json. Will fall back to LLM generation.")
+            return {}
+
+    def _load_hpi_data(self):
+        """Loads pre-generated HPI sections from a JSON file."""
+        try:
+            with open('Case_Outputs/HPI_per_organism.json', 'r') as f:
+                hpi_data = json.load(f)
+                logging.info("Successfully loaded pre-generated HPI data.")
+                return hpi_data
+        except FileNotFoundError:
+            logging.warning("HPI_per_organism.json not found. Will fall back to using full case description for generation.")
+            return {}
+        except json.JSONDecodeError:
+            logging.error("Error decoding HPI_per_organism.json. Will fall back to full case description.")
+            return {}
 
     def _update_system_message(self):
         """Formats and updates the system message with current tool descriptions and case."""
@@ -177,14 +208,24 @@ class MedicalMicrobiologyTutor:
     def _generate_initial_presentation(self):
         """Generate the initial case presentation using a dedicated LLM call with retries."""
         
-        # Truncate the case description to avoid exceeding token limits
-        max_length = 3000  # A safe number of characters
-        truncated_case_description = self.case_description
-        if len(truncated_case_description) > max_length:
-            truncated_case_description = truncated_case_description[:max_length] + "..."
-            
-        prompt = f"""Here is a clinical case:
-        {truncated_case_description}
+        # Prioritize HPI data as the source for generation. Fall back to full case description.
+        text_to_summarize = self.hpi_data.get(self.current_organism)
+        if not text_to_summarize:
+            logging.warning(f"No HPI data for '{self.current_organism}'. Falling back to full case description.")
+            text_to_summarize = self.case_description
+            # Truncate the full case description to avoid exceeding token limits
+            max_length = 3000  # A safe number of characters
+            if len(text_to_summarize) > max_length:
+                text_to_summarize = text_to_summarize[:max_length] + "..."
+        else:
+            logging.info(f"Using HPI data for '{self.current_organism}' to generate initial presentation.")
+
+        if not text_to_summarize:
+            logging.error("No content available to generate an initial presentation.")
+            return None
+
+        prompt = f"""Here is a clinical case summary:
+        {text_to_summarize}
 
         Generate a one-line initial presentation of this case.
         Focus on the patient's demographics and chief complaint.
@@ -247,20 +288,32 @@ class MedicalMicrobiologyTutor:
         self.messages = []  # Clear messages first
         self._update_system_message()  # This will create the system message
         
-        logging.info("[BACKEND_START_CASE] 4. Calling _generate_initial_presentation.")
-        # Get initial case presentation using the dedicated method
-        try:
-            initial_response = self._generate_initial_presentation()
-            logging.info("[BACKEND_START_CASE] 5. Adding initial messages to history and returning response.")
-            # Add both the system message and initial response to history
-            self.messages = [
-                {"role": "system", "content": self.messages[0]["content"]},
-                {"role": "assistant", "content": initial_response}
-            ]
-            return initial_response
-        except Exception as e:
-            logging.error(f"[BACKEND_START_CASE] <<< Error getting initial presentation: {e}")
-            return f"Error: Could not get initial case presentation. {e}"
+        logging.info("[BACKEND_START_CASE] 4. Getting initial case presentation.")
+        # Try to get the initial presentation from the pre-generated file first.
+        initial_response = self.initial_presentations.get(self.current_organism)
+        
+        # If not found, fall back to generating it.
+        if not initial_response:
+            logging.warning(f"No pre-generated presentation for '{self.current_organism}'. Falling back to LLM generation.")
+            try:
+                initial_response = self._generate_initial_presentation()
+            except Exception as e:
+                logging.error(f"[BACKEND_START_CASE] <<< Error getting initial presentation: {e}")
+                return f"Error: Could not get initial case presentation. {e}"
+        else:
+            logging.info(f"Using pre-generated initial presentation for '{self.current_organism}'.")
+
+        if not initial_response:
+             logging.error(f"[BACKEND_START_CASE] <<< Failed to get any initial presentation for {self.current_organism}.")
+             return f"Error: Could not produce an initial presentation for {self.current_organism}."
+
+        logging.info("[BACKEND_START_CASE] 5. Adding initial messages to history and returning response.")
+        # Add both the system message and initial response to history
+        self.messages = [
+            {"role": "system", "content": self.messages[0]["content"]},
+            {"role": "assistant", "content": initial_response}
+        ]
+        return initial_response
 
     def get_available_organisms(self):
         """Get a list of organisms that have cached cases."""
@@ -421,6 +474,12 @@ class MedicalMicrobiologyTutor:
                         tool_result = tool_function(tool_input, self.case_description, self.messages, model=self.current_model)
                         print(f"\n[DEBUG] Patient tool result: {tool_result}")  # Debug log
                         
+                        # --- GRACEFUL FALLBACK ---
+                        if not tool_result or not tool_result.strip():
+                            print("[WARN] Patient tool returned an empty response. Using fallback.")
+                            tool_result = "Patient: I'm not sure how to answer that. Could you ask in a different way?"
+                        # --- END GRACEFUL FALLBACK ---
+
                         if self.output_tool_directly:
                             tool_result = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', tool_result)
                             tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)

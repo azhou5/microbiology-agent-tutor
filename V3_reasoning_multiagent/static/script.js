@@ -43,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const LOCAL_STORAGE_HISTORY_KEY = 'microbiologyTutorChatHistory';
     const LOCAL_STORAGE_CASE_ID_KEY = 'microbiologyTutorCaseId';
     const LOCAL_STORAGE_ORGANISM_KEY = 'microbiologyTutorOrganismKey';
+    const LOCAL_STORAGE_RANDOM_MODE_KEY = 'microbiologyTutorRandomMode';
+    const LOCAL_STORAGE_SEEN_ORGANISMS_KEY = 'microbiologyTutorSeenOrganisms';
 
     function saveConversationState() {
         try {
@@ -51,6 +53,12 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(LOCAL_STORAGE_CASE_ID_KEY, currentCaseId);
             if (currentOrganismKey) { // Only save if not null
                 localStorage.setItem(LOCAL_STORAGE_ORGANISM_KEY, currentOrganismKey);
+            }
+            // Save the random mode state
+            if (randomOrganismBtn.classList.contains('active')) {
+                localStorage.setItem(LOCAL_STORAGE_RANDOM_MODE_KEY, 'true');
+            } else {
+                localStorage.removeItem(LOCAL_STORAGE_RANDOM_MODE_KEY);
             }
         } catch (e) {
             console.error("Error saving conversation state to localStorage:", e);
@@ -64,9 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const savedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
             const savedCaseId = localStorage.getItem(LOCAL_STORAGE_CASE_ID_KEY);
             const savedOrganismKey = localStorage.getItem(LOCAL_STORAGE_ORGANISM_KEY);
+            const isRandomMode = localStorage.getItem(LOCAL_STORAGE_RANDOM_MODE_KEY) === 'true';
 
             console.log("[DEBUG_RENDER] Loaded from localStorage:",
-                { savedHistoryJSON: savedHistory, savedCaseId, savedOrganismKey });
+                { savedHistoryJSON: savedHistory, savedCaseId, savedOrganismKey, isRandomMode });
 
             if (savedHistory && savedCaseId && savedOrganismKey) {
                 chatHistory = JSON.parse(savedHistory);
@@ -86,18 +95,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     finishBtn.disabled = false;
                     console.log("[DEBUG_RENDER] UI enabled, finishBtn enabled.");
                     setStatus(`Resumed case. Case ID: ${currentCaseId}`);
-                    if (organismSelect) {
-                        if (organismSelect.value === 'random' && currentOrganismKey !== 'random') {
-                            const allOptions = getAllOptions();
-                            const matchedOption = allOptions.find(opt => opt.value === currentOrganismKey);
-                            if (matchedOption) {
-                                organismSelect.value = currentOrganismKey;
-                                if (randomOrganismBtn && randomOrganismBtn.classList.contains('active')) {
-                                    randomOrganismBtn.classList.remove('active');
-                                    organismSelect.classList.remove('random-selected');
-                                }
-                            }
-                        } else if (organismSelect.value !== currentOrganismKey) {
+
+                    // Final UI state determination:
+                    if (isRandomMode) {
+                        // If random mode was saved, restore that UI state LAST.
+                        console.log("[DEBUG_RENDER] Random mode was active. Re-initializing random selection UI.");
+                        selectRandomOrganism();
+                    } else if (organismSelect) {
+                        // Otherwise, set the dropdown to the specific organism.
+                        if (organismSelect.value !== currentOrganismKey) {
                             organismSelect.value = currentOrganismKey;
                         }
                     }
@@ -124,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.removeItem(LOCAL_STORAGE_HISTORY_KEY);
             localStorage.removeItem(LOCAL_STORAGE_CASE_ID_KEY);
             localStorage.removeItem(LOCAL_STORAGE_ORGANISM_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_RANDOM_MODE_KEY);
             console.log("  [CLEAR_STATE] <<< Conversation state cleared.");
         } catch (e) {
             console.error("Error clearing conversation state from localStorage:", e);
@@ -388,42 +395,81 @@ document.addEventListener('DOMContentLoaded', () => {
         return options;
     }
 
-    // Function to select a random organism
+    // Function to select a random organism using sampling without replacement
     function selectRandomOrganism() {
-        console.log("    [RANDOM_SELECT] >>> Function started.");
-        const optionsToUse = cachedOrganisms.length > 0 ? cachedOrganisms : getAllOptions().map(opt => opt.value);
-        console.log("    [RANDOM_SELECT] Using this list for selection:", optionsToUse);
-        if (optionsToUse.length === 0) {
+        console.log("    [RANDOM_SELECT] >>> Function started (sampling without replacement).");
+        const allAvailableOrganisms = cachedOrganisms.length > 0 ? [...cachedOrganisms] : getAllOptions().map(opt => opt.value);
+
+        if (allAvailableOrganisms.length === 0) {
             console.log("    [RANDOM_SELECT] No options available to select from. Aborting.");
+            setStatus('No organisms available to start a case.', true);
             return;
         }
 
-        // Clear any visual indication of a specific selection
-        organismSelect.value = 'random'; // Set dropdown to "Random Selection"
-        organismSelect.classList.add('random-selected'); // Style for random
-        randomOrganismBtn.classList.add('active'); // Style button as active
+        // 1. Get seen organisms from localStorage
+        let seenOrganisms = [];
+        try {
+            const savedSeen = localStorage.getItem(LOCAL_STORAGE_SEEN_ORGANISMS_KEY);
+            if (savedSeen) {
+                seenOrganisms = JSON.parse(savedSeen);
+            }
+        } catch (e) {
+            console.error("Error parsing seen organisms from localStorage:", e);
+            seenOrganisms = []; // Reset on error
+        }
+        console.log("    [RANDOM_SELECT] Previously seen organisms:", seenOrganisms);
+
+        // 2. Determine unseen organisms
+        let unseenOrganisms = allAvailableOrganisms.filter(o => !seenOrganisms.includes(o));
+        console.log("    [RANDOM_SELECT] Unseen organisms:", unseenOrganisms);
+
+        // 3. Check if we need to reset
+        if (unseenOrganisms.length === 0 && allAvailableOrganisms.length > 0) {
+            console.log("    [RANDOM_SELECT] All organisms have been seen. Resetting the list.");
+            // Reset and clear from storage
+            localStorage.removeItem(LOCAL_STORAGE_SEEN_ORGANISMS_KEY);
+            seenOrganisms = [];
+            unseenOrganisms = allAvailableOrganisms;
+            setStatus('You have completed all available organisms! The cycle will now repeat.');
+
+            // Try to avoid the very last organism from the previous cycle
+            if (unseenOrganisms.length > 1 && currentOrganismKey) {
+                const finalPool = unseenOrganisms.filter(o => o !== currentOrganismKey);
+                if (finalPool.length > 0) {
+                    unseenOrganisms = finalPool;
+                    console.log(`    [RANDOM_SELECT] Starting new cycle, avoiding last organism '${currentOrganismKey}'.`);
+                }
+            }
+        }
+
+        // 4. Select from the available pool
+        const optionsToUse = unseenOrganisms;
+
+        if (optionsToUse.length === 0) {
+            // This should only happen if allAvailableOrganisms was empty to begin with.
+            console.error("    [RANDOM_SELECT] CRITICAL: No options to select from even after logic. Aborting.");
+            return;
+        }
 
         const randomIndex = Math.floor(Math.random() * optionsToUse.length);
         const randomOrganismValue = optionsToUse[randomIndex];
-        console.log(`    [RANDOM_SELECT] Selected random index ${randomIndex}, which is value: ${randomOrganismValue}`);
+        console.log(`    [RANDOM_SELECT] Selected random index ${randomIndex} from pool. Value: ${randomOrganismValue}`);
 
 
-        // Find the corresponding display text from the dropdown options
+        // Set UI elements
+        organismSelect.value = 'random';
+        organismSelect.classList.add('random-selected');
+        randomOrganismBtn.classList.add('active');
+
         const allOptions = getAllOptions();
         const matchedOption = allOptions.find(opt => opt.value === randomOrganismValue);
         const randomOrganismText = matchedOption ? matchedOption.textContent : randomOrganismValue;
-        console.log("    [RANDOM_SELECT] Display text for selected organism:", randomOrganismText);
 
-
-        // Store the random selection in a data attribute
         organismSelect.dataset.randomlySelectedValue = randomOrganismValue;
         organismSelect.dataset.randomlySelectedText = randomOrganismText;
-        console.log("    [RANDOM_SELECT] Stored in dataset:", { value: randomOrganismValue, text: randomOrganismText });
-
-
-        // Update the button text to show the randomly selected organism
         randomOrganismBtn.textContent = `Random: ${randomOrganismText}`;
-        console.log("    [RANDOM_SELECT] <<< Function finished.");
+
+        console.log(`    [RANDOM_SELECT] <<< Function finished. Selected: ${randomOrganismValue} (${randomOrganismText})`);
     }
 
     if (randomOrganismBtn) {
@@ -460,27 +506,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentCaseId = generateCaseId(); // Generate a new case ID for each new case
         console.log("[START_CASE] New Case ID:", currentCaseId);
 
-        console.log("[START_CASE] 3. Determining selected organism.");
+        console.log("[START_CASE] 3. Determining selected organism. Forcing random selection as per new requirement.");
         let selectedOrganism;
 
-        // Prioritize the 'active' state of the random button as the user's true intent.
-        if (randomOrganismBtn.classList.contains('active')) {
-            console.log("[START_CASE]   - Random button is active. This is the user's intent. Calling selectRandomOrganism().");
-            selectRandomOrganism(); // Pick a new random organism
-            selectedOrganism = organismSelect.dataset.randomlySelectedValue;
-            console.log(`[START_CASE]   - Value after random selection: '${selectedOrganism}'`);
-        } else {
-            console.log("[START_CASE]   - Random button is not active. Using dropdown's value.");
-            selectedOrganism = organismSelect.value;
-            console.log(`[START_CASE]   - Initial dropdown value: '${selectedOrganism}'`);
-            // If the dropdown is for some reason still 'random', select a random one.
-            if (selectedOrganism === 'random') {
-                console.log("[START_CASE]   - Dropdown was 'random'. Calling selectRandomOrganism().");
-                selectRandomOrganism();
-                selectedOrganism = organismSelect.dataset.randomlySelectedValue;
-                console.log(`[START_CASE]   - Value after random selection: '${selectedOrganism}'`);
-            }
-        }
+        // NEW LOGIC: Always select a random organism when "Start New Case" is clicked.
+        console.log("[START_CASE]   - Calling selectRandomOrganism() to pick a new random organism.");
+        selectRandomOrganism(); // This function now handles both the logic and UI updates for random selection.
+        selectedOrganism = organismSelect.dataset.randomlySelectedValue;
+        console.log(`[START_CASE]   - Value after random selection: '${selectedOrganism}'`);
+
 
         // Check if we have a valid organism to proceed with
         console.log("[START_CASE] 4. Validating final organism choice.");
@@ -537,6 +571,20 @@ document.addEventListener('DOMContentLoaded', () => {
             finishBtn.disabled = false; // Enable finish button now
             console.log("[START_CASE] 9. Saving new conversation state.");
             saveConversationState(); // Save state after successful start
+
+            // NEW: Update the list of seen organisms for sampling without replacement
+            try {
+                const savedSeen = localStorage.getItem(LOCAL_STORAGE_SEEN_ORGANISMS_KEY);
+                let seenOrganisms = savedSeen ? JSON.parse(savedSeen) : [];
+                if (!seenOrganisms.includes(currentOrganismKey)) {
+                    seenOrganisms.push(currentOrganismKey);
+                    localStorage.setItem(LOCAL_STORAGE_SEEN_ORGANISMS_KEY, JSON.stringify(seenOrganisms));
+                    console.log("[START_CASE]   - Updated seen organisms list:", seenOrganisms);
+                }
+            } catch (e) {
+                console.error("[START_CASE]   - Error updating seen organisms list:", e);
+            }
+
             console.log("[START_CASE] <<< Process finished successfully.");
         } catch (error) {
             console.error("[START_CASE] <<< Error during start case process:", error);
