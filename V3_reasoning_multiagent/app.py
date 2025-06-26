@@ -10,6 +10,7 @@ from tutor import MedicalMicrobiologyTutor
 from agents.case import get_case
 import config
 import secrets
+from agents.case_generator_rag import CaseGeneratorRAGAgent
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -569,6 +570,18 @@ def admin_live_chats():
     except Exception as e:
         logging.error(f"Error fetching live chats: {e}", exc_info=True)
         return f"Error fetching live chats: {e}", 500
+
+@app.route('/get_cached_organisms', methods=['GET'])
+def get_cached_organisms():
+    """Returns a list of organisms that have pre-generated cases in the cache."""
+    try:
+        # It's okay to create a temporary agent just to access the cache.
+        case_generator = CaseGeneratorRAGAgent()
+        organisms = case_generator.get_cached_organisms()
+        return jsonify(organisms)
+    except Exception as e:
+        logging.error(f"Error getting cached organisms: {e}", exc_info=True)
+        return jsonify({"error": "Could not retrieve cached organisms"}), 500
 
 @app.cli.command("shell")
 def shell():

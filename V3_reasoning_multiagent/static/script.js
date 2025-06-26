@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
     let currentCaseId = null; // Store the current case ID
     let currentOrganismKey = null;
+    let cachedOrganisms = []; // To store the list of organisms with cached cases
 
     const LOCAL_STORAGE_HISTORY_KEY = 'microbiologyTutorChatHistory';
     const LOCAL_STORAGE_CASE_ID_KEY = 'microbiologyTutorCaseId';
@@ -130,6 +131,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Function to generate a unique case ID
     function generateCaseId() {
         return 'case_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    async function fetchCachedOrganisms() {
+        try {
+            const response = await fetch('/get_cached_organisms');
+            if (!response.ok) {
+                throw new Error('Failed to fetch cached organisms');
+            }
+            const data = await response.json();
+            if (data && Array.isArray(data)) {
+                cachedOrganisms = data;
+                console.log('Successfully fetched cached organisms:', cachedOrganisms);
+                // Enable the random button only if there are cached organisms
+                if (randomOrganismBtn) {
+                    randomOrganismBtn.disabled = cachedOrganisms.length === 0;
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching cached organisms:', error);
+            if (randomOrganismBtn) randomOrganismBtn.disabled = true; // Disable on error
+        }
     }
 
     function addMessage(sender, messageContent, addFeedbackUI = false) {
@@ -366,23 +388,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to select a random organism
     function selectRandomOrganism() {
-        const options = getAllOptions();
-        if (options.length === 0) return;
+        const optionsToUse = cachedOrganisms.length > 0 ? cachedOrganisms : getAllOptions().map(opt => opt.value);
+        if (optionsToUse.length === 0) return;
 
         // Clear any visual indication of a specific selection
         organismSelect.value = 'random'; // Set dropdown to "Random Selection"
         organismSelect.classList.add('random-selected'); // Style for random
         randomOrganismBtn.classList.add('active'); // Style button as active
 
-        const randomIndex = Math.floor(Math.random() * options.length);
-        const randomOption = options[randomIndex];
+        const randomIndex = Math.floor(Math.random() * optionsToUse.length);
+        const randomOrganismValue = optionsToUse[randomIndex];
+
+        // Find the corresponding display text from the dropdown options
+        const allOptions = getAllOptions();
+        const matchedOption = allOptions.find(opt => opt.value === randomOrganismValue);
+        const randomOrganismText = matchedOption ? matchedOption.textContent : randomOrganismValue;
+
 
         // Store the random selection in a data attribute
-        organismSelect.dataset.randomlySelectedValue = randomOption.value;
-        organismSelect.dataset.randomlySelectedText = randomOption.textContent;
+        organismSelect.dataset.randomlySelectedValue = randomOrganismValue;
+        organismSelect.dataset.randomlySelectedText = randomOrganismText;
 
         // Update the button text to show the randomly selected organism
-        randomOrganismBtn.textContent = `Random: ${randomOption.textContent}`;
+        randomOrganismBtn.textContent = `Random: ${randomOrganismText}`;
     }
 
     if (randomOrganismBtn) {
@@ -675,9 +703,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         console.log("[DEBUG_RENDER] State WAS loaded on initial page setup. Input and finishBtn should be active.");
     }
+
+    // Fetch cached organisms on page load
+    fetchCachedOrganisms();
 });
 
-// Make the in_context_learning flag available (assuming it's set globally by your template)
+// Make the in_context_learning flag available (assuming it's set by your template)
 // This line should be outside DOMContentLoaded if it's set by Flask template directly in a <script> tag
 // window.in_context_learning = window.in_context_learning || false;
 // It's already in your HTML, so it should be fine. 
