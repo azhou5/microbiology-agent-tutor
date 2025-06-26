@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from .base_agent import BaseAgent
 from openai import AzureOpenAI
+import logging
 
 # Try to import Qdrant and embedding libraries (optional)
 try:
@@ -109,18 +110,18 @@ class CaseGeneratorRAGAgent(BaseAgent):
 
     def generate_case(self, organism: str = None) -> str:
         """Generate a clinical case for the specified organism."""
+        logging.info(f"[BACKEND_START_CASE] 3d. CaseGenerator's generate_case called for organism: '{organism}'.")
         if organism:
             self.organism = organism.lower()
             self.collection = "union_collection"
         
         # Normalize organism name for cache key
         cache_key = self._normalize_organism_name(self.organism)
-        
-        print(f"Generating case for {self.organism}...")
+        logging.info(f"[BACKEND_START_CASE]   - Normalized cache key is: '{cache_key}'.")
         
         # Check if case already exists in cache
         if cache_key in self.case_cache:
-            print(f"Found cached case for {self.organism}")
+            logging.info(f"[BACKEND_START_CASE]   - Found cached case for '{cache_key}'. Returning it.")
             
             # Also save to the old case.txt file for backward compatibility
             case_file = os.path.join(self.output_dir, "case.txt")
@@ -132,7 +133,7 @@ class CaseGeneratorRAGAgent(BaseAgent):
             
             return self.case_cache[cache_key]
         
-        print(f"No cached case found for {self.organism}, generating new case...")
+        logging.info(f"[BACKEND_START_CASE]   - No cached case found for '{cache_key}', generating new case...")
         
         # Reset case sections
         self._reset_case_sections()

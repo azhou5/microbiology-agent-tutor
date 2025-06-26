@@ -224,28 +224,34 @@ class MedicalMicrobiologyTutor:
 
     def start_new_case(self, organism=None, force_regenerate=False):
         """Initialize a new case with the specified organism."""
+        logging.info(f"[BACKEND_START_CASE] 3a. Tutor's start_new_case method called with organism: '{organism}'.")
         self.current_organism = organism or "staphylococcus aureus"
-        print(f"Starting new case with organism: {self.current_organism}")  # Debug log
+        logging.info(f"[BACKEND_START_CASE]   - Current organism set to: '{self.current_organism}'")
 
         # Get the case for the organism
         if force_regenerate:
-            print(f"Force regenerating case for {self.current_organism}")
+            logging.info(f"[BACKEND_START_CASE] 3b. Force regenerating case for {self.current_organism}.")
             from agents.case_generator_rag import CaseGeneratorRAGAgent
             case_generator = CaseGeneratorRAGAgent()
             self.case_description = case_generator.regenerate_case(self.current_organism)
         else:
+            logging.info(f"[BACKEND_START_CASE] 3b. Getting case for '{self.current_organism}' via get_case().")
             self.case_description = get_case(self.current_organism)
         
         if not self.case_description:
+            logging.error("[BACKEND_START_CASE] <<< Failed to load case description.")
             return "Error: Could not load case for the specified organism."
 
+        logging.info("[BACKEND_START_CASE] 3e. Resetting message history and updating system message.")
         # Reset the message history and set the formatted system message
         self.messages = []  # Clear messages first
         self._update_system_message()  # This will create the system message
         
+        logging.info("[BACKEND_START_CASE] 4. Calling _generate_initial_presentation.")
         # Get initial case presentation using the dedicated method
         try:
             initial_response = self._generate_initial_presentation()
+            logging.info("[BACKEND_START_CASE] 5. Adding initial messages to history and returning response.")
             # Add both the system message and initial response to history
             self.messages = [
                 {"role": "system", "content": self.messages[0]["content"]},
@@ -253,7 +259,7 @@ class MedicalMicrobiologyTutor:
             ]
             return initial_response
         except Exception as e:
-            print(f"Error getting initial case presentation: {e}")
+            logging.error(f"[BACKEND_START_CASE] <<< Error getting initial presentation: {e}")
             return f"Error: Could not get initial case presentation. {e}"
 
     def get_available_organisms(self):

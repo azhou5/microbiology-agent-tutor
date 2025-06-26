@@ -22,10 +22,21 @@ use_db = config.USE_GLOBAL_DB or config.USE_LOCAL_DB
 # --- Configuration ---
 FEEDBACK_LOG_FILE = 'feedback.log'
 CASE_FEEDBACK_LOG_FILE = 'case_feedback.log'
+DEBUG_LOG_FILE = 'debug_log.log'
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 
 # --- Logging Setup ---
-logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+# This configures the root logger to send logs to both a file and the console.
+logging.basicConfig(
+    level=logging.INFO, 
+    format=LOG_FORMAT,
+    handlers=[
+        logging.FileHandler(DEBUG_LOG_FILE),
+        logging.StreamHandler()
+    ])
+
+# The specific feedback loggers will still write to their own files
+# and will NOT propagate messages to the root logger's handlers.
 file_handler = logging.FileHandler(FEEDBACK_LOG_FILE)
 file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 feedback_logger = logging.getLogger('feedback')
@@ -230,11 +241,13 @@ def index():
 @app.route('/start_case', methods=['POST'])
 def start_case():
     """Starts a new case with the selected organism, managed in session."""
+    logging.info("[BACKEND_START_CASE] >>> Received request to /start_case.")
     try:
         data = request.get_json()
         organism = data.get('organism')
         model_name = 'o3-mini'  # Always use o3-mini for new cases as per current logic
         client_case_id = data.get('case_id') # Added to receive case_id
+        logging.info(f"[BACKEND_START_CASE] 1. Parsed request data: organism='{organism}', case_id='{client_case_id}'")
 
         logging.info(f"Starting new case with organism: {organism} and model: {model_name} (Session new: {session.new}, Case ID: {client_case_id})")
         
@@ -242,6 +255,7 @@ def start_case():
             logging.error(f"Case ID missing in start_case request for organism {organism}. (Session new: {session.new})")
             return jsonify({"error": "Case ID is missing. Cannot start case."}), 400
 
+        logging.info("[BACKEND_START_CASE] 2. Initializing MedicalMicrobiologyTutor.")
         tutor = MedicalMicrobiologyTutor(
             output_tool_directly=config.OUTPUT_TOOL_DIRECTLY,
             run_with_faiss=config.USE_FAISS,
@@ -249,13 +263,16 @@ def start_case():
             model_name=model_name
         )
             
+        logging.info(f"[BACKEND_START_CASE] 3. Calling tutor.start_new_case with organism: '{organism}'.")
         initial_message = tutor.start_new_case(organism=organism)
+        logging.info("[BACKEND_START_CASE] 6. Storing case_id in session and saving tutor state.")
         session['current_case_id'] = client_case_id # Store case_id in session
         save_tutor_to_session(tutor)
 
         if db:
             try:
                 # Log system message
+                logging.info("[BACKEND_START_CASE] 7. Logging initial messages to database.")
                 if tutor.messages and tutor.messages[0]['role'] == 'system':
                     system_log_entry = ConversationLog(
                         case_id=client_case_id,
@@ -279,12 +296,13 @@ def start_case():
                 db.session.rollback()
                 logging.error(f"Error logging initial messages to DB for case_id {client_case_id}: {e}", exc_info=True)
         
+        logging.info("[BACKEND_START_CASE] 8. Preparing and sending final JSON response.")
         return jsonify({
             "initial_message": initial_message,
             "history": tutor.messages
         })
     except Exception as e:
-        logging.error(f"Error starting case for organism {organism}: {e} (Session new: {session.new})", exc_info=True)
+        logging.error(f"[BACKEND_START_CASE] <<< Error during /start_case processing: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/chat', methods=['POST'])

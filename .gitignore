@@ -6,3 +6,5 @@ __pycache__/
 case_feedback.log
 feedback.log
 dot_env_microtutor.txt
+debug_log.log
+llm_interactions.log

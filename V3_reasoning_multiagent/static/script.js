@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveConversationState() {
         try {
+            console.log("    [SAVE_STATE] >>> Saving state to localStorage:", { historyLength: chatHistory.length, caseId: currentCaseId, organismKey: currentOrganismKey });
             localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(chatHistory));
             localStorage.setItem(LOCAL_STORAGE_CASE_ID_KEY, currentCaseId);
             if (currentOrganismKey) { // Only save if not null
@@ -119,10 +120,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearConversationState() {
         try {
+            console.log("  [CLEAR_STATE] >>> Clearing conversation state from localStorage.");
             localStorage.removeItem(LOCAL_STORAGE_HISTORY_KEY);
             localStorage.removeItem(LOCAL_STORAGE_CASE_ID_KEY);
             localStorage.removeItem(LOCAL_STORAGE_ORGANISM_KEY);
-            console.log("Conversation state cleared from localStorage.");
+            console.log("  [CLEAR_STATE] <<< Conversation state cleared.");
         } catch (e) {
             console.error("Error clearing conversation state from localStorage:", e);
         }
@@ -388,8 +390,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to select a random organism
     function selectRandomOrganism() {
+        console.log("    [RANDOM_SELECT] >>> Function started.");
         const optionsToUse = cachedOrganisms.length > 0 ? cachedOrganisms : getAllOptions().map(opt => opt.value);
-        if (optionsToUse.length === 0) return;
+        console.log("    [RANDOM_SELECT] Using this list for selection:", optionsToUse);
+        if (optionsToUse.length === 0) {
+            console.log("    [RANDOM_SELECT] No options available to select from. Aborting.");
+            return;
+        }
 
         // Clear any visual indication of a specific selection
         organismSelect.value = 'random'; // Set dropdown to "Random Selection"
@@ -398,28 +405,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const randomIndex = Math.floor(Math.random() * optionsToUse.length);
         const randomOrganismValue = optionsToUse[randomIndex];
+        console.log(`    [RANDOM_SELECT] Selected random index ${randomIndex}, which is value: ${randomOrganismValue}`);
+
 
         // Find the corresponding display text from the dropdown options
         const allOptions = getAllOptions();
         const matchedOption = allOptions.find(opt => opt.value === randomOrganismValue);
         const randomOrganismText = matchedOption ? matchedOption.textContent : randomOrganismValue;
+        console.log("    [RANDOM_SELECT] Display text for selected organism:", randomOrganismText);
 
 
         // Store the random selection in a data attribute
         organismSelect.dataset.randomlySelectedValue = randomOrganismValue;
         organismSelect.dataset.randomlySelectedText = randomOrganismText;
+        console.log("    [RANDOM_SELECT] Stored in dataset:", { value: randomOrganismValue, text: randomOrganismText });
+
 
         // Update the button text to show the randomly selected organism
         randomOrganismBtn.textContent = `Random: ${randomOrganismText}`;
+        console.log("    [RANDOM_SELECT] <<< Function finished.");
     }
 
     if (randomOrganismBtn) {
         randomOrganismBtn.addEventListener('click', selectRandomOrganism);
-    }
-
-    // Initialize random selection on page load if "Random Selection" is default
-    if (organismSelect && organismSelect.value === 'random') {
-        selectRandomOrganism(); // Make an initial random selection
     }
 
     // Event listener for organism select change
@@ -442,48 +450,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleStartCase() {
+        console.log("[START_CASE] >>> 'Start New Case' clicked. Beginning process.");
+        console.log("[START_CASE] 1. Clearing previous state.");
         clearConversationState(); // Clear any previous persisted state when starting a new case.
+
+        console.log("[START_CASE] 2. Resetting local variables (history, UI).");
         chatHistory = [];
         chatbox.innerHTML = ''; // Clear chatbox
         currentCaseId = generateCaseId(); // Generate a new case ID for each new case
+        console.log("[START_CASE] New Case ID:", currentCaseId);
 
-        let selectedOrganism = organismSelect.value;
+        console.log("[START_CASE] 3. Determining selected organism.");
+        let selectedOrganism;
 
-        // If "Random Selection" is active, pick a new random organism now.
-        if (selectedOrganism === 'random') {
-            selectRandomOrganism(); // This function updates the UI and the dataset attribute
-            selectedOrganism = organismSelect.dataset.randomlySelectedValue; // Get the newly picked value
+        // Prioritize the 'active' state of the random button as the user's true intent.
+        if (randomOrganismBtn.classList.contains('active')) {
+            console.log("[START_CASE]   - Random button is active. This is the user's intent. Calling selectRandomOrganism().");
+            selectRandomOrganism(); // Pick a new random organism
+            selectedOrganism = organismSelect.dataset.randomlySelectedValue;
+            console.log(`[START_CASE]   - Value after random selection: '${selectedOrganism}'`);
+        } else {
+            console.log("[START_CASE]   - Random button is not active. Using dropdown's value.");
+            selectedOrganism = organismSelect.value;
+            console.log(`[START_CASE]   - Initial dropdown value: '${selectedOrganism}'`);
+            // If the dropdown is for some reason still 'random', select a random one.
+            if (selectedOrganism === 'random') {
+                console.log("[START_CASE]   - Dropdown was 'random'. Calling selectRandomOrganism().");
+                selectRandomOrganism();
+                selectedOrganism = organismSelect.dataset.randomlySelectedValue;
+                console.log(`[START_CASE]   - Value after random selection: '${selectedOrganism}'`);
+            }
         }
 
         // Check if we have a valid organism to proceed with
+        console.log("[START_CASE] 4. Validating final organism choice.");
         if (!selectedOrganism || selectedOrganism === 'random') {
             setStatus('Please select an organism or click the "Random Selection" button.', true);
+            console.log("[START_CASE] <<< Aborting: No valid organism selected.");
             return;
         }
+        console.log(`[START_CASE]    - Validation passed. Using organism: '${selectedOrganism}'`);
 
         currentOrganismKey = selectedOrganism; // Set the global currentOrganismKey
+        console.log(`[START_CASE] 5. Set global organism key to: '${currentOrganismKey}' and updating UI status.`);
         setStatus(`Starting new case...`);
 
         disableInput(true);
         finishBtn.disabled = true; // Disable finish button until case starts
 
         try {
+            console.log("[START_CASE] 6. Sending request to backend /start_case endpoint.");
+            console.log("[START_CASE]   - Payload:", { organism: currentOrganismKey, case_id: currentCaseId });
             const response = await fetch('/start_case', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ organism: currentOrganismKey, case_id: currentCaseId }),
             });
 
+            console.log("[START_CASE] 7. Received response from backend.");
             if (!response.ok) {
                 const err = await response.json();
+                console.error("[START_CASE] <<< Error from backend:", err);
                 throw new Error(err.error || `HTTP ${response.status}`);
             }
 
             const data = await response.json();
+            console.log("[START_CASE]   - Response data:", data);
             if (data.error) {
                 throw new Error(data.error);
             }
 
+            console.log("[START_CASE] 8. Populating chat history and UI from response.");
             chatHistory = data.history || []; // Initialize with history from server (includes system prompt)
 
             // The initial message is already part of the history from the server
@@ -498,9 +535,11 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus(`Case started. Case ID: ${currentCaseId}`);
             disableInput(false);
             finishBtn.disabled = false; // Enable finish button now
+            console.log("[START_CASE] 9. Saving new conversation state.");
             saveConversationState(); // Save state after successful start
+            console.log("[START_CASE] <<< Process finished successfully.");
         } catch (error) {
-            console.error(error);
+            console.error("[START_CASE] <<< Error during start case process:", error);
             setStatus(`Error: ${error.message}`, true);
             disableInput(false); // Re-enable input if start fails
             currentOrganismKey = null; // Reset organism key on failure

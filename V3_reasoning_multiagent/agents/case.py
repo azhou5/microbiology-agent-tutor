@@ -1,5 +1,6 @@
 import os
 from agents.case_generator_rag import CaseGeneratorRAGAgent
+import logging
 
 # Initialize the case generator
 case_generator = CaseGeneratorRAGAgent()
@@ -14,6 +15,7 @@ def get_case(organism):
     Returns:
         str: The case text.
     """
+    logging.info(f"[BACKEND_START_CASE] 3c. get_case function called for organism: '{organism}'.")
     # Check if it's a path (for backward compatibility)
     if os.path.exists(organism):
         try:
@@ -23,5 +25,6 @@ def get_case(organism):
             print(f"Error reading case from file: {str(e)}")
     
     # Otherwise, generate a case for the specified organism
+    logging.info(f"[BACKEND_START_CASE]   - Calling case_generator.generate_case for '{organism}'.")
     return case_generator.generate_case(organism)
     
