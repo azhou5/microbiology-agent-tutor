@@ -17,6 +17,7 @@ from Feedback.feedback_faiss import retrieve_similar_examples, index, texts
 import config
 from datetime import datetime
 import logging
+import time
 
 
 dotenv.load_dotenv()
@@ -174,7 +175,7 @@ class MedicalMicrobiologyTutor:
                 self.messages[0]["content"] = formatted_system_message
 
     def _generate_initial_presentation(self):
-        """Generate the initial case presentation using a dedicated LLM call."""
+        """Generate the initial case presentation using a dedicated LLM call with retries."""
         
         # Truncate the case description to avoid exceeding token limits
         max_length = 3000  # A safe number of characters
@@ -189,21 +190,37 @@ class MedicalMicrobiologyTutor:
         Focus on the patient's demographics and chief complaint.
         Use this exact format: "A [age]-year-old [sex] presents with [chief complaint]."
         
-        MAKE THIS INITIAL PRESENTATION PURPOSEFULLY INCOMPLETE! You MUST NOT PROVIDE the CLICHING SYMPTOMS for the diagnosis. 
+        MAKE THIS INITIAL PRESENTATION PURPOSEFULLY INCOMPLETE! You MUST NOT PROVIDE the CLICHING SYMPTOMS for the diagnosis.
         For example:
         "A 72-year-old male presents with a 5-day history of productive cough and fever"
         "A 45-year-old female presents with increasing redness, swelling, and pain in her left knee"
 
         Keep it concise and focused on the most important presenting complaint."""
                 
-        try:
-            # Provide a minimal system prompt for this single-turn call
-            system_prompt = "You are a helpful assistant that generates clinical case presentations."
-            response = chat_complete(system_prompt=system_prompt, user_prompt=prompt, model=self.current_model)
-            return response.strip()
-        except Exception as e:
-            print(f"Error generating initial presentation: {e}")
-            return "A patient presents for evaluation."
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                system_prompt = "You are a helpful assistant that generates clinical case presentations."
+                response = chat_complete(
+                    system_prompt=system_prompt, 
+                    user_prompt=prompt, 
+                    model=self.current_model
+                )
+                
+                # If we get a valid response, return it immediately.
+                if response:
+                    return response.strip()
+                
+                # If the response is None, log it and retry.
+                logging.warning(f"Initial presentation generation failed. Retrying... (Attempt {attempt + 1}/{max_retries})")
+
+            except Exception as e:
+                logging.error(f"An unexpected error occurred in _generate_initial_presentation on attempt {attempt + 1}/{max_retries}: {e}")
+            
+            time.sleep(1) # Wait 1 second before the next attempt
+        
+        logging.error("All retries for initial presentation failed. Returning a default presentation.")
+        return "A patient presents for evaluation."
 
     def start_new_case(self, organism=None, force_regenerate=False):
         """Initialize a new case with the specified organism."""

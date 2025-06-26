@@ -28,15 +28,16 @@ if BACKEND == "azure":
                 model=model_to_use,
                 max_tokens=max_new_tokens
             )
-            if response:
+            # Return the response if it's a non-empty string, otherwise return None.
+            if response and response.strip():
                 print(f"Response: {response}")
                 return response
             else:
-                print("Error: LLM returned an empty response.")
-                return "Sorry, there was an error communicating with the language model. Please try again."
+                print("Error: LLM returned an empty or whitespace response.")
+                return None # Signal failure to the caller
         except Exception as e:
-            print(f"Error: {e}")
-            return f"An unexpected error occurred: {e}"
+            print(f"Error in chat_complete: {e}")
+            return None # Signal failure
 
 else:
     # --- Local HF model ---
