@@ -175,8 +175,15 @@ class MedicalMicrobiologyTutor:
 
     def _generate_initial_presentation(self):
         """Generate the initial case presentation using a dedicated LLM call."""
+        
+        # Truncate the case description to avoid exceeding token limits
+        max_length = 3000  # A safe number of characters
+        truncated_case_description = self.case_description
+        if len(truncated_case_description) > max_length:
+            truncated_case_description = truncated_case_description[:max_length] + "..."
+            
         prompt = f"""Here is a clinical case:
-        {self.case_description}
+        {truncated_case_description}
 
         Generate a one-line initial presentation of this case.
         Focus on the patient's demographics and chief complaint.

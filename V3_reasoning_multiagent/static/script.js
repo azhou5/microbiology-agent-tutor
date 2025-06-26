@@ -420,16 +420,21 @@ document.addEventListener('DOMContentLoaded', () => {
         currentCaseId = generateCaseId(); // Generate a new case ID for each new case
 
         let selectedOrganism = organismSelect.value;
-        if (selectedOrganism === 'random' && organismSelect.dataset.randomlySelectedValue) {
-            selectedOrganism = organismSelect.dataset.randomlySelectedValue;
-            setStatus(`Starting new randomly selected case...`);
-        } else if (selectedOrganism === 'random') {
-            setStatus('Please select an organism or use "Random Selection" to pick one.', true);
-            return;
-        } else {
-            setStatus(`Starting new case...`);
+
+        // If "Random Selection" is active, pick a new random organism now.
+        if (selectedOrganism === 'random') {
+            selectRandomOrganism(); // This function updates the UI and the dataset attribute
+            selectedOrganism = organismSelect.dataset.randomlySelectedValue; // Get the newly picked value
         }
+
+        // Check if we have a valid organism to proceed with
+        if (!selectedOrganism || selectedOrganism === 'random') {
+            setStatus('Please select an organism or click the "Random Selection" button.', true);
+            return;
+        }
+
         currentOrganismKey = selectedOrganism; // Set the global currentOrganismKey
+        setStatus(`Starting new case...`);
 
         disableInput(true);
         finishBtn.disabled = true; // Disable finish button until case starts
