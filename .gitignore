@@ -1,2 +1,12 @@
-.env
-env.dev
+**/.env
+**/env.dev
+**/__pycache__/
+__pycache__/
+*.pyc
+case_feedback.log
+feedback.log
+dot_env_microtutor.txt
+debug_log.log
+llm_interactions.log
+Datasets/
+V4_refactor/

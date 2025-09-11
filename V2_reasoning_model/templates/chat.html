@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Microbiology Tutor</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- App CSS -->
+    <link href="/static/css/style.css" rel="stylesheet">
+    <link href="/static/css/styles.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h2>Medical Microbiology Tutor</h2>
+                        <div id="organism-badge" style="display: none; margin-top: 5px;" class="badge bg-primary">
+                            Current organism: <span id="current-organism-badge"></span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col">
+                                <button class="btn btn-primary" onclick="location.href='/organisms'"
+                                    id="start-case-btn">Select Organism</button>
+                                <button class="btn btn-secondary" onclick="resetSession()" id="reset-btn">Reset
+                                    Session</button>
+                                <button class="btn btn-info" onclick="startTestCase()" id="test-case-btn">
+                                    Start Test Case
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="instructions-panel">
+                                    <h4>Case Progression Instructions:</h4>
+                                    <ol>
+                                        <li>First, gather information through history and physical examination questions
+                                        </li>
+                                        <li>Once you have enough information, provide your differential diagnosis</li>
+                                        <li>After providing your differential, you will either proceed or have to
+                                            provide your
+                                            reasoning for why you have this differential.
+                                        </li>
+                                        <li>After the differential, you may start to ask about labs and diagnostics
+                                        </li>
+                                        <li>When you're ready to make your final diagnosis, clearly state your
+                                            conclusion</li>
+                                        <li>If correct, you'll proceed to targeted questions about the
+                                            organism/condition</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Chat on the left -->
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        Case Discussion
+                                    </div>
+                                    <div class="chat-container" id="chat-container">
+                                        <div class="typing-indicator" id="typing-indicator">Tutor is typing...</div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="user-input"
+                                                placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+                                            <button class="btn btn-primary" onclick="sendMessage()"
+                                                id="send-btn">Send</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Revealed info on the right -->
+                            <div class="col-md-4">
+                                <div class="card compact-card">
+                                    <div class="card-header compact-header">
+                                        Revealed Information
+                                    </div>
+                                    <div class="revealed-info" id="revealed-info">
+                                        <h5 class="history-header mb-1">Patient History</h5>
+                                        <ul id="history-info" class="list-group list-group-flush compact-list">
+                                            <!-- History items will be added here -->
+                                        </ul>
+
+                                        <h5 class="mt-2 exam-header mb-1">Physical Exam</h5>
+                                        <ul id="exam-info" class="list-group list-group-flush compact-list">
+                                            <!-- Exam items will be added here -->
+                                        </ul>
+
+                                        <h5 class="mt-2 labs-header mb-1">Labs & Tests</h5>
+                                        <ul id="labs-info" class="list-group list-group-flush compact-list">
+                                            <!-- Lab items will be added here -->
+                                        </ul>
+
+                                        <div class="mt-3 text-center">
+                                            <button id="save-case-btn" class="btn btn-outline-primary btn-sm">
+                                                <i class="bi bi-download"></i> Save Case
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- App JS -->
+    <script src="/static/js/main.js"></script>
+</body>
+
+</html>

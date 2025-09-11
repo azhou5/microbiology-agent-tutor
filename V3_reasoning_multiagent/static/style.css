@@ -1,0 +1,652 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    width: 80%;
+    max-width: 700px;
+    display: flex;
+    flex-direction: column;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.case-setup {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    justify-content: center;
+}
+
+.case-setup label {
+    font-weight: bold;
+}
+
+.case-setup select,
+.case-setup button {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.case-setup button {
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.random-btn {
+    background-color: #6c757d;
+    color: white;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.random-btn:hover {
+    background-color: #5a6268;
+}
+
+@keyframes randomSelect {
+    0% {
+        background-color: #fff;
+    }
+
+    50% {
+        background-color: #e3f2fd;
+    }
+
+    100% {
+        background-color: #fff;
+    }
+}
+
+.random-selected {
+    animation: randomSelect 1s ease-in-out;
+}
+
+.case-setup button:hover {
+    background-color: #0056b3;
+}
+
+#chatbox {
+    height: 450px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.message {
+    padding: 10px 15px;
+    border-radius: 15px;
+    max-width: 80%;
+    word-wrap: break-word;
+    /* Ensure long words break */
+    line-height: 1.4;
+    position: relative;
+    /* For feedback buttons */
+}
+
+.user-message {
+    background-color: #d1e7fd;
+    /* Light blue */
+    color: #0a58ca;
+    align-self: flex-end;
+    border-bottom-right-radius: 5px;
+}
+
+.assistant-message {
+    background-color: #e2e3e5;
+    /* Light grey */
+    color: #41464b;
+    align-self: flex-start;
+    border-bottom-left-radius: 5px;
+    padding-bottom: 5px;
+    /* Add some padding at the bottom */
+}
+
+.feedback-container {
+    margin-top: 8px;
+    padding-top: 5px;
+    border-top: 1px solid #d5d8db;
+    opacity: 0.8;
+    transition: opacity 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.feedback-textboxes {
+    display: none;
+    /* Hidden by default */
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.feedback-textboxes.visible {
+    display: flex;
+}
+
+.feedback-textbox {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.feedback-textbox label {
+    font-size: 0.9em;
+    color: #555;
+}
+
+.feedback-textbox textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.9em;
+    min-height: 60px;
+}
+
+.feedback-submit {
+    align-self: flex-end;
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.feedback-submit:hover {
+    background-color: #0056b3;
+}
+
+.feedback-submit:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.assistant-message:hover .feedback-container {
+    opacity: 1;
+}
+
+.feedback-prompt {
+    font-size: 0.85em;
+    color: #555;
+    margin-right: 8px;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.feedback-buttons {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.feedback-buttons .rating-btn {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 3px 8px;
+    min-width: 25px;
+    text-align: center;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    color: #333;
+}
+
+.feedback-buttons .cancel-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 3px 8px;
+    margin-left: 8px;
+    color: #dc3545;
+    transition: all 0.2s ease;
+}
+
+.feedback-buttons .cancel-btn:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+.feedback-buttons .cancel-btn:disabled {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.feedback-buttons .rating-btn:hover {
+    background-color: #e0e0e0;
+    border-color: #bbb;
+    transform: translateY(-1px);
+}
+
+.feedback-buttons .rating-btn.rated {
+    background-color: #007bff;
+    color: white;
+    border-color: #0056b3;
+    font-weight: bold;
+}
+
+.feedback-buttons .rating-btn.rated:hover {
+    background-color: #0069d9;
+    transform: none;
+}
+
+.feedback-buttons .rating-btn:disabled {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.feedback-buttons .rating-btn:disabled:hover {
+    transform: none;
+    background-color: #e9ecef;
+}
+
+.feedback-input {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.feedback-input textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.9em;
+}
+
+.feedback-submit-btn {
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.feedback-submit-btn:hover {
+    background-color: #0056b3;
+}
+
+.feedback-submit-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.feedback-container em {
+    font-style: italic;
+    color: #666;
+}
+
+#input-area {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+#user-input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 1em;
+    line-height: 1.4;
+    min-height: calc(1.4em + 20px + 2px);
+    resize: vertical;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    box-sizing: border-box;
+}
+
+#send-btn {
+    padding: 10px 15px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#send-btn:hover {
+    background-color: #218838;
+}
+
+#send-btn:disabled,
+#user-input:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.status {
+    text-align: center;
+    margin-top: 10px;
+    color: #6c757d;
+    height: 1em;
+    /* Reserve space to prevent layout shift */
+}
+
+/* Modal styles */
+.modal {
+    display: none;
+    /* Hidden by default, shown by adding .is-active */
+    position: fixed;
+    /* Stay in place */
+    z-index: 100;
+    /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%;
+    /* Full width */
+    height: 100%;
+    /* Full height */
+    overflow: auto;
+    /* Enable scroll if needed */
+    background-color: rgba(0, 0, 0, 0.5);
+    /* Black w/ opacity */
+    justify-content: center;
+    align-items: center;
+}
+
+.modal.is-active {
+    display: flex;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    padding: 25px;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 600px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.case-summary {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border-left: 4px solid #007bff;
+}
+
+.case-summary h3 {
+    margin-top: 0;
+    color: #333;
+    font-size: 1.2em;
+}
+
+.case-summary p {
+    margin-bottom: 0;
+    color: #555;
+}
+
+#correct-organism {
+    color: #007bff;
+    font-size: 1.1em;
+}
+
+.feedback-question {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.skip-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 0.9em;
+    color: #6c757d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+}
+
+.skip-btn:hover {
+    background-color: #e9ecef;
+    color: #495057;
+}
+
+.skip-btn:disabled {
+    background-color: #e9ecef;
+    color: #adb5bd;
+    cursor: not-allowed;
+}
+
+.likert-scale {
+    display: flex;
+    justify-content: space-between;
+    margin: 10px 0;
+}
+
+.likert-scale label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    font-size: 14px;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+#submit-feedback-btn,
+#close-feedback-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#submit-feedback-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+
+#close-feedback-btn {
+    background-color: #f44336;
+    color: white;
+}
+
+#feedback-comments {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+}
+
+/* Finish button styling */
+#finish-btn {
+    margin-left: 10px;
+    background-color: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+}
+
+#finish-btn:hover {
+    background-color: #e68a00;
+}
+
+#finish-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.rating-select {
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.feedback-submitted {
+    margin-top: 8px;
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.feedback-rating {
+    color: #007bff;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.feedback-section {
+    margin-top: 8px;
+}
+
+.feedback-section:first-of-type {
+    margin-top: 0;
+}
+
+.feedback-label {
+    color: #495057;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.feedback-text {
+    color: #666;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-left: 8px;
+    border-left: 2px solid #dee2e6;
+}
+
+.case-setup select {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    color: #333;
+}
+
+/* Style for when random selection is active */
+.case-setup select.random-selected {
+    color: transparent;
+    text-shadow: 0 0 0 #333;
+}
+
+.case-setup select.random-selected option {
+    color: #333;
+}
+
+.case-setup select.random-selected option:checked {
+    color: transparent;
+    text-shadow: 0 0 0 #333;
+}
+
+/* Hide organism selection */
+.case-setup label[for="organism-select"],
+.case-setup .hidden-select,
+.case-setup #random-organism-btn {
+    display: none;
+}
+
+/* Adjust spacing for hidden elements */
+.case-setup {
+    justify-content: center;
+    gap: 15px;
+}
+
+.instructions {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px 20px;
+    margin: 15px 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.instructions h2 {
+    color: #2c3e50;
+    font-size: 1.2em;
+    margin: 0 0 10px 0;
+    font-weight: 600;
+}
+
+.instructions ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.instructions li {
+    color: #495057;
+    margin-bottom: 6px;
+    line-height: 1.3;
+    font-size: 0.95em;
+}
+
+.instructions li:last-child {
+    margin-bottom: 0;
+}
+
+.instructions strong {
+    color: #2c3e50;
+    font-weight: 600;
+}
