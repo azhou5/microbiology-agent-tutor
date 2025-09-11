@@ -373,26 +373,34 @@ h1 {
     text-align: center;
     margin-top: 10px;
     color: #6c757d;
-    /* Grey color */
-    font-style: italic;
-    min-height: 1.2em;
-    /* Reserve space */
+    height: 1em;
+    /* Reserve space to prevent layout shift */
 }
 
 /* Modal styles */
 .modal {
     display: none;
+    /* Hidden by default, shown by adding .is-active */
     position: fixed;
-    z-index: 1000;
+    /* Stay in place */
+    z-index: 100;
+    /* Sit on top */
     left: 0;
     top: 0;
     width: 100%;
+    /* Full width */
     height: 100%;
+    /* Full height */
+    overflow: auto;
+    /* Enable scroll if needed */
     background-color: rgba(0, 0, 0, 0.5);
-    align-items: center;
+    /* Black w/ opacity */
     justify-content: center;
-    padding: 20px;
-    box-sizing: border-box;
+    align-items: center;
+}
+
+.modal.is-active {
+    display: flex;
 }
 
 .modal-content {

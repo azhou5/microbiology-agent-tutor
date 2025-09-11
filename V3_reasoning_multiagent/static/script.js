@@ -12,28 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
     const correctOrganismSpan = document.getElementById('correct-organism');
 
-    // --- Temporary Debugging: Monitor feedbackModal.style.display changes ---
-    if (feedbackModal) {
-        let currentDisplay = feedbackModal.style.display;
-        Object.defineProperty(feedbackModal.style, 'display', {
-            get: function () {
-                return currentDisplay;
-            },
-            set: function (value) {
-                console.log('[DEBUG_MODAL_STYLE] feedbackModal.style.display is being set to:', value);
-                if (value === 'block' || value === 'flex') {
-                    console.error('[DEBUG_MODAL_STYLE] ATTENTION: feedbackModal.style.display is being set to \'block\' or \'flex\'. Call stack:');
-                    console.log(new Error().stack);
-                    // debugger; // Temporarily comment out debugger for smoother testing of this fix
-                }
-                currentDisplay = value;
-            },
-            configurable: true
-        });
-    } else {
-        console.error('[DEBUG_MODAL_STYLE] feedbackModal element not found!');
-    }
-    // --- End Temporary Debugging ---
+    // The modal display debugging code is no longer needed and has been removed.
 
     let chatHistory = []; // Store the conversation history [{role: 'user'/'assistant', content: '...'}, ...]
     let currentCaseId = null; // Store the current case ID
@@ -678,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 correctOrganismSpan.textContent = "Unknown (case not fully started or error occurred)";
             }
             console.log("[DEBUG_RENDER] Displaying feedback modal via finishBtn click.");
-            feedbackModal.style.display = 'flex';
+            feedbackModal.classList.add('is-active');
         });
     }
 
@@ -686,8 +665,8 @@ document.addEventListener('DOMContentLoaded', () => {
         closeFeedbackBtn.addEventListener('click', () => {
             console.log("[DEBUG_MODAL_CLOSE] closeFeedbackBtn clicked!");
             if (feedbackModal) {
-                feedbackModal.style.display = 'none';
-                console.log("[DEBUG_MODAL_CLOSE] feedbackModal.style.display set to 'none'.");
+                feedbackModal.classList.remove('is-active');
+                console.log("[DEBUG_MODAL_CLOSE] feedbackModal is now hidden.");
             } else {
                 console.error("[DEBUG_MODAL_CLOSE] feedbackModal element not found when trying to close!");
             }
@@ -731,7 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 setStatus('Case feedback submitted! Thank you. You can start a new case.');
-                feedbackModal.style.display = 'none';
+                feedbackModal.classList.remove('is-active');
 
                 // Reset UI for a new case
                 chatbox.innerHTML = '<p class="status">Case finished. Select an organism and start a new case.</p>';
