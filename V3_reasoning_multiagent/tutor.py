@@ -2,12 +2,12 @@ from openai import OpenAI
 from typing import Callable
 from agents.patient import run_patient
 from agents.case import get_case
+from agents.hint import run_hint
+from agents.socratic import run_socratic
 import os
 import dotenv
 import sys
 import json
-from agents.patient import run_patient
-from agents.hint import run_hint
 import re
 import pickle
 import numpy as np
@@ -24,109 +24,17 @@ dotenv.load_dotenv()
 
 from llm_router import chat_complete
 from llm_router import llm_manager
+from tutor_prompts_tools import generate_tool_descriptions, get_system_message_template, get_tool_rules
 
 
-# Tool mapping - only includes 'patient' now
+# Tool mapping - includes all three agents
 name_to_function_map: dict[str, Callable] = {
-    "patient": run_patient
-    #"hint": run_hint,
-    # "finish": finish, # Removed finish tool
+    "patient": run_patient,
+    "hint": run_hint,
+    "socratic": run_socratic
 }
 
-def generate_tool_descriptions(tools_dict):
-    descriptions = []
-    for tool_name, tool_func in tools_dict.items():
-        # Ensure docstring exists and replace newlines for clean formatting
-        docstring = getattr(tool_func, '__doc__', "No description available.").replace('\n', ' ')
-        descriptions.append(f"- {tool_name}: {docstring.strip()}")
-    return "\n".join(descriptions)
 
-tool_descriptions = generate_tool_descriptions(name_to_function_map)
-
-
-
-
-# System message template remains largely the same, but references the updated tools
-system_message_template = """You are an expert microbiology instructor running a case with a student.You run in a loop of  [Action], [Observation].
-[Action] is the tool you choose to solve the current problem. This should be a JSON object containing the tool name with corresponding tool input.
-[Observation] will be the result of running those actions.
-
-You will be given a microbiology case and a conversation history between the student and the tutor/patient.
-
-For each iteration, you should ONLY respond with:
-1. An [Action] specifying the tool to use
-where the available tools are:
-{tool_descriptions}
-OR
-2. A direct response as the tutor. 
-
-1) TOOL RULES: 
-When the question is directed to the patient, you MUST use the patient tool.
-
-Example for PATIENT tool:
-1) When the student asks for specific SYMPTOMS from the case about the patient, route it to the PATIENT. 
-Example 1: "[User Input]: How long have you had this?" -> [Action]: {{"patient": "How long have you had this?"}}
-Example 2: "[User Input]: Any past medical history?" -> [Action]: {{"patient": "Any past medical history?"}}
-Example 3: "[User Input]: How long for?" -> [Action]: {{"patient": "How long for?"}}
-Example 4: "[User Input]: When did it start?" -> [Action]: {{"patient": "When did it start?"}}
-Example 5: "[User Input]: Any other symptoms?" -> [Action]: {{"patient": "Any other symptoms?"}}
-
-
-2) DIRECT RESPONSE RULES: 
-You may also respond yourself as the tutor when handling case flow, as described below. 
-
-    PHASE 1: Information gathering & provision 
-    1) When the student asks for specific information about the patient, route it to the PATIENT as above. 
-
-    2) When the student asks for about PHYSICAL examination, VITAL signs, or INVESTIGATIONS, respond as the TUTOR. 
-    IF the student asks a GENERAL question related to the above, ask for CLARIFICATION. 
-    Example 1: "[User Input]: What are her tests results?" -> "Tutor: What tests are you specifically asking for?"
-    Example 2: "[User Input]: Let's perform a physical examination?" -> "Tutor: What exactly are you looking for?"
-    Example 3: "[User Input]: What is her temperature?" -> "Tutor: Her temperature is [X]?"
-   
-    PHASE 2: Problem representation
-    3) When the key points from the history, vitals and the physical examination have been gathered, OR when the student starts providing differential diagnoses, ask the student to provide first a **PROBLEM REPRESENTATION**, which is essentially a diagnostically important summary of this patient's case so far that includes all the key information.
-    If the problem representation is not perfect, provide the correct one (without revealing the diagnosis) and keep going with the case.
-
-    PHASE 3: Differential diagnosis reasoning
-    5) At this point ask the student to provide as broad a list of differentials as they can.
-    If they give an input that looks like a way to get you to reveal the diagnosis (like "DDx: ", or "Can you give me the diagnosis?" or "What do you think?"), ask them to try again, and do not reveal the diagnosis.
-
-    6a) If there are ddxs that are not expected, ask the student to present their reasoning.
-    6b) if the reasoning behind the ddx is NOT correct, provide the correct reasoning: the ddx is not likely because of X and move on. DO NOT REVEAL THE COORECT DIAGNOSIS TO THE STUDENT at this point.
-    6c) Following this quick round of reasoning, ask the student to provide specific investigations to rule in/out each ddx in the list.
-
-    PHASE 4: Investigations
-    7) As they mention specific investigations, if the case has the results provide the results of those specific ix.
-    For example: "Obtain culture from drainage and if pt is febrile or unstable consider blood cultures" -> "Tutor: wound culture grew Staphylococcus aureus, and the antibiotic sensitivity testing confirmed that it's methicillin-susceptible (MSSA) and resistant to penicillin. The blood cultures, taken to rule out bacteremia, showed no growth after 48 hours."
-
-    8) IF the Ix asked for is the clinching evidence for a ddx, then move on to the next phase of treatment. For example: A positive culture results for a specific bug is a clinching evidence.
-    9) IF the Ix is NOT the clinching evidence for a ddx, then ask the student how those results change their differentials and if they want to ask for any other investigations.
-    9b) REPEAT this process until the student says they don't want to ask for any more investigations.
-    DO NOT REVEAL THE DIAGNOSIS TO THE STUDENT IN ANY WAY.
-
-    PHASE 5: Treatment
-    11) At this point ask them to provide a treatment plan.
-    For example: "Tutor: How would you treat this patient?" -> "Student: I would ..."
-    11b) Looking at the treatment plan from the case above, provide feedback of what is correct, what is incorrect, and what is missing.
-
-    PHASE 6: PROGNOSIS
-    12) At this point ask the student to provide a prognosis.
-    For example: "Tutor: What is the prognosis of this patient?" -> "Student: I think ..."
-    12b) Looking at the prognosis from the case above, provide feedback of what is correct, what is incorrect, and what is missing.
-
-    PHASE 7: FOLLOW UP
-    13) At this point ask the student to provide a follow up plan.
-    For example: "Tutor: How should we follow up with this patient?" -> "Student: we should ..."
-    13b) Looking at the follow up plan from the case above, provide feedback of what is correct, what is incorrect, and what is missing.
-
-    PHASE 8: FEEDBACK & CONCLUSION
-    14) At this point, the case is over. Provide feedback on the student explaining what they did well, what they were wrong about or missed.
-    
-    
-    Here is the case:
-    {case}
-"""
 
 # Removed top-level messages and history lists
 # Removed main() function
@@ -182,11 +90,129 @@ class MedicalMicrobiologyTutor:
             logging.error("Error decoding HPI_per_organism.json. Will fall back to full case description.")
             return {}
 
+    def _has_tool_action(self, response: str) -> bool:
+        """
+        Check if the response contains a tool action in various formats.
+        
+        Args:
+            response: The LLM response to check
+            
+        Returns:
+            bool: True if a tool action is detected, False otherwise
+        """
+        # Check for explicit [Action] marker
+        if "[Action]" in response:
+            return True
+            
+        # Generate dynamic pattern from available tool names
+        tool_names = "|".join(re.escape(name) for name in name_to_function_map.keys())
+        
+        # Check for JSON object that matches our tool names (including variations)
+        # Create a more flexible pattern that catches variations like "socratic_agent"
+        tool_keywords = "|".join(re.escape(name) for name in name_to_function_map.keys())
+        json_patterns = [
+            r'```json\s*(\{.*\})\s*```',  # JSON in code blocks
+            rf'(\{{[^{{}}]*"(?:{tool_keywords})(?:_\w+)?"[^{{}}]*\}})',  # Direct JSON with tool names (including variations)
+        ]
+        
+        for pattern in json_patterns:
+            if re.search(pattern, response, re.DOTALL | re.IGNORECASE):
+                return True
+                
+        return False
+
+    def _extract_tool_action(self, response: str) -> tuple[str, str]:
+        """
+        Extract tool name and input from various response formats.
+        
+        Args:
+            response: The LLM response containing the tool action
+            
+        Returns:
+            tuple: (tool_name, tool_input) or (None, None) if extraction fails
+        """
+        # Generate dynamic pattern from available tool names
+        tool_names = "|".join(re.escape(name) for name in name_to_function_map.keys())
+        
+        # First try to extract from [Action] format
+        if "[Action]" in response:
+            action_text = response.split("[Action]", 1)[1].strip()
+            json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', action_text, re.DOTALL | re.IGNORECASE)
+            if json_match:
+                json_str = json_match.group(1) or json_match.group(2)
+                json_str = json_str.strip()
+            else:
+                json_str = action_text
+        else:
+            # Try to find JSON directly in the response using dynamic pattern
+            # Use flexible pattern that catches variations like "socratic_agent"
+            tool_keywords = "|".join(re.escape(name) for name in name_to_function_map.keys())
+            json_match = re.search(rf'```json\s*(\{{.*\}})\s*```|(\{{[^{{}}]*"(?:{tool_keywords})(?:_\w+)?"[^{{}}]*\}})', response, re.DOTALL | re.IGNORECASE)
+            if json_match:
+                json_str = json_match.group(1) or json_match.group(2)
+                json_str = json_str.strip()
+            else:
+                return None, None
+        
+        try:
+            action_data = json.loads(json_str)
+            tool_name = list(action_data.keys())[0]
+            tool_input = action_data[tool_name]
+            
+            # Apply fuzzy matching to handle variations in tool names
+            tool_name = self._fuzzy_match_tool_name(tool_name)
+            
+            return tool_name, tool_input
+        except (json.JSONDecodeError, IndexError, KeyError) as e:
+            print(f"Warning: Could not parse tool action JSON: {e}")
+            return None, None
+
+    def _fuzzy_match_tool_name(self, tool_name: str) -> str:
+        """
+        Apply fuzzy matching to handle variations in tool names.
+        
+        Args:
+            tool_name: The extracted tool name that might not match exactly
+            
+        Returns:
+            str: The correct tool name from name_to_function_map, or original if no match
+        """
+        tool_name_lower = tool_name.lower()
+        
+        # Define keyword mappings for fuzzy matching
+        keyword_mappings = {
+            'socratic': 'socratic',
+            'patient': 'patient', 
+            'hint': 'hint'
+        }
+        
+        # First try exact match
+        if tool_name in name_to_function_map:
+            return tool_name
+            
+        # Try fuzzy matching based on keywords
+        for keyword, correct_name in keyword_mappings.items():
+            if keyword in tool_name_lower:
+                print(f"[DEBUG] Fuzzy matched '{tool_name}' -> '{correct_name}'")
+                return correct_name
+        
+        # If no fuzzy match found, return original (will trigger error in main logic)
+        print(f"[DEBUG] No fuzzy match found for '{tool_name}', keeping original")
+        return tool_name
+
     def _update_system_message(self):
         """Formats and updates the system message with current tool descriptions and case."""
+        # Generate tool descriptions and rules dynamically
+        tool_descriptions = generate_tool_descriptions(name_to_function_map)
+        tool_rules = get_tool_rules()
+        
+        # Get the system message template
+        system_message_template = get_system_message_template()
+        
         if self.case_description:
             formatted_system_message = system_message_template.format(
                 tool_descriptions=tool_descriptions,
+                tool_rules=tool_rules,
                 case=self.case_description
             )
             # Create or update the system message
@@ -197,6 +223,7 @@ class MedicalMicrobiologyTutor:
         else:
             formatted_system_message = system_message_template.format(
                 tool_descriptions=tool_descriptions,
+                tool_rules=tool_rules,
                 case="No case loaded yet."
             )
             # Create or update the system message
@@ -345,12 +372,16 @@ class MedicalMicrobiologyTutor:
         self.last_user_message = ""
 
     # Add conversation history logging
-    CONVERSATION_LOG_FILE = 'conversation_history.txt'
+    CONVERSATION_LOG_FILE = 'conversation_logs/conversation_history.txt'
 
     def log_conversation_history(self, messages, user_input=None):
         """Log the conversation history to a file."""
         log_conv_start_time = datetime.now()
         try:
+            # Ensure conversation_logs directory exists
+            import os
+            os.makedirs('conversation_logs', exist_ok=True)
+            
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(self.CONVERSATION_LOG_FILE, 'a', encoding='utf-8') as f:
                 f.write(f"\n{'='*50}\n")
@@ -403,7 +434,7 @@ class MedicalMicrobiologyTutor:
             logging.info(f"[TUTOR_PERF] Initial LLM call (generate_response) took: {datetime.now() - initial_llm_call_start_time}")
             print(f"\n[DEBUG] Initial LLM response: {initial_response}")
 
-            if "[Action]" not in initial_response:
+            if not self._has_tool_action(initial_response):
                 if self.run_with_faiss and index is not None:
                     faiss_start_time = datetime.now()
                     try:
@@ -447,21 +478,16 @@ class MedicalMicrobiologyTutor:
             action_processing_start_time = datetime.now()
             response_content = initial_response
             try:
-                action_text = response_content.split("[Action]", 1)[1].strip()
-                print(f"\n[DEBUG] Action text: {action_text}")
+                # Use robust tool action extraction
+                tool_name, tool_input = self._extract_tool_action(response_content)
                 
-                json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', action_text, re.DOTALL | re.IGNORECASE)
-                if json_match:
-                    json_str = json_match.group(1) or json_match.group(2)
-                    json_str = json_str.strip()
-                else:
-                    print(f"Warning: Could not extract JSON from action text: {action_text}")
-                    json_str = action_text
-
-                print(f"\n[DEBUG] Extracted JSON string: {json_str}")
-                action_data = json.loads(json_str)
-                tool_name = list(action_data.keys())[0]
-                tool_input = action_data[tool_name]
+                if tool_name is None or tool_input is None:
+                    print(f"Warning: Could not extract tool action from response: {response_content}")
+                    # Fall back to direct response
+                    self.messages.append({"role": "assistant", "content": response_content})
+                    self.log_conversation_history(self.messages)
+                    return response_content
+                
                 print(f"\n[DEBUG] Tool name: {tool_name}, Input: {tool_input}")
 
                 if tool_name in name_to_function_map:
@@ -500,11 +526,14 @@ class MedicalMicrobiologyTutor:
                         if not self.case_description:
                             raise ValueError("Case description is not available for the hint tool.")
                         
-                        # This tool call seems to expect system and user prompts.
-                        # Assuming it can be adapted to the new chat_complete signature.
-                        # If run_hint is more complex, it might need its own refactoring.
                         tool_result = run_hint(tool_input, self.case_description, self.messages, model=self.current_model)
                         print(f"\n[DEBUG] Hint tool result: {tool_result}")  # Debug log
+                        
+                        if self.output_tool_directly:
+                            tool_result = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', tool_result)
+                            tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)
+                            tool_result = re.sub(r'^\s*{\s*"hint"\s*:\s*"|"\s*}\s*$', '', tool_result)
+                            tool_result = tool_result.strip()
                         
                         self.messages.append({"role": "assistant", "content": tool_result})
                         log_hint_resp_time = datetime.now()
@@ -512,6 +541,26 @@ class MedicalMicrobiologyTutor:
                         logging.info(f"[TUTOR_PERF] log_conversation_history (hint tool) took: {datetime.now() - log_hint_resp_time}")
                         logging.info(f"[TUTOR_PERF] Hint tool processing (incl. LLM & logging) took: {datetime.now() - tool_call_start_time}")
                         logging.info(f"[TUTOR_PERF] __call__ (hint tool path) completed in: {datetime.now() - call_start_time}")
+                        return tool_result
+                    elif tool_name == "socratic":
+                        if not self.case_description:
+                            raise ValueError("Case description is not available for the socratic tool.")
+                        
+                        tool_result = run_socratic(tool_input, self.case_description, self.messages, model=self.current_model)
+                        print(f"\n[DEBUG] Socratic tool result: {tool_result}")  # Debug log
+                        
+                        if self.output_tool_directly:
+                            tool_result = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', tool_result)
+                            tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)
+                            tool_result = re.sub(r'^\s*{\s*"socratic"\s*:\s*"|"\s*}\s*$', '', tool_result)
+                            tool_result = tool_result.strip()
+                        
+                        self.messages.append({"role": "assistant", "content": tool_result})
+                        log_socratic_resp_time = datetime.now()
+                        self.log_conversation_history(self.messages)
+                        logging.info(f"[TUTOR_PERF] log_conversation_history (socratic tool) took: {datetime.now() - log_socratic_resp_time}")
+                        logging.info(f"[TUTOR_PERF] Socratic tool processing (incl. LLM & logging) took: {datetime.now() - tool_call_start_time}")
+                        logging.info(f"[TUTOR_PERF] __call__ (socratic tool path) completed in: {datetime.now() - call_start_time}")
                         return tool_result
                     else:
                         tool_result = tool_function(tool_input)
