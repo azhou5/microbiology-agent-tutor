@@ -54,10 +54,14 @@ class CostTracker:
         "gpt-4": {"input": 0.03, "output": 0.06},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
         "o4-mini-0416": {"input": 0.0011, "output": 0.0044},
+        "o4-mini-2025-04-16": {"input": 0.0011, "output": 0.0044},
         "o3-mini-0131": {"input": 0.00015, "output": 0.0006},
         "gpt-4o-1120": {"input": 0.01, "output": 0.03},
         "gpt-4o-0806": {"input": 0.01, "output": 0.03},
         "gpt-4o-mini-0718": {"input": 0.0005, "output": 0.0015},
+        "gpt-5": {"input": 0.01, "output": 0.03},  # Estimated cost for gpt-5
+        "gpt-4o": {"input": 0.01, "output": 0.03},
+        "gpt-4o-mini": {"input": 0.0005, "output": 0.0015},
         "text-embedding-3-small": {"input": 0.00002, "output": 0},
         "text-embedding-3-large": {"input": 0.00013, "output": 0},
     }
@@ -244,9 +248,98 @@ def create_chat_completion_with_cost_tracking(
     
     return response, cost_info
 
+
+def create_responses_with_cost_tracking(
+    client: OpenAI,
+    cost_tracker: CostTracker,
+    model: str,
+    input_messages: List[Dict],
+    reasoning: Optional[Dict] = None,
+    **kwargs
+) -> tuple:
+    """
+    Wrapper for OpenAI's responses.create that tracks costs.
+    
+    Args:
+        client: OpenAI client instance
+        cost_tracker: CostTracker instance
+        model: Model name (used for cost tracking)
+        input_messages: List of message dictionaries for the input field
+        reasoning: Optional reasoning configuration dict
+        **kwargs: Additional arguments for responses.create
+        
+    Returns:
+        tuple: (response, cost_info)
+    """
+    
+    response = None
+    try:
+        # Prepare the input for responses.create
+        response_kwargs = {
+            "model": model,
+            "input": input_messages,
+            **kwargs
+        }
+        
+        # Add reasoning if provided
+        if reasoning:
+            response_kwargs["reasoning"] = reasoning
+        
+        response = client.responses.create(**response_kwargs)
+        
+    except Exception as e:
+        with open('error_log.txt', 'a') as f:
+            f.write(f"\nError occurred at: {datetime.now()}\n")
+            f.write(f"Error message: {str(e)}\n")
+            f.write("Input messages sent:\n")
+            f.write(str(input_messages))
+            f.write("\nFull response:\n")
+            f.write(str(response) if response is not None else "No response received")
+            f.write("\n-------------------\n")
+        raise
+    
+    # Extract token usage from the response
+    # Note: The responses API may have different usage structure
+    # We'll need to handle this based on the actual response format
+    try:
+        if hasattr(response, 'usage') and response.usage:
+            usage = TokenUsage(
+                prompt_tokens=getattr(response.usage, 'prompt_tokens', 0),
+                completion_tokens=getattr(response.usage, 'completion_tokens', 0),
+                total_tokens=getattr(response.usage, 'total_tokens', 0)
+            )
+        else:
+            # Fallback: estimate tokens if usage info not available
+            # This is a rough estimation - in practice, you might want to count tokens differently
+            input_text = " ".join([msg.get("content", "") for msg in input_messages])
+            output_text = getattr(response, 'output_text', '') 
+            
+            # Rough token estimation (4 characters per token average)
+            estimated_input_tokens = len(input_text) // 4
+            estimated_output_tokens = len(output_text) // 4
+            
+            usage = TokenUsage(
+                prompt_tokens=estimated_input_tokens,
+                completion_tokens=estimated_output_tokens,
+                total_tokens=estimated_input_tokens + estimated_output_tokens
+            )
+    except Exception as e:
+        print(f"Warning: Could not extract usage information from response: {e}")
+        # Fallback to zero usage
+        usage = TokenUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+    
+    # Get input and output text for logging
+    input_text = " ".join([msg.get("content", "") for msg in input_messages])
+    output_text = getattr(response, 'output_text', '')
+    
+    # Track usage and get cost info
+    cost_info = cost_tracker.add_usage(model, usage, input_text=input_text, output_text=output_text)
+    
+    return response, cost_info
+
 class LLMManager:
    
-    def __init__(self, model, use_azure=True, log_file: str = "llm_interactions.log"):
+    def __init__(self, model=None, use_azure=True, log_file: str = "llm_interactions.log"):
         self.use_azure = use_azure
         self.client = None
         self.cost_tracker = CostTracker(log_file=log_file)
@@ -259,7 +352,12 @@ class LLMManager:
         self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
         self.azure_api_version = self._get_api_version_for_model(model)
-        self.model = model
+        
+        # Use config default if model not provided
+        if model is None:
+            self.model = config.API_MODEL_NAME
+        else:
+            self.model = model
         
         # Override use_azure based on environment toggle
         self.use_azure = use_azure_env and self.azure_endpoint and self.azure_api_key
@@ -304,10 +402,14 @@ class LLMManager:
         # Use the simplified API version from environment
         return os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
 
-    def generate_response(self, message, model, retries=3, backoff_factor=2, max_tokens=None):
+    def generate_response(self, message, model=None, retries=3, backoff_factor=2, max_tokens=None):
         if not self.client:
             client_type = "Azure OpenAI" if self.use_azure else "Standard OpenAI"
             raise Exception(f"{client_type} client not initialized. Cannot proceed.")
+
+        # Use instance model if no model specified
+        if model is None:
+            model = self.model
 
         # Use config default if max_tokens not provided
         if max_tokens is None:
@@ -319,18 +421,35 @@ class LLMManager:
 
         for attempt in range(retries):
             try:
-                # Use max_tokens for all models
-                kwargs = {"max_completion_tokens": max_tokens}
-
-                api_response_object, _ = create_chat_completion_with_cost_tracking(
-                    client=self.client,
-                    cost_tracker=self.cost_tracker,
-                    model=model,
-                    messages=message,
-                    deployment_id=deployment_name,
-                    **kwargs
-                )
-                return api_response_object.choices[0].message.content
+                if self.use_azure:
+                    # Use Azure OpenAI with chat.completions.create
+                    kwargs = {"max_completion_tokens": max_tokens}
+                    
+                    api_response_object, _ = create_chat_completion_with_cost_tracking(
+                        client=self.client,
+                        cost_tracker=self.cost_tracker,
+                        model=model,
+                        messages=message,
+                        deployment_id=deployment_name,
+                        **kwargs
+                    )
+                    return api_response_object.choices[0].message.content
+                else:
+                   
+                    # Add reasoning configuration for better responses
+                    #reasoning = {"effort": "low"}
+                    
+                    api_response_object, _ = create_responses_with_cost_tracking(
+                        client=self.client,
+                        cost_tracker=self.cost_tracker,
+                        model=model,
+                        input_messages=message,
+                        #reasoning=reasoning
+                    )
+                    
+                    # Extract the output text from the response
+                    return getattr(api_response_object, 'output_text', '')
+                    
             except openai.APIError as e:
                 print(f"OpenAI API returned an API Error: {e} (attempt {attempt + 1}/{retries})")
             except openai.APIConnectionError as e:
@@ -348,7 +467,7 @@ class LLMManager:
         print("All retry attempts failed.")
         return None
 
-    def GPT_api(self, system_prompt, prompt, n_responses=1, model="o4-mini-0416", max_tokens=None):
+    def GPT_api(self, system_prompt, prompt, n_responses=1, model=None, max_tokens=None):
         responses = []
         message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
         for _ in range(n_responses):
@@ -375,7 +494,7 @@ class LLMManager:
         """Get a formatted string of the cost summary"""
         return self.cost_tracker.get_formatted_summary()
 
-def run_LLM(system_prompt, input_prompt, iterations, model="o4-mini-0416", azure_openai=True, log_file="llm_interactions.log"):
+def run_LLM(system_prompt, input_prompt, iterations, model=None, azure_openai=True, log_file="llm_interactions.log"):
     llm_manager = LLMManager(model=model, use_azure=azure_openai, log_file=log_file)
     max_empty_retries = 2
     empty_retry_count = 0
@@ -458,6 +577,7 @@ __all__ = [
     'CostTracker',
     'TokenUsage',
     'create_chat_completion_with_cost_tracking',
+    'create_responses_with_cost_tracking',
     'parse_llm_output_text_format'
 ]
     

@@ -30,7 +30,7 @@ def get_embeddings_batch(texts):
     else:
         raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
     response = client.embeddings.create(
-        model="text-embedding-3-small",
+        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         input=texts
     )
     return [data.embedding for data in response.data]
@@ -157,7 +157,7 @@ def get_embedding(text):
         raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
 
     response = client.embeddings.create(
-        model="text-embedding-3-small",  # Adjust if using another model
+        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         input=text
     )
     return response.data[0].embedding
@@ -186,7 +186,7 @@ def get_embeddings_batch(text_list):
         raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
 
     response = client.embeddings.create(
-        model="text-embedding-3-small",
+        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         input=text_list
     )
 

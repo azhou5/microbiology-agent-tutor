@@ -21,7 +21,7 @@ except ImportError:
 load_dotenv()
 
 class CaseGeneratorRAGAgent(BaseAgent):
-    def __init__(self, model_name: str = "gpt-4o"):
+    def __init__(self, model_name: str = None):
         super().__init__(model_name)
         print("Initializing CaseGeneratorRAGAgent...")
         
@@ -408,7 +408,7 @@ class CaseGeneratorRAGAgent(BaseAgent):
             
             # Generate embedding for the query
             embedding_response = self.embedding_client.embeddings.create(
-                model="text-embedding-3-large",
+                model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
                 input=query
             )
             query_vector = embedding_response.data[0].embedding

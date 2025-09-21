@@ -63,7 +63,7 @@ def get_embedding(text):
         raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
     
     response = client.embeddings.create(
-        model="text-embedding-3-small",
+        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         input=text
     )
     return response.data[0].embedding

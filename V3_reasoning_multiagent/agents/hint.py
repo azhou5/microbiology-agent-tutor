@@ -109,7 +109,7 @@ def run_hint(input: str, case: str, history: list, run_with_faiss: bool = config
     if use_azure:
         # Check if there's a deployment mapping for this model
         o4_mini_deployment = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT")
-        if model_to_use == "o4-mini-0416" and o4_mini_deployment:
+        if model_to_use == config.API_MODEL_NAME and o4_mini_deployment:
             model_to_use = o4_mini_deployment
 
     response = client.chat.completions.create(

@@ -38,14 +38,16 @@ def start_application():
     try:
         # Import and run the main app
         from app import app
-        import uvicorn
         
         # Get port from environment (Render sets this)
         port = int(os.getenv("PORT", 8000))
         
         print(f"🌐 Starting server on port {port}")
         print(f"🔧 Using {os.getenv('USE_AZURE_OPENAI', 'false')} for Azure OpenAI")
-        uvicorn.run(app, host="0.0.0.0", port=port)
+        
+        # Use Flask's built-in development server for local development
+        # For production, use Gunicorn: gunicorn -w 4 -b 0.0.0.0:8000 app:app
+        app.run(host="0.0.0.0", port=port, debug=False)
         
     except Exception as e:
         print(f"❌ Error starting application: {str(e)}")
