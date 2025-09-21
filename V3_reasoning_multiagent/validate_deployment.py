@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from dotenv import load_dotenv
+import config
 
 # Load environment variables
 # Try to load from the .env file, but don't fail if it doesn't exist (Render uses environment variables)
@@ -68,15 +69,30 @@ def test_api_connection():
         # Make a simple test call
         start_time = time.time()
         
-        response = client.chat.completions.create(
-            model=deployment_name,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Say 'API test successful' and nothing else."}
-            ],
-            max_tokens=10,
-            temperature=0
-        )
+        # Use the correct parameter name based on the model
+        validation_tokens = config.VALIDATION_MAX_TOKENS
+        if use_azure:
+            # Azure OpenAI uses max_tokens
+            response = client.chat.completions.create(
+                model=deployment_name,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Say 'API test successful' and nothing else."}
+                ],
+                max_tokens=validation_tokens,
+                temperature=0
+            )
+        else:
+            # Personal OpenAI uses max_completion_tokens for newer models
+            response = client.chat.completions.create(
+                model=deployment_name,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Say 'API test successful' and nothing else."}
+                ],
+                max_completion_tokens=validation_tokens,
+                temperature=0
+            )
         
         end_time = time.time()
         response_time = end_time - start_time

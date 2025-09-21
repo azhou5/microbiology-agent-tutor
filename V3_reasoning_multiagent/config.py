@@ -38,6 +38,10 @@ LLM_BACKEND = "azure" if USE_AZURE_OPENAI else "openai"
 API_MODEL_NAME = "o4-mini-0416" if USE_AZURE_OPENAI else "gpt-5-mini-2025-08-07"
 LOCAL_MODEL_NAME = "distilgpt2"
 
+# --- Token Configuration ---
+DEFAULT_MAX_TOKENS = 16000  # Default max tokens for regular API calls
+VALIDATION_MAX_TOKENS = 100  # Max tokens for validation/deployment testing
+
 # --- Feature flags ---
 USE_FAISS = False
 OUTPUT_TOOL_DIRECTLY = True
