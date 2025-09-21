@@ -9,54 +9,9 @@ from datetime import datetime
 import logging
 
 
-def log_patient_conversation(input_text: str, system_prompt: str, response: str, model: str):
-    """Log patient conversation to patient_convo_history.txt"""
-    try:
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        with open('patient_convo_history.txt', 'a', encoding='utf-8') as f:
-            f.write(f"\n{'='*80}\n")
-            f.write(f"PATIENT CONVERSATION - {timestamp}\n")
-            f.write(f"Model: {model}\n")
-            f.write(f"{'='*80}\n")
-            f.write(f"INPUT: {input_text}\n")
-            f.write(f"{'-'*40}\n")
-            f.write(f"SYSTEM PROMPT:\n{system_prompt}\n")
-            f.write(f"{'-'*40}\n")
-            f.write(f"PATIENT RESPONSE: {response}\n")
-            f.write(f"{'='*80}\n")
-    except Exception as e:
-        print(f"Warning: Could not write to patient conversation log: {str(e)}")
-
-
-def run_patient(input: str, case: str, history: list, run_with_faiss: bool = config.USE_FAISS, model: str = None) -> str:
-    """Responds as the patient. When the user asks a question directed at the patient, you should use this tool to get the patient's response."""
-    
-    # Create a simple test file to verify the function is being called
-    try:
-        with open('patient_tool_called.txt', 'a') as f:
-            f.write(f"Patient tool called at {datetime.now()}: '{input}'\n")
-    except Exception as e:
-        print(f"Error writing test file: {e}")
-    
-    # Debug logging for patient tool input
-    logging.info(f"[DEBUG] Patient tool input: '{input}'")
-    logging.info(f"[DEBUG] Patient tool case length: {len(case) if case else 0} characters")
-    logging.info(f"[DEBUG] Patient tool history length: {len(history) if history else 0} messages")
-    logging.info(f"[DEBUG] Patient tool model: {model or config.API_MODEL_NAME}")
-    
-    # Format the recent history similar to how the index was created
-    recent_context = ""
-    if history:
-        recent_context = "Chat history:\n"
-        for message in history[-5:-1]:  # Get last 4 messages like in index generation
-            if isinstance(message, dict) and "role" in message and "content" in message:
-                recent_context += f"{message['role']}: {message['content']}\n"
-    
-    logging.info(f"[DEBUG] Patient tool recent context: {recent_context}")
-
-
-    core_system_prompt = """You are a patient. You are answering questions from a tutor. 
+def get_patient_system_prompt() -> str:
+    """Get the core system prompt for the patient agent."""
+    return """You are a patient. You are answering questions from a tutor. 
         You should respond in a way that is consistent with a patient's response. 
 
         Here are some important RULES:
@@ -103,9 +58,71 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
     
         """
 
+
+def get_patient_user_prompt(input_text: str) -> str:
+    """Get the user prompt for the patient agent."""
+    return f"Please respond to this question as the patient: {input_text}"
+
+
+def log_patient_conversation(input_text: str, system_prompt: str, response: str, model: str):
+    """Log patient conversation to conversation_logs/patient_convo_history.txt"""
+    try:
+        # Ensure conversation_logs directory exists
+        import os
+        os.makedirs('conversation_logs', exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        with open('conversation_logs/patient_convo_history.txt', 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"PATIENT CONVERSATION - {timestamp}\n")
+            f.write(f"Model: {model}\n")
+            f.write(f"{'='*80}\n")
+            f.write(f"INPUT: {input_text}\n")
+            f.write(f"{'-'*40}\n")
+            f.write(f"SYSTEM PROMPT:\n{system_prompt}\n")
+            f.write(f"{'-'*40}\n")
+            f.write(f"PATIENT RESPONSE: {response}\n")
+            f.write(f"{'='*80}\n")
+    except Exception as e:
+        print(f"Warning: Could not write to patient conversation log: {str(e)}")
+
+
+def run_patient(input: str, case: str, history: list, run_with_faiss: bool = config.USE_FAISS, model: str = None) -> str:
+    """Responds as the patient. When the user asks a question directed at the patient, you should use this tool to get the patient's response."""
+    
+    # Create a simple test file to verify the function is being called
+    try:
+        with open('patient_tool_called.txt', 'a') as f:
+            f.write(f"Patient tool called at {datetime.now()}: '{input}'\n")
+    except Exception as e:
+        print(f"Error writing test file: {e}")
+    
+    # Debug logging for patient tool input
+    logging.info(f"[DEBUG] Patient tool input: '{input}'")
+    logging.info(f"[DEBUG] Patient tool case length: {len(case) if case else 0} characters")
+    logging.info(f"[DEBUG] Patient tool history length: {len(history) if history else 0} messages")
+    logging.info(f"[DEBUG] Patient tool model: {model or config.API_MODEL_NAME}")
+    
+    # Filter out system messages from history to avoid confusion
+    filtered_history = [msg for msg in history if msg.get('role') != 'system']
+    
+    # Format the full filtered conversation for context
+    conversation_context = ""
+    if filtered_history:
+        conversation_context = "Chat history:\n"
+        for message in filtered_history:
+            if isinstance(message, dict) and "role" in message and "content" in message:
+                conversation_context += f"{message['role']}: {message['content']}\n"
+    
+    logging.info(f"[DEBUG] Patient tool conversation context: {conversation_context}")
+
+
+    core_system_prompt = get_patient_system_prompt()
+
     if run_with_faiss == True and index is not None:
-        # Combine recent history with current query for embedding
-        embedding_text = recent_context 
+        # Use conversation context for embedding
+        embedding_text = conversation_context 
         
         # Get embedding for the combined text
         embedding = get_embedding(embedding_text)
@@ -117,15 +134,12 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
         similar_examples = [texts[idx] for idx in indices[0]]
         examples_text = "\n\nSimilar examples with feedback, including the rated messsage and expert feedback:\n" + "\n---\n".join(similar_examples)
         
-        # Filter out system messages from history to avoid confusion
-        filtered_history = [msg for msg in history if msg.get('role') != 'system']
-        
         system_prompt = core_system_prompt + f"""
         Here is the case:
         {case}
 
         Here is the history of the conversation:
-        {filtered_history}
+        {conversation_context}
         
         Here are some examples of similar exchanges between a patient and a tutor, as well as a manual rating of the quality of the response and feedback. 
         {examples_text}
@@ -134,15 +148,12 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
         """
         print(examples_text)
     else:
-        # Filter out system messages from history to avoid confusion
-        filtered_history = [msg for msg in history if msg.get('role') != 'system']
-        
         system_prompt = core_system_prompt + f"""
         Here is the case:
         {case}
 
         Here is the history of the conversation:
-        {filtered_history}
+        {conversation_context}
 
         You should respond to the most recent query from the patient's perspective given the rules above. 
         """
@@ -152,9 +163,12 @@ def run_patient(input: str, case: str, history: list, run_with_faiss: bool = con
     logging.info(f"[DEBUG] Patient tool user prompt: '{input}'")
     logging.info(f"[DEBUG] Patient tool system prompt preview: {system_prompt[:500]}...")
     
+    # Use the proper user prompt instead of the raw input
+    user_prompt = get_patient_user_prompt(input)
+    
     response = chat_complete(
         system_prompt=system_prompt,
-        user_prompt=input,
+        user_prompt=user_prompt,
         model=model or config.API_MODEL_NAME
     )
     
