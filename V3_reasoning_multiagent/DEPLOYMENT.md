@@ -41,6 +41,11 @@ Set these in your Render dashboard:
 
 - `GLOBAL_DATABASE_URL` - Your PostgreSQL connection string
 
+#### Optional Configuration
+
+- `DEFAULT_MAX_TOKENS` - Override default max tokens (default: 16000)
+- `VALIDATION_MAX_TOKENS` - Override validation max tokens (default: 100)
+
 ## Deployment Process
 
 1. **Validation Phase**: The deployment script first runs `validate_deployment.py`

@@ -11,6 +11,7 @@ from openai import OpenAI
 import json
 import os
 from datetime import datetime
+import config
 
 
 from dotenv import load_dotenv
@@ -303,10 +304,14 @@ class LLMManager:
         # Use the simplified API version from environment
         return os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
 
-    def generate_response(self, message, model, retries=3, backoff_factor=2, max_tokens=16000):
+    def generate_response(self, message, model, retries=3, backoff_factor=2, max_tokens=None):
         if not self.client:
             client_type = "Azure OpenAI" if self.use_azure else "Standard OpenAI"
             raise Exception(f"{client_type} client not initialized. Cannot proceed.")
+
+        # Use config default if max_tokens not provided
+        if max_tokens is None:
+            max_tokens = config.DEFAULT_MAX_TOKENS
 
         deployment_name = model
         if self.use_azure and model in self.azure_deployment_map:
@@ -343,7 +348,7 @@ class LLMManager:
         print("All retry attempts failed.")
         return None
 
-    def GPT_api(self, system_prompt, prompt, n_responses=1, model="o4-mini-0416", max_tokens=16000):
+    def GPT_api(self, system_prompt, prompt, n_responses=1, model="o4-mini-0416", max_tokens=None):
         responses = []
         message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
         for _ in range(n_responses):

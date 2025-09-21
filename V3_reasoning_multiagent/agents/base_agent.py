@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import json
 from openai import AzureOpenAI, OpenAI
+import config
 
 # Load environment variables
 load_dotenv()
@@ -57,11 +58,20 @@ class BaseAgent:
             if self.model_name == "o4-mini-0416" and o4_mini_deployment:
                 model_to_use = o4_mini_deployment
         
-        response = self.client.chat.completions.create(
-            model=model_to_use,
-            messages=messages,
-            max_tokens=800
-        )
+        # Use the correct parameter based on the API type
+        max_tokens = config.DEFAULT_MAX_TOKENS
+        if self.use_azure:
+            response = self.client.chat.completions.create(
+                model=model_to_use,
+                messages=messages,
+                max_tokens=max_tokens
+            )
+        else:
+            response = self.client.chat.completions.create(
+                model=model_to_use,
+                messages=messages,
+                max_completion_tokens=max_tokens
+            )
         
         response_text = response.choices[0].message.content
         self.add_to_history("assistant", response_text)
