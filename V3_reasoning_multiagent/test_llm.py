@@ -74,7 +74,7 @@ def test_azure_openai():
     system_prompt = get_system_prompt()
     input_prompt = get_input_prompt()
     
-    models_to_test = ["gpt-4o-1120", "o4-mini-0416"]
+    models_to_test = ["gpt-4o-1120", "o4-mini-0416"]  # Azure models
     results = []
     
     for model in models_to_test:
@@ -147,7 +147,7 @@ def test_personal_openai():
     system_prompt = get_system_prompt()
     input_prompt = get_input_prompt()
     
-    models_to_test = ["gpt-5-2025-08-07", "gpt-5-mini-2025-08-07"]
+    models_to_test = ["o4-mini-2025-04-16", "gpt-5-2025-08-07"]  # Personal OpenAI models
     results = []
     
     for model in models_to_test:
@@ -257,7 +257,7 @@ def show_menu():
     print("🚀 LLM Testing Suite")
     print("="*60)
     print("1. Test Azure OpenAI (gpt-4o-1120, o4-mini-0416)")
-    print("2. Test Personal OpenAI (gpt-5, gpt-5-mini)")
+    print("2. Test Personal OpenAI (o4-mini-2025-04-16, gpt-4o-mini)")
     print("3. Test Specific Model (custom input)")
     print("4. Run All Tests")
     print("5. Exit")

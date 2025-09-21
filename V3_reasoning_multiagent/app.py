@@ -200,7 +200,7 @@ def get_tutor_from_session():
     Retrieves or creates a MedicalMicrobiologyTutor instance based on session data.
     Initializes a new tutor if no session data is found.
     """
-    model_name_from_session = session.get('tutor_model_name', 'o4-mini-0416') # Default to o4-mini-0416
+    model_name_from_session = session.get('tutor_model_name', config.API_MODEL_NAME) # Default to configured model
     current_organism_from_session = session.get('tutor_current_organism', None)
 
     tutor = MedicalMicrobiologyTutor(
@@ -235,7 +235,7 @@ def index():
     """Serves the main HTML page."""
     tutor = get_tutor_from_session()
     return render_template('index.html', 
-                           current_model=tutor.current_model or 'o4-mini-0416',
+                           current_model=tutor.current_model or config.API_MODEL_NAME,
                            in_context_learning=config.IN_CONTEXT_LEARNING)
 
 @app.route('/start_case', methods=['POST'])
@@ -245,7 +245,7 @@ def start_case():
     try:
         data = request.get_json()
         organism = data.get('organism')
-        model_name = 'o4-mini-0416'  # Always use o4-mini-0416 for new cases as per current logic
+        model_name = config.API_MODEL_NAME  # Use configured model for new cases
         client_case_id = data.get('case_id') # Added to receive case_id
         logging.info(f"[BACKEND_START_CASE] 1. Parsed request data: organism='{organism}', case_id='{client_case_id}'")
 
@@ -269,7 +269,7 @@ def start_case():
         session['current_case_id'] = client_case_id # Store case_id in session
         save_tutor_to_session(tutor)
 
-        if db:
+        if db and db is not None:
             try:
                 # Log system message
                 logging.info("[BACKEND_START_CASE] 7. Logging initial messages to database.")
@@ -355,7 +355,7 @@ def chat():
         logging.info(f"Received user message: {message_text} for organism {tutor.current_organism} (Session new: {session.new}, Case ID: {active_case_id})")
         
         db_log_user_start_time = datetime.now()
-        if db:
+        if db and db is not None:
             try:
                 user_log_entry = ConversationLog(
                     case_id=active_case_id,
@@ -375,7 +375,7 @@ def chat():
         logging.info(f"[CHAT_PERF] tutor(message_text) full call took: {datetime.now() - tutor_call_start_time}")
         
         db_log_assistant_start_time = datetime.now()
-        if db:
+        if db and db is not None:
             try:
                 assistant_log_entry = ConversationLog(
                     case_id=active_case_id,
@@ -434,7 +434,7 @@ def feedback():
 
         tutor = get_tutor_from_session() # Get tutor to access current_organism
 
-        if use_db:
+        if use_db and db is not None:
             entry = FeedbackEntry(
                 timestamp=datetime.utcnow(),
                 organism=tutor.current_organism, # From session
@@ -485,7 +485,7 @@ def case_feedback():
         tutor = get_tutor_from_session()
         current_organism_for_log = tutor.current_organism or "Unknown"
 
-        if use_db:
+        if use_db and db is not None:
             entry = CaseFeedbackEntry(
                 timestamp=datetime.utcnow(),
                 organism=current_organism_for_log, # From session
@@ -529,6 +529,8 @@ def case_feedback():
 @app.route('/admin/feedback')
 def admin_feedback():
     """Simple HTML view of feedback entries."""
+    if not db:
+        return "Database is not configured.", 500
     entries = FeedbackEntry.query.order_by(FeedbackEntry.timestamp.desc()).all()
     # Build a simple HTML table
     rows = ""

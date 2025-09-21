@@ -13,7 +13,7 @@ This is only used for case generation. Need to replace this code.
 """
 
 class BaseAgent:
-    def __init__(self, model_name: str = "o4-mini-0416"):
+    def __init__(self, model_name: str = None):
         # Determine which client to use based on the toggle
         use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -55,7 +55,7 @@ class BaseAgent:
         if self.use_azure:
             # Check if there's a deployment mapping for this model
             o4_mini_deployment = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT")
-            if self.model_name == "o4-mini-0416" and o4_mini_deployment:
+            if self.model_name == config.API_MODEL_NAME and o4_mini_deployment:
                 model_to_use = o4_mini_deployment
         
         # Use the correct parameter based on the API type
@@ -70,7 +70,6 @@ class BaseAgent:
             response = self.client.chat.completions.create(
                 model=model_to_use,
                 messages=messages,
-                max_completion_tokens=max_tokens
             )
         
         response_text = response.choices[0].message.content

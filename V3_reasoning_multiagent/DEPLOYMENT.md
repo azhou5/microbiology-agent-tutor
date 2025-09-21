@@ -71,7 +71,7 @@ Set these in your Render dashboard:
 ✅ Personal OpenAI API key found
 🧪 Testing API connection...
 ✅ API test successful!
-   Model: gpt-5-mini-2025-08-07
+   Model: o4-mini-2025-04-16 (Personal OpenAI)
    Response time: 1.23s
    Response: API test successful
 ✅ Deployment validation PASSED!

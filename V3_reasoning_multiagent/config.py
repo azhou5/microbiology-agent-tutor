@@ -35,12 +35,16 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 # Automatically determine backend based on USE_AZURE_OPENAI environment variable
 USE_AZURE_OPENAI = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
 LLM_BACKEND = "azure" if USE_AZURE_OPENAI else "openai"
-API_MODEL_NAME = "o4-mini-0416" if USE_AZURE_OPENAI else "gpt-5-mini-2025-08-07"
+API_MODEL_NAME = "o4-mini-0416" if USE_AZURE_OPENAI else os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
 LOCAL_MODEL_NAME = "distilgpt2"
 
 # --- Token Configuration ---
 DEFAULT_MAX_TOKENS = 16000  # Default max tokens for regular API calls
 VALIDATION_MAX_TOKENS = 100  # Max tokens for validation/deployment testing
+
+# --- Temperature Configuration ---
+DEFAULT_TEMPERATURE = 0.7  # Default temperature for regular API calls
+VALIDATION_TEMPERATURE = 0  # Temperature for validation (Azure only, Personal OpenAI uses default)
 
 # --- Feature flags ---
 USE_FAISS = False

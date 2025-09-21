@@ -58,12 +58,12 @@ def test_api_connection():
                 api_key=azure_api_key,
                 api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
             )
-            model_name = "o4-mini-0416"
-            deployment_name = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", "o4-mini-0416")
+            model_name = config.API_MODEL_NAME
+            deployment_name = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", model_name)
         else:
             from openai import OpenAI
             client = OpenAI(api_key=openai_api_key)
-            model_name = "gpt-5-mini-2025-08-07"
+            model_name = config.API_MODEL_NAME
             deployment_name = model_name
         
         # Make a simple test call
@@ -72,7 +72,7 @@ def test_api_connection():
         # Use the correct parameter name based on the model
         validation_tokens = config.VALIDATION_MAX_TOKENS
         if use_azure:
-            # Azure OpenAI uses max_tokens
+            # Azure OpenAI uses max_tokens and supports temperature=0
             response = client.chat.completions.create(
                 model=deployment_name,
                 messages=[
@@ -80,24 +80,28 @@ def test_api_connection():
                     {"role": "user", "content": "Say 'API test successful' and nothing else."}
                 ],
                 max_tokens=validation_tokens,
-                temperature=0
+                temperature=config.VALIDATION_TEMPERATURE
             )
         else:
-            # Personal OpenAI uses max_completion_tokens for newer models
-            response = client.chat.completions.create(
-                model=deployment_name,
-                messages=[
+            # Personal OpenAI uses max_completion_tokens and doesn't support temperature=0
+            response = client.responses.create(
+                model=model_name,
+                #reasoning={"effort": "medium"},
+                input=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": "Say 'API test successful' and nothing else."}
-                ],
-                max_completion_tokens=validation_tokens,
-                temperature=0
+                ]
             )
-        
+
         end_time = time.time()
         response_time = end_time - start_time
         
-        response_text = response.choices[0].message.content.strip()
+        response_text = response.output_text.strip()
+        
+        # Debug output
+        print(f"🔍 Debug - Raw response: '{response.output_text}'")
+        print(f"🔍 Debug - Stripped response: '{response_text}'")
+        print(f"🔍 Debug - Response length: {len(response_text)}")
         
         if "API test successful" in response_text:
             print(f"✅ API test successful!")
@@ -106,7 +110,7 @@ def test_api_connection():
             print(f"   Response: {response_text}")
             return True
         else:
-            print(f"❌ Unexpected response: {response_text}")
+            print(f"❌ Unexpected response: '{response_text}'")
             return False
             
     except Exception as e:
