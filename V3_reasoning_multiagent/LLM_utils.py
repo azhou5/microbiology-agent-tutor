@@ -52,8 +52,11 @@ class CostTracker:
         "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
         "gpt-4": {"input": 0.03, "output": 0.06},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
-        "o3-mini": {"input": 0.0011, "output": 0.0044},
-        "o4-mini-0416": {"input": 0.00015, "output": 0.0006},
+        "o4-mini-0416": {"input": 0.0011, "output": 0.0044},
+        "o3-mini-0131": {"input": 0.00015, "output": 0.0006},
+        "gpt-4o-1120": {"input": 0.01, "output": 0.03},
+        "gpt-4o-0806": {"input": 0.01, "output": 0.03},
+        "gpt-4o-mini-0718": {"input": 0.0005, "output": 0.0015},
         "text-embedding-3-small": {"input": 0.00002, "output": 0},
         "text-embedding-3-large": {"input": 0.00013, "output": 0},
     }
@@ -242,37 +245,48 @@ def create_chat_completion_with_cost_tracking(
 
 class LLMManager:
    
-    def __init__(self, use_azure=True, log_file: str = "llm_interactions.log"):
+    def __init__(self, model, use_azure=True, log_file: str = "llm_interactions.log"):
         self.use_azure = use_azure
         self.client = None
         self.cost_tracker = CostTracker(log_file=log_file)
         self.azure_deployment_map = {}
-
+        
+        # Determine which API to use based on the toggle
+        use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
+        
+        # Store credentials for on-demand client creation
+        self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        self.azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        self.azure_api_version = self._get_api_version_for_model(model)
+        self.model = model
+        
+        # Override use_azure based on environment toggle
+        self.use_azure = use_azure_env and self.azure_endpoint and self.azure_api_key
+        
         if self.use_azure:
-            azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-            azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-            api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview") #api_version="2024-12-01-preview"
-            if azure_endpoint and azure_api_key:
+            if self.azure_endpoint and self.azure_api_key:
+                print("LLM_utils: Azure OpenAI credentials loaded for LLMManager.")
+                
+                # Create the Azure client once with the default API version
                 try:
                     self.client = AzureOpenAI(
-                        azure_endpoint=azure_endpoint,
-                        api_key=azure_api_key,
-                        api_version=api_version
+                        azure_endpoint=self.azure_endpoint,
+                        api_key=self.azure_api_key,
+                        api_version=self.azure_api_version
                     )
                     print("LLM_utils: Azure OpenAI client initialized for LLMManager.")
-
-                    # Map standard model names to specific Azure deployment names from .env file
-                    o3_mini_deployment = os.getenv("AZURE_OPENAI_O3_MINI_DEPLOYMENT")
-                    if o3_mini_deployment:
-                        self.azure_deployment_map['o3-mini'] = o3_mini_deployment
-                        print(f"LLM_utils: Mapped model 'o3-mini' to Azure deployment '{o3_mini_deployment}'")
-
                 except Exception as e:
                     print(f"LLM_utils: Error initializing Azure OpenAI client: {str(e)}")
+                
+                # Map standard model names to specific Azure deployment names from .env file
+                o4_mini_deployment = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT")
+                if o4_mini_deployment:
+                    self.azure_deployment_map['o4-mini-0416'] = o4_mini_deployment
+                    print(f"LLM_utils: Mapped model 'o4-mini-0416' to Azure deployment '{o4_mini_deployment}'")
             else:
                 print("LLM_utils: WARNING - Missing Azure OpenAI credentials. Azure client not initialized.")
-                if not azure_endpoint: print("  AZURE_OPENAI_ENDPOINT: ❌")
-                if not azure_api_key: print("  AZURE_OPENAI_API_KEY: ❌")
+                if not self.azure_endpoint: print("  AZURE_OPENAI_ENDPOINT: ❌")
+                if not self.azure_api_key: print("  AZURE_OPENAI_API_KEY: ❌")
         else:
             openai_api_key = os.getenv("OPENAI_API_KEY")
             if openai_api_key:
@@ -284,7 +298,12 @@ class LLMManager:
             else:
                 print("LLM_utils: WARNING - Missing OpenAI API key. Standard OpenAI client not initialized.")
 
-    def generate_response(self, message, model, retries=3, backoff_factor=2, max_tokens=40000):
+    def _get_api_version_for_model(self, model: str) -> str:
+        """Determine the correct API version based on the model series"""
+        # Use the simplified API version from environment
+        return os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
+
+    def generate_response(self, message, model, retries=3, backoff_factor=2, max_tokens=16000):
         if not self.client:
             client_type = "Azure OpenAI" if self.use_azure else "Standard OpenAI"
             raise Exception(f"{client_type} client not initialized. Cannot proceed.")
@@ -324,7 +343,7 @@ class LLMManager:
         print("All retry attempts failed.")
         return None
 
-    def GPT_api(self, system_prompt, prompt, n_responses=1, model="o3-mini", max_tokens=40000):
+    def GPT_api(self, system_prompt, prompt, n_responses=1, model="o4-mini-0416", max_tokens=16000):
         responses = []
         message = [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
         for _ in range(n_responses):
@@ -351,8 +370,8 @@ class LLMManager:
         """Get a formatted string of the cost summary"""
         return self.cost_tracker.get_formatted_summary()
 
-def run_LLM(system_prompt, input_prompt, iterations, model="o3-mini", azure_openai=True, log_file="llm_interactions.log"):
-    llm_manager = LLMManager(use_azure=azure_openai, log_file=log_file)
+def run_LLM(system_prompt, input_prompt, iterations, model="o4-mini-0416", azure_openai=True, log_file="llm_interactions.log"):
+    llm_manager = LLMManager(model=model, use_azure=azure_openai, log_file=log_file)
     max_empty_retries = 2
     empty_retry_count = 0
 

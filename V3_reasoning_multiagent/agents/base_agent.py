@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
 import json
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -10,18 +10,29 @@ load_dotenv()
 
 This is only used for case generation. Need to replace this code. 
 """
-# Verify Azure OpenAI configuration
-if not os.getenv("AZURE_OPENAI_API_KEY") or not os.getenv("AZURE_OPENAI_ENDPOINT"):
-    raise ValueError("Missing required Azure OpenAI environment variables")
 
 class BaseAgent:
-    def __init__(self, model_name: str = "o3-mini"):
-        # Initialize Azure OpenAI client
-        self.client = AzureOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-        )
+    def __init__(self, model_name: str = "o4-mini-0416"):
+        # Determine which client to use based on the toggle
+        use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
+        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        
+        if use_azure_env and azure_endpoint and azure_api_key:
+            # Use Azure OpenAI
+            self.client = AzureOpenAI(
+                azure_endpoint=azure_endpoint,
+                api_key=azure_api_key,
+                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
+            )
+            self.use_azure = True
+        elif openai_api_key:
+            # Use personal OpenAI
+            self.client = OpenAI(api_key=openai_api_key)
+            self.use_azure = False
+        else:
+            raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
         
         self.model_name = model_name
         self.conversation_history = []
@@ -38,8 +49,16 @@ class BaseAgent:
         for msg in self.conversation_history:
             messages.append({"role": msg["role"], "content": msg["content"]})
         
+        # For Azure, use deployment name if available, otherwise use model name
+        model_to_use = self.model_name
+        if self.use_azure:
+            # Check if there's a deployment mapping for this model
+            o4_mini_deployment = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT")
+            if self.model_name == "o4-mini-0416" and o4_mini_deployment:
+                model_to_use = o4_mini_deployment
+        
         response = self.client.chat.completions.create(
-            model=self.model_name,
+            model=model_to_use,
             messages=messages,
             max_tokens=800
         )

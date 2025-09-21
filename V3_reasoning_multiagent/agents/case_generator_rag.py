@@ -4,7 +4,7 @@ import time
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from .base_agent import BaseAgent
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 import logging
 
 # Try to import Qdrant and embedding libraries (optional)
@@ -60,11 +60,23 @@ class CaseGeneratorRAGAgent(BaseAgent):
                 self.qdrant_client = None
         
         # Initialize embedding client
-        self.embedding_client = AzureOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-        )
+        use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
+        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        
+        if use_azure_env and azure_endpoint and azure_api_key:
+            # Use Azure OpenAI
+            self.embedding_client = AzureOpenAI(
+                azure_endpoint=azure_endpoint,
+                api_key=azure_api_key,
+                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
+            )
+        elif openai_api_key:
+            # Use personal OpenAI
+            self.embedding_client = OpenAI(api_key=openai_api_key)
+        else:
+            raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
         
         # Case sections
         self.case_sections = {
