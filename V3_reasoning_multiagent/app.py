@@ -200,7 +200,7 @@ def get_tutor_from_session():
     Retrieves or creates a MedicalMicrobiologyTutor instance based on session data.
     Initializes a new tutor if no session data is found.
     """
-    model_name_from_session = session.get('tutor_model_name', 'o3-mini') # Default to o3-mini
+    model_name_from_session = session.get('tutor_model_name', 'o4-mini-0416') # Default to o4-mini-0416
     current_organism_from_session = session.get('tutor_current_organism', None)
 
     tutor = MedicalMicrobiologyTutor(
@@ -235,7 +235,7 @@ def index():
     """Serves the main HTML page."""
     tutor = get_tutor_from_session()
     return render_template('index.html', 
-                           current_model=tutor.current_model or 'o3-mini',
+                           current_model=tutor.current_model or 'o4-mini-0416',
                            in_context_learning=config.IN_CONTEXT_LEARNING)
 
 @app.route('/start_case', methods=['POST'])
@@ -245,7 +245,7 @@ def start_case():
     try:
         data = request.get_json()
         organism = data.get('organism')
-        model_name = 'o3-mini'  # Always use o3-mini for new cases as per current logic
+        model_name = 'o4-mini-0416'  # Always use o4-mini-0416 for new cases as per current logic
         client_case_id = data.get('case_id') # Added to receive case_id
         logging.info(f"[BACKEND_START_CASE] 1. Parsed request data: organism='{organism}', case_id='{client_case_id}'")
 

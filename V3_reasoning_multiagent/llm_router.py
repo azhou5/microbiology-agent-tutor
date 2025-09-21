@@ -13,7 +13,7 @@ from LLM_utils import LLMManager
 BACKEND  = config.LLM_BACKEND
 
 if BACKEND == "azure":
-    llm_manager = LLMManager(use_azure=True)
+    llm_manager = LLMManager(model=config.API_MODEL_NAME, use_azure=True)
 
     def chat_complete(system_prompt: str, user_prompt: str, model: str = None, max_new_tokens: int = 512, max_retries: int = 3):
         """

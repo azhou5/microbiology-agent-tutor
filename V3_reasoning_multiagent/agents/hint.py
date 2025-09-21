@@ -1,4 +1,4 @@
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 import os
 import dotenv
 import numpy as np
@@ -83,14 +83,37 @@ def run_hint(input: str, case: str, history: list, run_with_faiss: bool = config
         Based on the case and conversation history, provide a single strategic hint in the form of a question that hasn't been asked yet.
         """
 
-    client = AzureOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"), 
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-    )
+    # Determine which client to use based on the toggle
+    use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
+    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    
+    if use_azure_env and azure_endpoint and azure_api_key:
+        # Use Azure OpenAI
+        client = AzureOpenAI(
+            azure_endpoint=azure_endpoint,
+            api_key=azure_api_key,
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
+        )
+        use_azure = True
+    elif openai_api_key:
+        # Use personal OpenAI
+        client = OpenAI(api_key=openai_api_key)
+        use_azure = False
+    else:
+        raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
+
+    # For Azure, use deployment name if available, otherwise use model name
+    model_to_use = model or config.API_MODEL_NAME
+    if use_azure:
+        # Check if there's a deployment mapping for this model
+        o4_mini_deployment = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT")
+        if model_to_use == "o4-mini-0416" and o4_mini_deployment:
+            model_to_use = o4_mini_deployment
 
     response = client.chat.completions.create(
-        model=model or config.API_MODEL_NAME,  # Use passed model or default to config
+        model=model_to_use,
         messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": input}],
     )
 
