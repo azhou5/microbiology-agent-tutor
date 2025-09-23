@@ -60,6 +60,10 @@ class MedicalMicrobiologyTutor:
         self.last_user_message = "" # Keep track of the last user message if needed for context
         self.initial_presentations = self._load_initial_presentations()
         self.hpi_data = self._load_hpi_data()
+        
+        # Routing state for socratic mode
+        self.socratic_mode = False
+        self.socratic_conversation_count = 0
 
     def _load_initial_presentations(self):
         """Loads pre-generated initial case sentences from a JSON file."""
@@ -199,6 +203,69 @@ class MedicalMicrobiologyTutor:
         # If no fuzzy match found, return original (will trigger error in main logic)
         print(f"[DEBUG] No fuzzy match found for '{tool_name}', keeping original")
         return tool_name
+
+
+    def _handle_socratic_direct_route(self, user_message: str) -> str:
+        """
+        Handle direct routing to socratic agent when in socratic mode.
+        
+        Args:
+            user_message: The user's message
+            
+        Returns:
+            str: The socratic agent's response
+        """
+        print(f"[DEBUG] Handling direct socratic route for: {user_message}")
+        
+        # Add user message to history if not already there
+        if not self.messages or self.messages[-1].get("content") != user_message:
+            self.messages.append({"role": "user", "content": user_message})
+        
+        # Call socratic agent directly
+        if not self.case_description:
+            raise ValueError("Case description is not available for the socratic tool.")
+        
+        socratic_response = run_socratic(
+            user_message, 
+            self.case_description, 
+            self.messages, 
+            model=self.current_model
+        )
+        
+        print(f"[DEBUG] Socratic direct response: {socratic_response}")
+        
+        # Check for completion signal
+        completion_signal = "[SOCRATIC_COMPLETE]"
+        is_complete = completion_signal in socratic_response
+        
+        # Clean the response - remove completion signal and other formatting
+        cleaned_response = socratic_response
+        if completion_signal in cleaned_response:
+            cleaned_response = cleaned_response.replace(completion_signal, "").strip()
+            print(f"[DEBUG] Detected completion signal, cleaning response")
+        
+        if self.output_tool_directly:
+            cleaned_response = re.sub(r'\[Action\]:\s*|\s*\[Observation\]:\s*', '', cleaned_response)
+            cleaned_response = re.sub(r'```json\s*|\s*```', '', cleaned_response)
+            cleaned_response = re.sub(r'^\s*{\s*"socratic"\s*:\s*"|"\s*}\s*$', '', cleaned_response)
+            cleaned_response = cleaned_response.strip()
+        
+        # Add cleaned socratic response to history
+        self.messages.append({"role": "assistant", "content": cleaned_response})
+        
+        # Increment conversation count
+        self.socratic_conversation_count += 1
+        
+        # Check if socratic section is complete based on signal
+        if is_complete:
+            print(f"[DEBUG] Socratic section complete (signal detected), exiting socratic mode")
+            self.socratic_mode = False
+            self.socratic_conversation_count = 0
+        
+        # Log conversation
+        self.log_conversation_history(self.messages)
+        
+        return cleaned_response
 
     def _update_system_message(self):
         """Formats and updates the system message with current tool descriptions and case."""
@@ -370,6 +437,9 @@ class MedicalMicrobiologyTutor:
         self.current_organism = None
         self.case_description = None
         self.last_user_message = ""
+        # Reset socratic mode state
+        self.socratic_mode = False
+        self.socratic_conversation_count = 0
 
     # Add conversation history logging
     CONVERSATION_LOG_FILE = 'conversation_logs/conversation_history.txt'
@@ -413,6 +483,12 @@ class MedicalMicrobiologyTutor:
 
         self.last_user_message = message_content
         print(f"\n[DEBUG] User message: {message_content}")
+
+        # Check if we're in socratic mode and should route directly to socratic agent
+        if self.socratic_mode:
+            print(f"[DEBUG] In socratic mode, routing directly to socratic agent")
+            # Route directly to socratic agent - it will handle completion detection
+            return self._handle_socratic_direct_route(message_content)
 
         should_append_user_message = True
         if self.messages and len(self.messages) > 0:
@@ -554,6 +630,11 @@ class MedicalMicrobiologyTutor:
                             tool_result = re.sub(r'```json\s*|\s*```', '', tool_result)
                             tool_result = re.sub(r'^\s*{\s*"socratic"\s*:\s*"|"\s*}\s*$', '', tool_result)
                             tool_result = tool_result.strip()
+                        
+                        # Set socratic mode to True when socratic tool is called
+                        self.socratic_mode = True
+                        self.socratic_conversation_count = 1
+                        print(f"[DEBUG] Entering socratic mode - future messages will route directly to socratic agent")
                         
                         self.messages.append({"role": "assistant", "content": tool_result})
                         log_socratic_resp_time = datetime.now()
