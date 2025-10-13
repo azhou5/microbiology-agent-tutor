@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let audioChunks = [];
     let isRecording = false;
     let voiceEnabled = false;
+    let voiceInitialized = false; // Track if we've attempted initialization
+    let recordingStartTime = null; // Track when recording started
 
     // LocalStorage keys
     const STORAGE_KEYS = {
@@ -571,24 +573,143 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
 
     /**
-     * Initialize voice recording
+     * Check if the current context is secure for getUserMedia
      */
-    async function initVoice() {
+    function isSecureContext() {
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+
+        // Secure contexts: HTTPS, localhost, 127.0.0.1, or file://
+        return (
+            protocol === 'https:' ||
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            hostname === '[::1]' ||
+            protocol === 'file:'
+        );
+    }
+
+    /**
+     * Check if voice is available (without requesting permission)
+     */
+    function checkVoiceAvailability() {
+        console.log('[VOICE] Checking voice availability...');
+        console.log('[VOICE] navigator:', typeof navigator);
+        console.log('[VOICE] navigator.mediaDevices:', typeof navigator.mediaDevices);
+        console.log('[VOICE] window.location.href:', window.location.href);
+        console.log('[VOICE] window.isSecureContext:', window.isSecureContext);
+        console.log('[VOICE] window.location.protocol:', window.location.protocol);
+        console.log('[VOICE] window.location.hostname:', window.location.hostname);
+
+        // Check if we're in a secure context first (this we can determine for sure)
+        if (!isSecureContext()) {
+            const currentUrl = window.location.href;
+            const localhostUrl = currentUrl.replace(window.location.hostname, 'localhost');
+            const errorMessage = '❌ Use localhost';
+            const tooltipMessage = `Microphone requires HTTPS or localhost. Try: ${localhostUrl}`;
+
+            setVoiceStatus(errorMessage);
+            if (voiceBtn) {
+                voiceBtn.disabled = true;
+                voiceBtn.title = tooltipMessage;
+            }
+
+            console.warn(
+                '%c[VOICE] Security Warning',
+                'color: orange; font-weight: bold; font-size: 14px;',
+                `\nMicrophone requires HTTPS or localhost.\nCurrent: ${window.location.hostname}\nTry: ${localhostUrl}`
+            );
+            return false;
+        }
+
+        // If we're in a secure context, ALWAYS enable the button
+        // Let the actual getUserMedia call fail with a proper error if there's an issue
+        if (voiceBtn) {
+            voiceBtn.disabled = false;
+            voiceBtn.title = 'Click to request microphone access';
+        }
+
+        // Check if the browser supports getUserMedia (but don't disable button)
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            let statusMessage = '🎤 Click to try';
+            let warning = 'Voice API not detected, but click to try anyway';
+
+            if (!navigator.mediaDevices) {
+                console.warn('[VOICE] navigator.mediaDevices is undefined - this is unusual on localhost');
+                warning = 'navigator.mediaDevices is undefined. Click to attempt access anyway.';
+            } else if (!navigator.mediaDevices.getUserMedia) {
+                console.warn('[VOICE] getUserMedia is undefined');
+                warning = 'getUserMedia is undefined. Click to attempt access anyway.';
+            }
+
+            setVoiceStatus(statusMessage);
+            if (voiceBtn) {
+                voiceBtn.title = warning;
+            }
+            console.warn('[VOICE] Voice API not detected. Browser:', navigator.userAgent);
+            console.warn('[VOICE] Button enabled anyway - will attempt on click');
+            return false;
+        }
+
+        // Voice API is available
+        setVoiceStatus('🎤 Click to start');
+        console.log('[VOICE] ✅ Voice API available, waiting for user interaction');
+        return true;
+    }
+
+    /**
+     * Request microphone permission (called on first user interaction)
+     */
+    async function requestMicrophonePermission() {
+        if (voiceInitialized) {
+            return voiceEnabled; // Already attempted
+        }
+
+        voiceInitialized = true;
+        setVoiceStatus('⏳ Requesting...');
+
         try {
+            console.log('[VOICE] Requesting microphone permission...');
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             voiceEnabled = true;
             setVoiceStatus('🎤 Voice ready');
             console.log('[VOICE] Microphone access granted');
-            // Stop the stream immediately (we'll request again when recording)
+
+            // Stop the stream immediately (we'll request again when actually recording)
             stream.getTracks().forEach(track => track.stop());
+
+            if (voiceBtn) {
+                voiceBtn.title = 'Click and hold to record';
+            }
+
+            return true;
         } catch (error) {
             console.error('[VOICE] Microphone access denied:', error);
             voiceEnabled = false;
-            setVoiceStatus('❌ Mic unavailable');
+
+            let errorMessage = '❌ Mic unavailable';
+            let tooltipMessage = 'Microphone access denied';
+
+            if (error.name === 'NotAllowedError') {
+                errorMessage = '❌ Permission denied';
+                tooltipMessage = 'You denied microphone access. Click 🔒 in address bar to change permissions.';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = '❌ No microphone';
+                tooltipMessage = 'No microphone found on this device';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage = '❌ Mic in use';
+                tooltipMessage = 'Microphone is already in use by another application';
+            } else {
+                tooltipMessage = error.message || 'Could not access microphone';
+            }
+
+            setVoiceStatus(errorMessage);
             if (voiceBtn) {
                 voiceBtn.disabled = true;
-                voiceBtn.title = 'Microphone access denied';
+                voiceBtn.title = tooltipMessage;
             }
+
+            return false;
         }
     }
 
@@ -611,16 +732,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            console.log('[VOICE] 🎙️ Starting recording...');
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('[VOICE] ✅ Got media stream');
 
-            // Try to use webm/opus if supported, fallback to default
-            let mimeType = 'audio/webm;codecs=opus';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = 'audio/webm';
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = ''; // Use default
+            // Try formats in order of OpenAI compatibility
+            // MP4/M4A works best, then WebM with opus
+            const preferredFormats = [
+                'audio/mp4',  // Best for OpenAI, works in Safari
+                'audio/webm;codecs=opus',  // Good quality, works in Chrome/Firefox
+                'audio/webm',  // Fallback for older browsers
+                ''  // Browser default
+            ];
+
+            let mimeType = '';
+            for (const format of preferredFormats) {
+                if (format === '' || MediaRecorder.isTypeSupported(format)) {
+                    mimeType = format;
+                    break;
                 }
             }
+
+            console.log('[VOICE] Using mimeType:', mimeType || 'browser default');
+            console.log('[VOICE] Supported formats check:');
+            preferredFormats.forEach(fmt => {
+                if (fmt) console.log(`  - ${fmt}: ${MediaRecorder.isTypeSupported(fmt) ? '✅' : '❌'}`);
+            });
 
             const options = mimeType ? { mimeType } : {};
             mediaRecorder = new MediaRecorder(stream, options);
@@ -629,28 +766,46 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
                     audioChunks.push(event.data);
+                    console.log('[VOICE] 📊 Data chunk received:', event.data.size, 'bytes');
                 }
             };
 
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
-                console.log('[VOICE] Recording stopped, size:', audioBlob.size, 'bytes');
+                console.log('[VOICE] ⏹️ Recording stopped, total size:', audioBlob.size, 'bytes');
 
                 // Stop all tracks
                 stream.getTracks().forEach(track => track.stop());
 
                 // Send to API
-                await sendVoiceMessage(audioBlob);
+                if (audioBlob.size > 0) {
+                    await sendVoiceMessage(audioBlob);
+                } else {
+                    console.error('[VOICE] Recording is empty (0 bytes)');
+                    setStatus('Recording failed - no audio captured', true);
+                    setVoiceStatus('🎤 Voice ready');
+                }
             };
 
             mediaRecorder.start();
             isRecording = true;
-            setVoiceStatus('🔴 Recording...');
-            console.log('[VOICE] Recording started');
+            recordingStartTime = Date.now();
+            setVoiceStatus('🔴 RECORDING - Speak now!');
+            setStatus('🎙️ Recording in progress... Release to send');
+
+            // Visual feedback on button
+            if (voiceBtn) {
+                voiceBtn.style.background = '#dc3545';
+                voiceBtn.style.animation = 'pulse 1s infinite';
+            }
+
+            console.log('[VOICE] ✅ Recording started successfully at', new Date(recordingStartTime).toISOString());
+            console.log('[VOICE] 💡 Speak now! Release button or click again to stop.');
 
         } catch (error) {
-            console.error('[VOICE] Recording error:', error);
-            setStatus('Error accessing microphone', true);
+            console.error('[VOICE] ❌ Recording error:', error);
+            setStatus('Error accessing microphone: ' + error.message, true);
+            setVoiceStatus('❌ Recording failed');
             isRecording = false;
         }
     }
@@ -660,10 +815,48 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function stopRecording() {
         if (mediaRecorder && isRecording) {
+            // Check recording duration
+            const duration = Date.now() - recordingStartTime;
+            console.log('[VOICE] ⏹️ Stopping recording... Duration:', duration, 'ms');
+
+            if (duration < 500) {
+                console.warn('[VOICE] ⚠️ Recording too short:', duration, 'ms (minimum 500ms recommended)');
+                setStatus('Recording too short - please hold longer', true);
+                setVoiceStatus('⚠️ Too short');
+
+                // Stop and reset
+                mediaRecorder.stop();
+                isRecording = false;
+
+                // Reset button
+                if (voiceBtn) {
+                    voiceBtn.style.background = '';
+                    voiceBtn.style.animation = '';
+                }
+
+                // Reset status after delay
+                setTimeout(() => {
+                    setVoiceStatus('🎤 Voice ready');
+                    setStatus('');
+                }, 2000);
+
+                return;
+            }
+
             mediaRecorder.stop();
             isRecording = false;
             setVoiceStatus('⏸️ Processing...');
-            console.log('[VOICE] Stopping recording...');
+            setStatus('Processing audio...');
+
+            // Reset button appearance
+            if (voiceBtn) {
+                voiceBtn.style.background = '';
+                voiceBtn.style.animation = '';
+            }
+
+            console.log('[VOICE] ✅ Recording stopped after', duration, 'ms, processing...');
+        } else {
+            console.warn('[VOICE] ⚠️ Stop called but not recording');
         }
     }
 
@@ -672,13 +865,29 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function sendVoiceMessage(audioBlob) {
         console.log('[VOICE] Sending audio to API...');
+        console.log('[VOICE] Audio blob type:', audioBlob.type);
+        console.log('[VOICE] Audio blob size:', audioBlob.size, 'bytes');
+
         disableInput(true);
         setStatus('Transcribing and processing...');
 
         try {
+            // Determine file extension from MIME type
+            let extension = 'webm';
+            if (audioBlob.type.includes('mp4')) {
+                extension = 'mp4';
+            } else if (audioBlob.type.includes('ogg')) {
+                extension = 'ogg';
+            } else if (audioBlob.type.includes('wav')) {
+                extension = 'wav';
+            }
+
+            const filename = `recording.${extension}`;
+            console.log('[VOICE] Sending as:', filename);
+
             // Create form data
             const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('audio', audioBlob, filename);
             formData.append('case_id', currentCaseId);
             formData.append('organism_key', currentOrganismKey);
             formData.append('history', JSON.stringify(chatHistory));
@@ -757,9 +966,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Handle voice button click
+     * Handle voice button click (toggle recording on/off)
      */
-    function handleVoiceButton() {
+    async function handleVoiceButton() {
+        // First-time setup: request permission
+        if (!voiceInitialized) {
+            const granted = await requestMicrophonePermission();
+            if (!granted) {
+                setStatus('Microphone access denied. Check permissions.', true);
+                return;
+            }
+        }
+
         if (!voiceEnabled) {
             setStatus('Voice is not available. Check microphone permissions.', true);
             return;
@@ -770,60 +988,38 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Toggle recording
         if (isRecording) {
+            console.log('[VOICE] 🛑 Stopping recording (user clicked button)');
             stopRecording();
             if (voiceBtn) {
                 voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤';
             }
         } else {
+            console.log('[VOICE] ▶️ Starting recording (user clicked button)');
             startRecording();
             if (voiceBtn) {
                 voiceBtn.classList.add('recording');
+                voiceBtn.textContent = '⏹️';
             }
         }
     }
 
-    // Voice button event listeners
+    // Voice button event listener - simple toggle on click
     if (voiceBtn) {
-        // Click to toggle recording
         voiceBtn.addEventListener('click', handleVoiceButton);
-
-        // Also support press and hold
-        voiceBtn.addEventListener('mousedown', (e) => {
-            if (!isRecording) {
-                startRecording();
-                voiceBtn.classList.add('recording');
-            }
-        });
-
-        voiceBtn.addEventListener('mouseup', (e) => {
-            if (isRecording) {
-                stopRecording();
-                voiceBtn.classList.remove('recording');
-            }
-        });
-
-        // Touch support for mobile
-        voiceBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (!isRecording) {
-                startRecording();
-                voiceBtn.classList.add('recording');
-            }
-        });
-
-        voiceBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            if (isRecording) {
-                stopRecording();
-                voiceBtn.classList.remove('recording');
-            }
-        });
+        voiceBtn.title = 'Click to start/stop voice recording';
     }
 
-    // Initialize voice on load
+    // Check voice availability on load (doesn't request permission yet)
     if (voiceBtn) {
-        initVoice();
+        console.log('[VOICE] Voice button found:', voiceBtn);
+        console.log('[VOICE] Voice button disabled state BEFORE check:', voiceBtn.disabled);
+        checkVoiceAvailability();
+        console.log('[VOICE] Voice button disabled state AFTER check:', voiceBtn.disabled);
+    } else {
+        console.error('[VOICE] Voice button element not found!');
     }
 
     // ============================================================

@@ -41,18 +41,29 @@ class Config(BaseConfig):
     DB_NAME: str = os.getenv("DB_NAME", "microbiology_feedback")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
     
-    # LLM Configuration
-    LLM_BACKEND: str = os.getenv("LLM_BACKEND", "azure")
-    API_MODEL_NAME: str = os.getenv("API_MODEL_NAME", "o3-mini-0131")
-    LOCAL_MODEL_NAME: str = os.getenv("LOCAL_MODEL_NAME", "distilgpt2")
+    # LLM Configuration - respects USE_AZURE_OPENAI flag
+    USE_AZURE_OPENAI: bool = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
     
     # Azure OpenAI settings
     AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
     AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+    AZURE_OPENAI_O4_MINI_DEPLOYMENT: str = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", "o4-mini-0416")
     
-    # OpenAI settings
+    # Personal OpenAI settings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    PERSONAL_OPENAI_MODEL: str = os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
+    
+    # Determine which model to use based on USE_AZURE_OPENAI flag
+    # This is computed at initialization time
+    API_MODEL_NAME: str = (
+        os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", "o4-mini-0416")
+        if os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
+        else os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
+    )
+    
+    LLM_BACKEND: str = os.getenv("LLM_BACKEND", "azure")
+    LOCAL_MODEL_NAME: str = os.getenv("LOCAL_MODEL_NAME", "distilgpt2")
     
     # Feature flags
     USE_FAISS: bool = os.getenv("USE_FAISS", "False").lower() == "true"

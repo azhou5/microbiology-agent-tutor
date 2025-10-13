@@ -20,6 +20,9 @@ asyncpg==0.29.0    # For async PostgreSQL
 openai==1.10.0
 # tiktoken==0.5.2  # For token counting
 
+# Note: Voice features use OpenAI's Whisper API which supports webm/mp3/wav natively
+# No audio conversion libraries needed!
+
 # Vector Search (optional)
 faiss-cpu==1.7.4
 numpy==1.24.3

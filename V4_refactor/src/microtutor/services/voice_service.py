@@ -80,55 +80,97 @@ class VoiceService:
         filename: str = "audio.mp3",
         language: Optional[str] = None,
         prompt: Optional[str] = None,
+        response_format: str = "text",
     ) -> str:
         """Transcribe audio to text using OpenAI Whisper API.
         
+        Follows OpenAI Speech-to-Text API best practices:
+        - Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm
+        - Max file size: 25 MB (~30 minutes of audio)
+        - Uses whisper-1 model
+        
         Args:
             audio_file: Audio file bytes.
-            filename: Filename (with extension) for the audio.
-            language: Optional language code (e.g., "en", "es"). Auto-detected if None.
-            prompt: Optional prompt to guide the model's style/vocabulary.
-                   Useful for medical terminology.
+            filename: Filename (with extension) for the audio. Extension hints at format.
+            language: Optional ISO-639-1 language code (e.g., "en", "es"). 
+                     Auto-detected if None. Providing it improves accuracy and latency.
+            prompt: Optional prompt to guide transcription style/vocabulary.
+                   Useful for medical terminology. Max 224 tokens.
+            response_format: Output format. Options: "text" (default), "json", 
+                           "verbose_json", "srt", "vtt".
         
         Returns:
-            Transcribed text.
+            Transcribed text string.
         
         Raises:
-            Exception: If transcription fails.
+            ValueError: If file is empty or too large.
+            Exception: If OpenAI API call fails.
         
         Example:
-            >>> with open("question.mp3", "rb") as f:
-            ...     audio_bytes = f.read()
+            >>> audio_bytes = Path("question.mp3").read_bytes()
             >>> text = await voice_service.transcribe_audio(
             ...     audio_bytes,
             ...     filename="question.mp3",
-            ...     prompt="Medical terminology: staphylococcus, streptococcus"
+            ...     language="en",
+            ...     prompt="Medical terms: staphylococcus, streptococcus"
             ... )
+        
+        References:
+            https://platform.openai.com/docs/guides/speech-to-text
         """
         try:
-            logger.info(f"Transcribing audio file: {filename}")
+            # Validate file size (OpenAI limit: ~25MB)
+            file_size_mb = len(audio_file) / (1024 * 1024)
+            if len(audio_file) == 0:
+                raise ValueError("Audio file is empty (0 bytes)")
+            if file_size_mb > 25:
+                raise ValueError(
+                    f"Audio file too large: {file_size_mb:.2f}MB (max 25MB). "
+                    "Consider splitting into smaller chunks."
+                )
+            
+            logger.info(
+                f"Transcribing audio: {filename} "
+                f"({file_size_mb:.2f}MB, lang={language or 'auto'})"
+            )
             
             # Create a file-like object from bytes
+            # The .name attribute helps OpenAI determine the format
             from io import BytesIO
             audio_buffer = BytesIO(audio_file)
             audio_buffer.name = filename
             
-            # Call Whisper API
+            # Call OpenAI Whisper API
+            # Note: response_format="text" returns a string directly
+            # Other formats return objects with more structure
             transcript = await self.client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_buffer,
                 language=language,
                 prompt=prompt,
+                response_format=response_format,
             )
             
-            transcribed_text = transcript.text
-            logger.info(f"Transcription successful: '{transcribed_text[:100]}...'")
+            # Extract text based on response format
+            if response_format == "text":
+                transcribed_text = transcript  # Direct string for "text" format
+            elif hasattr(transcript, "text"):
+                transcribed_text = transcript.text  # For json/verbose_json
+            else:
+                transcribed_text = str(transcript)  # Fallback
+            
+            logger.info(f"✅ Transcription successful: '{transcribed_text[:100]}...'")
             
             return transcribed_text
             
-        except Exception as e:
-            logger.error(f"Transcription failed: {e}")
+        except ValueError as e:
+            # Re-raise validation errors as-is
+            logger.error(f"Transcription validation error: {e}")
             raise
+        except Exception as e:
+            # Log and re-raise API errors
+            logger.error(f"❌ Transcription failed: {e}", exc_info=True)
+            raise Exception(f"Transcription error: {str(e)}") from e
     
     async def synthesize_speech(
         self,

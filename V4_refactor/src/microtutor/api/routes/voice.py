@@ -23,8 +23,8 @@ router = APIRouter(prefix="/voice", tags=["voice"])
     description="Upload an audio file and get the transcribed text using OpenAI Whisper.",
 )
 async def transcribe_audio(
-    audio: UploadFile = File(..., description="Audio file (mp3, wav, m4a, etc.)"),
-    language: str = Form(None, description="Language code (e.g., 'en', 'es'). Auto-detected if not provided."),
+    audio: UploadFile = File(..., description="Audio file (mp3, wav, m4a, webm, etc.)"),
+    language: str = Form("en", description="ISO-639-1 language code (e.g., 'en', 'es'). Defaults to 'en' for better accuracy."),
     voice_service: VoiceService = Depends(get_voice_service),
 ) -> VoiceTranscriptionResponse:
     """Transcribe audio to text.
@@ -46,24 +46,50 @@ async def transcribe_audio(
     try:
         # Read audio file
         audio_bytes = await audio.read()
+        filename = audio.filename or "audio.mp3"
+        
+        # Validate file size
+        if len(audio_bytes) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Audio file is empty (0 bytes)"
+            )
+        
+        if len(audio_bytes) > 25 * 1024 * 1024:  # 25MB limit
+            raise HTTPException(
+                status_code=413,
+                detail=f"Audio file too large: {len(audio_bytes)} bytes (max 25MB)"
+            )
         
         # Transcribe with medical terminology prompt
         from microtutor.services.voice_service import VoiceConfig
         
         transcribed_text = await voice_service.transcribe_audio(
             audio_file=audio_bytes,
-            filename=audio.filename or "audio.mp3",
+            filename=filename,
             language=language,
             prompt=VoiceConfig.MEDICAL_PROMPT,
+            response_format="text",
         )
         
         return VoiceTranscriptionResponse(
             text=transcribed_text,
-            language=language or "auto",
+            language=language,
         )
         
+    except ValueError as e:
+        # Validation errors -> 400
+        logger.error(f"Transcription validation error: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        logger.error(f"Transcription endpoint failed: {e}")
+        # API errors -> 500
+        logger.error(f"Transcription endpoint failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Transcription failed: {str(e)}"
@@ -176,12 +202,26 @@ async def voice_chat(
         
         # Step 1: Transcribe user audio
         audio_bytes = await audio.read()
+        filename = audio.filename or "audio.webm"
+        
+        logger.info(f"Received audio: {filename}, size: {len(audio_bytes)} bytes")
+        
+        # OpenAI Whisper supports: mp3, mp4, mpeg, mpga, m4a, wav, and webm
+        # No conversion needed!
+        
+        if len(audio_bytes) == 0:
+            raise ValueError("Audio file is empty (0 bytes)")
+        
+        if len(audio_bytes) > 25 * 1024 * 1024:  # 25MB limit
+            raise ValueError(f"Audio file too large: {len(audio_bytes)} bytes (max 25MB)")
         
         from microtutor.services.voice_service import VoiceConfig
         user_text = await voice_service.transcribe_audio(
             audio_file=audio_bytes,
-            filename=audio.filename or "audio.mp3",
+            filename=filename,
+            language="en",  # Improves accuracy & latency for English medical terms
             prompt=VoiceConfig.MEDICAL_PROMPT,
+            response_format="text",  # Simple string response
         )
         
         logger.info(f"User audio transcribed: '{user_text[:100]}...'")
@@ -189,44 +229,45 @@ async def voice_chat(
         # Step 2: Process through tutor
         history_list = json.loads(history) if history != "[]" else []
         
-        # Create chat request
-        from microtutor.models.requests import ChatRequest
-        chat_request = ChatRequest(
-            message=user_text,
-            history=history_list,
+        # Create tutor context (use model from tutor_service config)
+        from microtutor.models.domain import TutorContext
+        context = TutorContext(
             case_id=case_id,
-            organism_key=organism_key,
+            organism=organism_key,
+            conversation_history=history_list,
+            model_name=tutor_service.model_name,  # Use configured model
         )
         
-        # Get tutor response
-        tutor_response = await tutor_service.chat(
-            message=chat_request.message,
-            history=chat_request.history,
-            case_id=chat_request.case_id,
-            organism_key=chat_request.organism_key,
+        # Get tutor response using process_message
+        tutor_response = await tutor_service.process_message(
+            message=user_text,
+            context=context,
         )
         
         # Step 3: Determine speaker and synthesize
-        # If tool is "patient", use patient voice, otherwise tutor voice
-        speaker = "patient" if tutor_response.tool_name == "patient" else "tutor"
+        # Check if tools_used contains "patient" to determine voice
+        speaker = "patient" if "patient" in tutor_response.tools_used else "tutor"
         
         response_audio = await voice_service.synthesize_speech(
-            text=tutor_response.response,
+            text=tutor_response.content,
             speaker=speaker,
         )
         
         # Encode audio as base64 for JSON response
         audio_base64 = base64.b64encode(response_audio).decode("utf-8")
         
-        logger.info(f"Voice chat complete - Speaker: {speaker}")
+        logger.info(f"Voice chat complete - Speaker: {speaker}, Tools: {tutor_response.tools_used}")
+        
+        # Get updated history from context
+        updated_history = context.conversation_history
         
         return VoiceChatResponse(
             transcribed_text=user_text,
-            response_text=tutor_response.response,
+            response_text=tutor_response.content,
             audio_base64=audio_base64,
             speaker=speaker,
-            tool_name=tutor_response.tool_name,
-            history=tutor_response.history,
+            tool_name=tutor_response.tools_used[0] if tutor_response.tools_used else "tutor",
+            history=updated_history,
         )
         
     except Exception as e:
