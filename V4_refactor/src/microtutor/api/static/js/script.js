@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
     const correctOrganismSpan = document.getElementById('correct-organism');
 
+    // Voice elements
+    const voiceBtn = document.getElementById('voice-btn');
+    const voiceStatus = document.getElementById('voice-status');
+    const responseAudio = document.getElementById('response-audio');
+
     // API Configuration
     const API_BASE = '/api/v1';
 
@@ -24,6 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
     let currentCaseId = null;
     let currentOrganismKey = null;
+
+    // Voice state
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let voiceEnabled = false;
 
     // LocalStorage keys
     const STORAGE_KEYS = {
@@ -554,6 +565,270 @@ document.addEventListener('DOMContentLoaded', () => {
             this.disabled = true;
         });
     });
+
+    // ============================================================
+    // VOICE FUNCTIONALITY
+    // ============================================================
+
+    /**
+     * Initialize voice recording
+     */
+    async function initVoice() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            voiceEnabled = true;
+            setVoiceStatus('🎤 Voice ready');
+            console.log('[VOICE] Microphone access granted');
+            // Stop the stream immediately (we'll request again when recording)
+            stream.getTracks().forEach(track => track.stop());
+        } catch (error) {
+            console.error('[VOICE] Microphone access denied:', error);
+            voiceEnabled = false;
+            setVoiceStatus('❌ Mic unavailable');
+            if (voiceBtn) {
+                voiceBtn.disabled = true;
+                voiceBtn.title = 'Microphone access denied';
+            }
+        }
+    }
+
+    /**
+     * Set voice status message
+     */
+    function setVoiceStatus(message) {
+        if (voiceStatus) {
+            voiceStatus.textContent = message;
+        }
+    }
+
+    /**
+     * Start recording audio
+     */
+    async function startRecording() {
+        if (!currentCaseId || !currentOrganismKey) {
+            setStatus('Please start a case first before using voice', true);
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Try to use webm/opus if supported, fallback to default
+            let mimeType = 'audio/webm;codecs=opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'audio/webm';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = ''; // Use default
+                }
+            }
+
+            const options = mimeType ? { mimeType } : {};
+            mediaRecorder = new MediaRecorder(stream, options);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
+                console.log('[VOICE] Recording stopped, size:', audioBlob.size, 'bytes');
+
+                // Stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+
+                // Send to API
+                await sendVoiceMessage(audioBlob);
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            setVoiceStatus('🔴 Recording...');
+            console.log('[VOICE] Recording started');
+
+        } catch (error) {
+            console.error('[VOICE] Recording error:', error);
+            setStatus('Error accessing microphone', true);
+            isRecording = false;
+        }
+    }
+
+    /**
+     * Stop recording audio
+     */
+    function stopRecording() {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            isRecording = false;
+            setVoiceStatus('⏸️ Processing...');
+            console.log('[VOICE] Stopping recording...');
+        }
+    }
+
+    /**
+     * Send voice message to API
+     */
+    async function sendVoiceMessage(audioBlob) {
+        console.log('[VOICE] Sending audio to API...');
+        disableInput(true);
+        setStatus('Transcribing and processing...');
+
+        try {
+            // Create form data
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('case_id', currentCaseId);
+            formData.append('organism_key', currentOrganismKey);
+            formData.append('history', JSON.stringify(chatHistory));
+
+            // Send to voice chat endpoint
+            const response = await fetch(`${API_BASE}/voice/chat`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || errData.error || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('[VOICE] Response received:', data);
+
+            // Add transcribed user message
+            addMessage('user', data.transcribed_text);
+            chatHistory.push({ role: 'user', content: data.transcribed_text });
+
+            // Add assistant response
+            const speakerIcon = data.speaker === 'patient' ? '🤒' : '👨‍⚕️';
+            addMessage('assistant', `${speakerIcon} ${data.response_text}`, true);
+            chatHistory.push({ role: 'assistant', content: data.response_text });
+
+            // Play audio response
+            if (data.audio_base64) {
+                playAudioResponse(data.audio_base64);
+            }
+
+            setStatus('');
+            setVoiceStatus('🎤 Voice ready');
+            disableInput(false);
+            saveConversationState();
+
+        } catch (error) {
+            console.error('[VOICE] Error:', error);
+            setStatus(`Voice error: ${error.message}`, true);
+            setVoiceStatus('❌ Error');
+            disableInput(false);
+        }
+    }
+
+    /**
+     * Play audio response from base64
+     */
+    function playAudioResponse(audioBase64) {
+        try {
+            // Convert base64 to blob
+            const byteCharacters = atob(audioBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+
+            // Create URL and play
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            if (responseAudio) {
+                responseAudio.src = audioUrl;
+                responseAudio.play();
+                console.log('[VOICE] Playing audio response');
+
+                // Clean up URL after playing
+                responseAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                };
+            }
+        } catch (error) {
+            console.error('[VOICE] Error playing audio:', error);
+        }
+    }
+
+    /**
+     * Handle voice button click
+     */
+    function handleVoiceButton() {
+        if (!voiceEnabled) {
+            setStatus('Voice is not available. Check microphone permissions.', true);
+            return;
+        }
+
+        if (!currentCaseId || !currentOrganismKey) {
+            setStatus('Please start a case first before using voice', true);
+            return;
+        }
+
+        if (isRecording) {
+            stopRecording();
+            if (voiceBtn) {
+                voiceBtn.classList.remove('recording');
+            }
+        } else {
+            startRecording();
+            if (voiceBtn) {
+                voiceBtn.classList.add('recording');
+            }
+        }
+    }
+
+    // Voice button event listeners
+    if (voiceBtn) {
+        // Click to toggle recording
+        voiceBtn.addEventListener('click', handleVoiceButton);
+
+        // Also support press and hold
+        voiceBtn.addEventListener('mousedown', (e) => {
+            if (!isRecording) {
+                startRecording();
+                voiceBtn.classList.add('recording');
+            }
+        });
+
+        voiceBtn.addEventListener('mouseup', (e) => {
+            if (isRecording) {
+                stopRecording();
+                voiceBtn.classList.remove('recording');
+            }
+        });
+
+        // Touch support for mobile
+        voiceBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!isRecording) {
+                startRecording();
+                voiceBtn.classList.add('recording');
+            }
+        });
+
+        voiceBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (isRecording) {
+                stopRecording();
+                voiceBtn.classList.remove('recording');
+            }
+        });
+    }
+
+    // Initialize voice on load
+    if (voiceBtn) {
+        initVoice();
+    }
+
+    // ============================================================
+    // END VOICE FUNCTIONALITY
+    // ============================================================
 
     // Initialize
     console.log('[INIT] MicroTutor V4 Frontend initialized');

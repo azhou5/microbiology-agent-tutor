@@ -21,7 +21,7 @@ except ImportError:
         return []
 
 from microtutor.models.domain import TutorContext, TutorResponse, TokenUsage, TutorState
-from config import config
+from microtutor.core.config_helper import config
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +57,24 @@ class TutorService:
         self,
         organism: str,
         case_id: str,
-        model_name: Optional[str] = None
+        model_name: Optional[str] = None,
+        use_hpi_only: bool = False
     ) -> TutorResponse:
-        """Start a new case."""
+        """Start a new case.
+        
+        Args:
+            organism: The microorganism name
+            case_id: Unique case identifier
+            model_name: Optional LLM model to use
+            use_hpi_only: If True, use shorter HPI version
+        """
         start_time = datetime.now()
         model = model_name or self.model_name
         
-        logger.info(f"Starting case: organism={organism}, case_id={case_id}")
+        logger.info(f"Starting case: organism={organism}, case_id={case_id}, use_hpi_only={use_hpi_only}")
         
-        # Load case
-        case_description = get_case(organism)
+        # Load case (full or HPI only)
+        case_description = get_case(organism, use_hpi_only=use_hpi_only)
         if not case_description:
             raise ValueError(f"Could not load case for organism: {organism}")
         

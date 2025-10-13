@@ -13,17 +13,18 @@ from microtutor.agents.case_generator_rag import CaseGeneratorRAGAgent
 # Initialize the case generator
 case_generator = CaseGeneratorRAGAgent()
 
-def get_case(organism):
+def get_case(organism, use_hpi_only=False):
     """
     Get a case for the specified organism, generating it if it doesn't exist.
     
     Args:
         organism (str): The organism to get a case for.
+        use_hpi_only (bool): If True, return only the HPI (shorter version).
     
     Returns:
         str: The case text.
     """
-    logging.info(f"[BACKEND_START_CASE] 3c. get_case function called for organism: '{organism}'.")
+    logging.info(f"[BACKEND_START_CASE] 3c. get_case function called for organism: '{organism}', use_hpi_only={use_hpi_only}.")
     # Check if it's a path (for backward compatibility)
     if os.path.exists(organism):
         try:
@@ -34,5 +35,5 @@ def get_case(organism):
     
     # Otherwise, generate a case for the specified organism
     logging.info(f"[BACKEND_START_CASE]   - Calling case_generator.generate_case for '{organism}'.")
-    return case_generator.generate_case(organism)
+    return case_generator.generate_case(organism, use_hpi_only=use_hpi_only)
     

@@ -21,7 +21,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from microtutor.models.responses import ErrorResponse
-from microtutor.api.routes import chat
+from microtutor.api.routes import chat, voice
+
+# Try to import guidelines router (optional)
+try:
+    from microtutor.api.routes import guidelines
+    GUIDELINES_AVAILABLE = True
+except ImportError:
+    GUIDELINES_AVAILABLE = False
+    logger.warning("Guidelines router not available (missing dependencies)")
 
 # Configure logging
 logging.basicConfig(
@@ -126,6 +134,14 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+app.include_router(voice.router, prefix="/api/v1", tags=["voice"])
+
+# Include optional guidelines router
+if GUIDELINES_AVAILABLE:
+    app.include_router(guidelines.router, tags=["guidelines"])
+    logger.info("✅ Guidelines API routes enabled")
+else:
+    logger.info("ℹ️  Guidelines API routes disabled (install dependencies to enable)")
 
 
 # Root endpoints
@@ -160,16 +176,35 @@ async def health_check():
 @app.get("/api/v1/info")
 async def api_info():
     """API information endpoint."""
+    endpoints_info = {
+        "start_case": "POST /api/v1/start_case",
+        "chat": "POST /api/v1/chat",
+        "voice_transcribe": "POST /api/v1/voice/transcribe",
+        "voice_synthesize": "POST /api/v1/voice/synthesize",
+        "voice_chat": "POST /api/v1/voice/chat",
+        "health": "GET /health",
+        "docs": "GET /api/docs"
+    }
+    
+    # Add guidelines endpoints if available
+    if GUIDELINES_AVAILABLE:
+        endpoints_info.update({
+            "guidelines_search": "POST /api/v1/guidelines/search",
+            "guidelines_organism": "GET /api/v1/guidelines/organism/{organism}",
+            "guidelines_sources": "GET /api/v1/guidelines/sources",
+            "guidelines_health": "GET /api/v1/guidelines/health"
+        })
+    
     return {
         "name": "MicroTutor API",
         "version": "4.0.0",
         "description": "AI-powered microbiology tutoring system",
-        "endpoints": {
-            "start_case": "POST /api/v1/start_case",
-            "chat": "POST /api/v1/chat",
-            "health": "GET /health",
-            "docs": "GET /api/docs"
-        }
+        "features": {
+            "tutoring": True,
+            "voice": True,
+            "guidelines": GUIDELINES_AVAILABLE
+        },
+        "endpoints": endpoints_info
     }
 
 

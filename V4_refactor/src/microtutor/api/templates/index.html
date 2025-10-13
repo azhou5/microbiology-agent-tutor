@@ -65,14 +65,22 @@
         </div>
 
         <div id="input-area" class="input-area">
-            <textarea id="user-input" placeholder="Enter your message..." rows="1" disabled></textarea>
+            <textarea id="user-input" placeholder="Enter your message or use voice..." rows="1" disabled></textarea>
             <div class="button-group">
+                <button id="voice-btn" class="btn btn-voice" title="Click or hold to speak">
+                    <span class="btn-icon">🎤</span>
+                    <span class="voice-btn-text">Voice</span>
+                </button>
                 <button id="send-btn" class="btn btn-success" disabled>
                     <span class="btn-icon">📤</span> Send
                 </button>
                 <button id="finish-btn" class="btn btn-warning" disabled>
                     <span class="btn-icon">🏁</span> Finish Case
                 </button>
+            </div>
+            <div class="voice-controls">
+                <p id="voice-status" class="voice-status">🎤 Initializing...</p>
+                <audio id="response-audio" controls hidden></audio>
             </div>
         </div>
 

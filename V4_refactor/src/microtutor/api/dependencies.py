@@ -25,6 +25,7 @@ except ImportError:
 from microtutor.services.tutor_service import TutorService
 from microtutor.services.case_service import CaseService
 from microtutor.services.feedback_service import FeedbackService
+from microtutor.services.voice_service import VoiceService
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 _tutor_service: Optional[TutorService] = None
 _case_service: Optional[CaseService] = None
 _feedback_service: Optional[FeedbackService] = None
+_voice_service: Optional[VoiceService] = None
 
 
 def get_tutor_service() -> TutorService:
@@ -76,6 +78,39 @@ def get_feedback_service() -> FeedbackService:
         _feedback_service = FeedbackService()
         logger.info("FeedbackService singleton created")
     return _feedback_service
+
+
+def get_voice_service() -> VoiceService:
+    """Get or create VoiceService singleton.
+    
+    Returns:
+        VoiceService instance configured from environment
+    """
+    global _voice_service
+    if _voice_service is None:
+        # Get OpenAI API key from config or environment
+        api_key = getattr(config, 'OPENAI_API_KEY', None)
+        if api_key is None:
+            import os
+            api_key = os.getenv('OPENAI_API_KEY')
+        
+        if api_key is None:
+            logger.warning("No OpenAI API key found - voice service will not work")
+            raise ValueError("OpenAI API key required for voice service")
+        
+        # Get voice configuration from config if available
+        tutor_voice = getattr(config, 'VOICE_TUTOR', 'nova')
+        patient_voice = getattr(config, 'VOICE_PATIENT', 'echo')
+        tts_model = getattr(config, 'VOICE_TTS_MODEL', 'tts-1')
+        
+        _voice_service = VoiceService(
+            api_key=api_key,
+            tutor_voice=tutor_voice,  # type: ignore
+            patient_voice=patient_voice,  # type: ignore
+            tts_model=tts_model,  # type: ignore
+        )
+        logger.info(f"VoiceService singleton created - Tutor: {tutor_voice}, Patient: {patient_voice}")
+    return _voice_service
 
 
 # Database setup

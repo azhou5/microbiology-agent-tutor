@@ -12,7 +12,7 @@ from microtutor.models.database import ConversationLog
 from microtutor.services.tutor_service import TutorService
 from microtutor.api.dependencies import get_tutor_service, get_db
 from microtutor.core.logging_config import get_logger, log_conversation_turn
-from config import config
+from microtutor.core.config_helper import config
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -76,7 +76,8 @@ async def start_case(
         response = await tutor_service.start_case(
             organism=request.organism,
             case_id=request.case_id,
-            model_name=request.model_name
+            model_name=request.model_name,
+            use_hpi_only=request.use_hpi_only
         )
         
         # Log to database if available
@@ -352,5 +353,43 @@ async def submit_case_feedback(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to submit case feedback"
+        )
+
+
+@router.get(
+    "/organisms",
+    summary="Get available organisms",
+    description="Get list of organisms with pre-generated cases"
+)
+async def get_available_organisms() -> dict:
+    """Get list of organisms that have pre-generated cases available.
+    
+    Returns:
+        Dictionary with organisms list and additional metadata
+    """
+    logger.info("[ORGANISMS] Fetching available organisms")
+    
+    try:
+        from microtutor.agents.case_generator_rag import CaseGeneratorRAGAgent
+        
+        case_generator = CaseGeneratorRAGAgent()
+        cached_organisms = case_generator.get_cached_organisms()
+        hpi_organisms = case_generator.get_hpi_organisms()
+        
+        logger.info(f"[ORGANISMS] Found {len(cached_organisms)} cached organisms")
+        
+        return {
+            "status": "success",
+            "organisms": cached_organisms,
+            "hpi_organisms": hpi_organisms,
+            "count": len(cached_organisms),
+            "message": "Available organisms retrieved successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"[ORGANISMS] Error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve organisms"
         )
 

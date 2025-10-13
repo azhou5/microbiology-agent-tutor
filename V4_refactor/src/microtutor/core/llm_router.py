@@ -11,7 +11,7 @@ from typing import List, Dict, Optional, Union
 from dotenv import load_dotenv
 
 from microtutor.core.llm_client import LLMClient
-from config import config
+from microtutor.core.config_helper import config
 
 # Load environment
 load_dotenv()

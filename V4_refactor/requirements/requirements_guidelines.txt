@@ -1,0 +1,30 @@
+# Guideline Search Requirements
+# Install these to enable guideline search functionality in MicroTutor V4
+
+# Option 1: ToolUniverse (Recommended)
+# Provides 600+ scientific tools including 8 guideline search tools
+tooluniverse>=0.1.0
+
+# Option 2: Custom Tools (Minimal)
+# Required only if NOT using ToolUniverse
+# Uncomment these if you want standalone guideline search:
+
+# requests>=2.31.0
+# beautifulsoup4>=4.12.0
+# lxml>=5.0.0
+
+# Optional: NCBI API key for PubMed (free, higher rate limits)
+# Get your key: https://www.ncbi.nlm.nih.gov/account/
+
+# Installation Commands:
+# ---------------------
+# 
+# Install ToolUniverse (recommended):
+#   pip install tooluniverse
+# 
+# Or install custom tool dependencies:
+#   pip install requests beautifulsoup4 lxml
+#
+# Or install all V4 requirements + guidelines:
+#   pip install -r requirements_v4.txt -r requirements_guidelines.txt
+

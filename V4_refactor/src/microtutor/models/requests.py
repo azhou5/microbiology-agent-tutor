@@ -50,6 +50,7 @@ class StartCaseRequest(BaseModel):
         organism: The microorganism for the case
         case_id: Client-generated unique case ID
         model_name: Optional LLM model to use
+        use_hpi_only: If True, use shorter HPI version instead of full case
     """
     
     organism: constr(min_length=1) = Field(
@@ -66,6 +67,10 @@ class StartCaseRequest(BaseModel):
         default="o3-mini",
         description="LLM model to use for this case"
     )
+    use_hpi_only: Optional[bool] = Field(
+        default=False,
+        description="Use shorter HPI (History of Present Illness) instead of full case"
+    )
     
     @validator('organism')
     def organism_not_empty(cls, v: str) -> str:
@@ -80,7 +85,8 @@ class StartCaseRequest(BaseModel):
             "example": {
                 "organism": "staphylococcus aureus",
                 "case_id": "case_2024_abc123",
-                "model_name": "o3-mini"
+                "model_name": "o3-mini",
+                "use_hpi_only": False
             }
         }
 

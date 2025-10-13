@@ -10,7 +10,7 @@ import os
 from dotenv import load_dotenv
 import json
 from openai import AzureOpenAI, OpenAI
-from config import config
+from microtutor.core.config_helper import config
 
 # Load environment variables
 load_dotenv()

@@ -263,3 +263,84 @@ class HealthCheckResponse(BaseModel):
             }
         }
 
+
+class VoiceTranscriptionResponse(BaseModel):
+    """Response from audio transcription.
+    
+    Attributes:
+        text: Transcribed text from audio
+        language: Language code (detected or specified)
+    """
+    
+    text: str = Field(
+        ...,
+        description="Transcribed text from the audio file"
+    )
+    language: str = Field(
+        ...,
+        description="Language code (e.g., 'en', 'es') or 'auto' if auto-detected"
+    )
+    
+    class Config:
+        """Pydantic config with example."""
+        schema_extra = {
+            "example": {
+                "text": "What are the patient's vital signs?",
+                "language": "en"
+            }
+        }
+
+
+class VoiceChatResponse(BaseModel):
+    """Response from voice-to-voice chat interaction.
+    
+    Attributes:
+        transcribed_text: User's transcribed audio as text
+        response_text: Tutor's response text
+        audio_base64: Base64-encoded audio response
+        speaker: Speaker type (tutor or patient)
+        tool_name: Tool used to generate response
+        history: Updated conversation history
+    """
+    
+    transcribed_text: str = Field(
+        ...,
+        description="User's audio transcribed to text"
+    )
+    response_text: str = Field(
+        ...,
+        description="Tutor's response as text"
+    )
+    audio_base64: str = Field(
+        ...,
+        description="Base64-encoded audio response (MP3)"
+    )
+    speaker: str = Field(
+        ...,
+        description="Speaker type: 'tutor' or 'patient'"
+    )
+    tool_name: Optional[str] = Field(
+        None,
+        description="Tool used to generate the response"
+    )
+    history: List[Message] = Field(
+        ...,
+        description="Updated conversation history"
+    )
+    
+    class Config:
+        """Pydantic config with example."""
+        schema_extra = {
+            "example": {
+                "transcribed_text": "What symptoms does the patient have?",
+                "response_text": "I've been experiencing fever and chills for 3 days.",
+                "audio_base64": "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA...",
+                "speaker": "patient",
+                "tool_name": "patient",
+                "history": [
+                    {"role": "user", "content": "What symptoms does the patient have?"},
+                    {"role": "assistant", "content": "I've been experiencing fever and chills for 3 days."}
+                ]
+            }
+        }
+

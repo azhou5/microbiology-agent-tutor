@@ -42,7 +42,9 @@ class CaseGeneratorRAGAgent(BaseAgent):
         challenging but solvable with proper clinical reasoning."""
         
         # Output directory for saving generated cases
-        self.output_dir = f"Case_Outputs"
+        # Use absolute path relative to project root to ensure consistency
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        self.output_dir = os.path.join(project_root, "Case_Outputs")
         os.makedirs(self.output_dir, exist_ok=True)
         
         # Case cache file path
@@ -127,9 +129,17 @@ class CaseGeneratorRAGAgent(BaseAgent):
         """Normalize organism name for consistent cache keys."""
         return organism.lower().strip().replace(" ", "_")
 
-    def generate_case(self, organism: str = None) -> str:
-        """Generate a clinical case for the specified organism."""
-        logging.info(f"[BACKEND_START_CASE] 3d. CaseGenerator's generate_case called for organism: '{organism}'.")
+    def generate_case(self, organism: str = None, use_hpi_only: bool = False) -> str:
+        """Generate a clinical case for the specified organism.
+        
+        Args:
+            organism: The organism name
+            use_hpi_only: If True, return just the HPI (shorter version) instead of full case
+            
+        Returns:
+            Case description text
+        """
+        logging.info(f"[BACKEND_START_CASE] 3d. CaseGenerator's generate_case called for organism: '{organism}', use_hpi_only={use_hpi_only}.")
         if organism:
             self.organism = organism.lower()
             self.collection = "union_collection"
@@ -137,6 +147,15 @@ class CaseGeneratorRAGAgent(BaseAgent):
         # Normalize organism name for cache key
         cache_key = self._normalize_organism_name(self.organism)
         logging.info(f"[BACKEND_START_CASE]   - Normalized cache key is: '{cache_key}'.")
+        
+        # If user wants HPI only, try to get it first
+        if use_hpi_only:
+            hpi = self.get_hpi(self.organism)
+            if hpi:
+                logging.info(f"[BACKEND_START_CASE]   - Found HPI for '{cache_key}'. Returning it.")
+                return hpi
+            else:
+                logging.info(f"[BACKEND_START_CASE]   - No HPI found for '{cache_key}', falling back to full case.")
         
         # Check if case already exists in cache
         if cache_key in self.case_cache:
@@ -204,8 +223,49 @@ class CaseGeneratorRAGAgent(BaseAgent):
         return case_text
 
     def get_cached_organisms(self) -> List[str]:
-        """Get a list of all organisms that have cached cases."""
+        """Get a list of all organisms that have cached cases.
+        
+        Returns:
+            List of organism names that have pre-generated cases available.
+        """
         return list(self.case_cache.keys())
+    
+    def get_hpi_organisms(self) -> List[str]:
+        """Get a list of all organisms that have HPI (History of Present Illness) available.
+        
+        Returns:
+            List of organism names with HPI data.
+        """
+        hpi_file = os.path.join(self.output_dir, "HPI_per_organism.json")
+        try:
+            if os.path.exists(hpi_file):
+                with open(hpi_file, 'r', encoding='utf-8') as f:
+                    hpi_data = json.load(f)
+                    return list(hpi_data.keys())
+        except Exception as e:
+            print(f"Error loading HPI organisms: {str(e)}")
+        return []
+    
+    def get_hpi(self, organism: str) -> Optional[str]:
+        """Get the HPI (History of Present Illness) for an organism.
+        
+        Args:
+            organism: The organism name
+            
+        Returns:
+            HPI text or None if not found
+        """
+        hpi_file = os.path.join(self.output_dir, "HPI_per_organism.json")
+        cache_key = self._normalize_organism_name(organism)
+        
+        try:
+            if os.path.exists(hpi_file):
+                with open(hpi_file, 'r', encoding='utf-8') as f:
+                    hpi_data = json.load(f)
+                    return hpi_data.get(cache_key)
+        except Exception as e:
+            print(f"Error loading HPI for {organism}: {str(e)}")
+        return None
 
     def clear_cache(self, organism: str = None):
         """Clear the cache for a specific organism or all organisms."""

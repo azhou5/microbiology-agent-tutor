@@ -26,7 +26,7 @@ except ImportError:
     def retrieve_similar_examples(*args, **kwargs): return []
 
 from microtutor.core.llm_router import chat_complete
-from config import config
+from microtutor.core.config_helper import config
 
 # Load environment variables
 dotenv.load_dotenv()

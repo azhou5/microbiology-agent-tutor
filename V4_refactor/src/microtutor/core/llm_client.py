@@ -11,7 +11,7 @@ from openai import AzureOpenAI, OpenAI
 import openai
 
 from microtutor.core.cost_tracker import CostTracker, TokenUsage
-import config
+from microtutor.core.config_helper import config
 
 
 class LLMClient:

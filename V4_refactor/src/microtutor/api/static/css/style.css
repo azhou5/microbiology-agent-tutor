@@ -191,6 +191,66 @@ h1 {
     transform: none !important;
 }
 
+/* Voice button */
+.btn-voice {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.btn-voice:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5568d3 0%, #63408a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-voice.recording {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.btn-voice.recording:hover {
+    background: linear-gradient(135deg, #ff5252 0%, #d64759 100%);
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
+    }
+}
+
+/* Voice controls */
+.voice-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.voice-status {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0;
+    flex-grow: 1;
+}
+
+#response-audio {
+    max-width: 300px;
+    height: 32px;
+}
+
 /* Chatbox */
 .chatbox {
     min-height: 450px;
