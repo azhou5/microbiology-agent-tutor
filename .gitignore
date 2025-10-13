@@ -13,3 +13,4 @@ conversation_history.txt
 patient_convo_history.txt
 patient_tool_called.txt
 case.txt
+docs/

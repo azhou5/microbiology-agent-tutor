@@ -56,6 +56,7 @@ from microtutor.tools.registry import (
 from microtutor.tools.patient import PatientTool, run_patient
 from microtutor.tools.socratic import SocraticTool, run_socratic  
 from microtutor.tools.hint import HintTool, run_hint
+from microtutor.tools.ddx_case_search import DDXCaseSearchTool, search_ddx_cases
 
 # Prompts (for customization if needed)
 from microtutor.tools import prompts
@@ -81,11 +82,13 @@ __all__ = [
     'PatientTool',
     'SocraticTool',
     'HintTool',
+    'DDXCaseSearchTool',
     
     # Legacy functions
     'run_patient',
     'run_socratic',
     'run_hint',
+    'search_ddx_cases',
     
     # Prompts module
     'prompts'

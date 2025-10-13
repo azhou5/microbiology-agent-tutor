@@ -29,12 +29,14 @@ class MicroTutorToolEngine:
             from microtutor.tools.patient import PatientTool
             from microtutor.tools.socratic import SocraticTool
             from microtutor.tools.hint import HintTool
+            from microtutor.tools.ddx_case_search import DDXCaseSearchTool
             
             register_tool_class("PatientTool", PatientTool)
             register_tool_class("SocraticTool", SocraticTool)
             register_tool_class("HintTool", HintTool)
+            register_tool_class("DDXCaseSearchTool", DDXCaseSearchTool)
             
-            logger.info("Registered 3 tool classes")
+            logger.info("Registered 4 tool classes")
         except ImportError as e:
             logger.warning(f"Could not import tool classes: {e}")
     

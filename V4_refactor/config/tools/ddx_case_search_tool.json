@@ -1,0 +1,43 @@
+{
+    "name": "ddx_case_search",
+    "description": "Search and retrieve real clinical cases from the DDX Learners Virtual Morning Report archive. Use this tool when you need to find a clinical case based on a specific presenting complaint or symptom. The tool searches through 600+ real patient cases and extracts the full case details from PDFs. Example: 'Find a case about chest pain' or 'Search for a patient with fever and cough'.",
+    "type": "DDXCaseSearchTool",
+    "category": "case_generation",
+    "cacheable": true,
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "presenting_complaint": {
+                "type": "string",
+                "description": "The presenting symptom or complaint to search for (e.g., 'chest pain', 'fever', 'shortness of breath', 'abdominal pain')"
+            },
+            "return_top_n": {
+                "type": "integer",
+                "description": "Number of matching cases to return (default: 3, max: 10)",
+                "default": 3,
+                "minimum": 1,
+                "maximum": 10
+            },
+            "extract_full_text": {
+                "type": "boolean",
+                "description": "Whether to extract and return the full case text from the top match (default: true)",
+                "default": true
+            }
+        },
+        "required": [
+            "presenting_complaint"
+        ]
+    },
+    "pdf_directory": "../Datasets/vmr_pdfs",
+    "cache_directory": "../Datasets/vmr_cache",
+    "similarity_threshold": 0.6,
+    "max_results": 5,
+    "metadata": {
+        "version": "1.0",
+        "author": "MicroTutor Team",
+        "use_case": "Retrieve real clinical cases from DDX Learners archive for case generation",
+        "data_source": "Clinical Problem Solving (clinicalproblemsolving.com) Virtual Morning Reports",
+        "total_episodes": "600+",
+        "date_range": "2023-2025"
+    }
+}
