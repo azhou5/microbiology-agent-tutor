@@ -1,0 +1,54 @@
+{
+    "name": "hint",
+    "description": "When the student needs a HINT to guide their investigation, use the HINT tool. Example 1: 'I'm not sure what to ask next' -> use hint tool with argument 'I need guidance on what to ask next'. The hint tool provides strategic guidance without revealing the diagnosis.",
+    "type": "HintTool",
+    "category": "educational_agents",
+    "cacheable": false,
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "input_text": {
+                "type": "string",
+                "description": "The student's request for help or the context for the hint"
+            },
+            "case": {
+                "type": "string",
+                "description": "The case description for generating appropriate hints"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Conversation history to understand what has been covered",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "model": {
+                "type": "string",
+                "description": "LLM model to use",
+                "default": "gpt-4"
+            }
+        },
+        "required": [
+            "input_text",
+            "case"
+        ]
+    },
+    "prompt_template": "You are a helpful medical tutor providing strategic hints.\n\nThe student needs guidance on their case investigation.\n\nYour hints should:\n1. Suggest specific questions to ask the patient\n2. Recommend investigations to consider\n3. Point to key clinical features without revealing diagnosis\n4. Be educational and guide learning\n\nCase Information:\n{case}\n\nStudent Request: {input_text}\n\nProvide a helpful hint:",
+    "llm_config": {
+        "max_new_tokens": 400,
+        "temperature": 0.7
+    },
+    "metadata": {
+        "version": "1.0",
+        "author": "MicroTutor Team",
+        "use_case": "Provides scaffolded support when students need guidance"
+    }
+}

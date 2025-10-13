@@ -1,0 +1,54 @@
+{
+    "name": "patient",
+    "description": "When the question is directed to the PATIENT, use the PATIENT tool. Use this when the student asks for specific SYMPTOMS from the case about the patient. Example 1: 'How long have you had this?' -> use patient tool. Example 2: 'Any past medical history?' -> use patient tool. Example 3: 'How long for?' -> use patient tool. Example 4: 'When did it start?' -> use patient tool. Example 5: 'Any other symptoms?' -> use patient tool. The patient will respond realistically based on the case, only answering what is specifically asked.",
+    "type": "PatientTool",
+    "category": "educational_agents",
+    "cacheable": false,
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "input_text": {
+                "type": "string",
+                "description": "The question or statement directed to the patient"
+            },
+            "case": {
+                "type": "string",
+                "description": "The case description containing patient information"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Previous conversation messages for context",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "model": {
+                "type": "string",
+                "description": "LLM model to use for response generation",
+                "default": "gpt-4"
+            }
+        },
+        "required": [
+            "input_text",
+            "case"
+        ]
+    },
+    "prompt_template": "You are a patient. You are answering questions from a medical student.\n\nIMPORTANT RULES:\n1. Provide ONLY the information SPECIFICALLY asked by the student\n2. If the question is general or open, ask for more specific details\n3. Never give hints or reveal the diagnosis\n4. Never use medical jargon\n5. Do not volunteer information that wasn't asked\n\nCase Information:\n{case}\n\nStudent Question: {input_text}\n\nRespond as the patient:",
+    "llm_config": {
+        "max_new_tokens": 500,
+        "temperature": 0.7
+    },
+    "metadata": {
+        "version": "1.0",
+        "author": "MicroTutor Team",
+        "use_case": "Simulates realistic patient responses during case investigation"
+    }
+}

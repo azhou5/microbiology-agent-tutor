@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MicroTutor V4 - AI-Powered Microbiology Education</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🔬 MicroTutor V4</h1>
+            <p class="subtitle">AI-Powered Microbiology Education</p>
+        </header>
+
+        <div class="instructions">
+            <h2>📋 Case Flow</h2>
+            <ol>
+                <li><strong>History:</strong> Gather key history and examination findings from the patient</li>
+                <li><strong>Problem Representation:</strong> Present illness script</li>
+                <li><strong>Differential Diagnosis:</strong> List differential diagnoses and their reasoning</li>
+                <li><strong>Tests:</strong> Order relevant investigations to narrow down differentials</li>
+                <li><strong>Management:</strong> Propose treatments and follow-up plan</li>
+                <li><strong>Feedback:</strong> Receive feedback on the case</li>
+            </ol>
+        </div>
+
+        <div class="case-setup">
+            <label for="organism-select">Select Organism:</label>
+            <select id="organism-select">
+                <option value="">-- Choose an organism --</option>
+                <optgroup label="Bacteria">
+                    <option value="staphylococcus aureus">Staphylococcus aureus</option>
+                    <option value="escherichia coli">Escherichia coli</option>
+                    <option value="nocardia species">Nocardia species</option>
+                    <option value="borrelia burgdorferi">Borrelia burgdorferi</option>
+                    <option value="streptococcus pneumoniae">Streptococcus pneumoniae</option>
+                </optgroup>
+                <optgroup label="Viruses">
+                    <option value="hsv-1">HSV-1</option>
+                    <option value="influenza a">Influenza A</option>
+                    <option value="hiv">HIV</option>
+                    <option value="ebv">EBV</option>
+                </optgroup>
+                <optgroup label="Fungi">
+                    <option value="candida albicans">Candida albicans</option>
+                    <option value="aspergillus fumigatus">Aspergillus fumigatus</option>
+                </optgroup>
+                <optgroup label="Parasites">
+                    <option value="plasmodium falciparum">Plasmodium falciparum (malaria)</option>
+                    <option value="taenia solium">Taenia solium</option>
+                </optgroup>
+            </select>
+            <button id="start-case-btn" class="btn btn-primary">🚀 Start New Case</button>
+        </div>
+
+        <div id="chatbox" class="chatbox">
+            <div class="welcome-message">
+                <p>👋 Welcome to MicroTutor V4!</p>
+                <p>Select an organism above and click "Start New Case" to begin your interactive microbiology case
+                    study.</p>
+            </div>
+        </div>
+
+        <div id="input-area" class="input-area">
+            <textarea id="user-input" placeholder="Enter your message..." rows="1" disabled></textarea>
+            <div class="button-group">
+                <button id="send-btn" class="btn btn-success" disabled>
+                    <span class="btn-icon">📤</span> Send
+                </button>
+                <button id="finish-btn" class="btn btn-warning" disabled>
+                    <span class="btn-icon">🏁</span> Finish Case
+                </button>
+            </div>
+        </div>
+
+        <p id="status-message" class="status"></p>
+
+        <footer>
+            <p>Powered by FastAPI & OpenAI | Version 4.0.0</p>
+        </footer>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 Case Feedback</h2>
+                <button class="modal-close" id="close-feedback-btn" aria-label="Close">×</button>
+            </div>
+
+            <div class="case-summary">
+                <h3>Case Summary</h3>
+                <p>The correct organism for this case was: <strong id="correct-organism"></strong></p>
+            </div>
+
+            <div class="feedback-form">
+                <div class="feedback-question">
+                    <p>How detailed was the case?</p>
+                    <div class="likert-scale">
+                        <label><input type="radio" name="detail" value="1"> 1 (Not detailed)</label>
+                        <label><input type="radio" name="detail" value="2"> 2</label>
+                        <label><input type="radio" name="detail" value="3"> 3</label>
+                        <label><input type="radio" name="detail" value="4"> 4 (Very detailed)</label>
+                    </div>
+                    <button class="skip-btn" data-question="detail">Skip</button>
+                </div>
+
+                <div class="feedback-question">
+                    <p>How helpful was this case for your learning?</p>
+                    <div class="likert-scale">
+                        <label><input type="radio" name="helpfulness" value="1"> 1 (Not helpful)</label>
+                        <label><input type="radio" name="helpfulness" value="2"> 2</label>
+                        <label><input type="radio" name="helpfulness" value="3"> 3</label>
+                        <label><input type="radio" name="helpfulness" value="4"> 4 (Very helpful)</label>
+                    </div>
+                    <button class="skip-btn" data-question="helpfulness">Skip</button>
+                </div>
+
+                <div class="feedback-question">
+                    <p>How accurate was the medical information in this case?</p>
+                    <div class="likert-scale">
+                        <label><input type="radio" name="accuracy" value="1"> 1 (Not accurate)</label>
+                        <label><input type="radio" name="accuracy" value="2"> 2</label>
+                        <label><input type="radio" name="accuracy" value="3"> 3</label>
+                        <label><input type="radio" name="accuracy" value="4"> 4 (Very accurate)</label>
+                    </div>
+                    <button class="skip-btn" data-question="accuracy">Skip</button>
+                </div>
+
+                <div class="feedback-question">
+                    <p>Additional comments (optional):</p>
+                    <textarea id="feedback-comments" rows="4"
+                        placeholder="Share your thoughts about this case..."></textarea>
+                </div>
+
+                <div class="modal-buttons">
+                    <button id="submit-feedback-btn" class="btn btn-success">✅ Submit Feedback</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/script.js"></script>
+</body>
+
+</html>

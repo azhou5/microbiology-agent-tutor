@@ -9,7 +9,6 @@ dot_env_microtutor.txt
 debug_log.log
 llm_interactions.log
 Datasets/
-V4_refactor/
 conversation_history.txt
 patient_convo_history.txt
 patient_tool_called.txt

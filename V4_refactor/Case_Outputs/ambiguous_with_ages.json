@@ -1,0 +1,15 @@
+{
+  "borrelia_burgdorferi": "45-year-old man reports fatigue and expanding skin rash.",
+  "staphylococcus_aureus": "27-year-old woman has fever and arm discomfort.",
+  "escherichia_coli": "65-year-old man presents with fever and urinary symptoms.",
+  "nocardia_species": "58-year-old woman complains of worsening breathing and fatigue.",
+  "streptococcus_pneumoniae": "72-year-old man reports cough, fever, and feeling unwell.",
+  "hsv-1": "28-year-old woman presents with painful lip sores.",
+  "influenza_a": "68-year-old man has fever, cough, and body aches.",
+  "hiv": "52-year-old woman complains of fatigue and weight loss.",
+  "ebv": "19-year-old man presents with sore throat and fatigue.",
+  "candida_albicans": "36-year-old woman reports irritation and abnormal discharge.",
+  "aspergillus_fumigatus": "58-year-old man has worsening cough and low-grade fever.",
+  "plasmodium_falciparum": "34-year-old man returns from travel with fever and chills.",
+  "taenia_solium": "45-year-old woman reports headaches, dizziness, and nausea."
+}

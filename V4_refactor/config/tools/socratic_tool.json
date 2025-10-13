@@ -1,0 +1,56 @@
+{
+    "name": "socratic",
+    "description": "CRITERIA FOR CALLING SOCRATIC: When the student reaches a set of differential diagnoses, route it to the SOCRATIC tool. Example 1: 'I think it's flu A, TB, or lung cancer' -> use socratic tool. Example 2: (mid-socratic dialogue) 'Well I suspect it's TB because the history of immunosuppression, but you're right that it's less prevalent in the United States. I think this can be lower on my differential.' -> use socratic tool. Remember that this socratic conversation will go on for multiple turns, each one needs to be passed to the Socratic agent. CRITERIA FOR EXITING SOCRATIC: When the student and the socratic agent have completed their dialogue OR if the student asks to MOVE ON, DO NOT pass to the socratic agent, but instead continue with the case as the tutor.",
+    "type": "SocraticTool",
+    "category": "educational_agents",
+    "cacheable": false,
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "input_text": {
+                "type": "string",
+                "description": "The student's differential diagnosis or response during Socratic dialogue"
+            },
+            "case": {
+                "type": "string",
+                "description": "The case description for reference"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Full conversation history for context",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "model": {
+                "type": "string",
+                "description": "LLM model to use",
+                "default": "gpt-4"
+            }
+        },
+        "required": [
+            "input_text",
+            "case",
+            "conversation_history"
+        ]
+    },
+    "prompt_template": "You are a Socratic medical educator. The student has proposed a differential diagnosis.\n\nYour goal is to:\n1. Challenge their reasoning with probing questions\n2. Help them think through epidemiology, pathophysiology, and clinical presentation\n3. Guide them to refine their differential\n4. Never give away the answer directly\n\nCase Information:\n{case}\n\nStudent's Statement: {input_text}\n\nEngage in Socratic dialogue. If the student has refined their thinking sufficiently, include [SOCRATIC_COMPLETE] in your response.",
+    "llm_config": {
+        "max_new_tokens": 800,
+        "temperature": 0.8
+    },
+    "metadata": {
+        "version": "1.0",
+        "author": "MicroTutor Team",
+        "use_case": "Facilitates deep clinical reasoning through Socratic questioning",
+        "completion_signal": "[SOCRATIC_COMPLETE]"
+    }
+}
