@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from microtutor.services.background_service import get_background_service, shutdown_background_service
+from microtutor.api.dependencies import init_database
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,10 @@ async def lifespan(app) -> AsyncGenerator[None, None]:
     logger.info("🚀 Starting MicroTutor application...")
     
     try:
+        # Initialize database
+        init_database()
+        logger.info("✅ Database initialized")
+        
         # Initialize background service
         background_service = get_background_service()
         logger.info("✅ Background service initialized")

@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from microtutor.models.responses import ErrorResponse
-from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database_simple
+from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database, database_mock
 from microtutor.core.startup import get_lifespan
 
 # Try to import guidelines router (optional)
@@ -123,7 +123,20 @@ app.include_router(voice.router, prefix="/api/v1", tags=["voice"])
 app.include_router(monitoring.router, prefix="/api/v1", tags=["monitoring"])
 app.include_router(concurrent_chat.router, prefix="/api/v1", tags=["concurrent"])
 app.include_router(fast_chat.router, prefix="/api/v1", tags=["ultra_fast"])
-app.include_router(database_simple.router, prefix="/api/v1/db", tags=["database"])
+# Include database routes - try real database first, fallback to mock
+try:
+    from microtutor.api.dependencies import get_db
+    # Test if database is available
+    db = next(get_db())
+    if db is not None:
+        app.include_router(database.router, prefix="/api/v1/db", tags=["database"])
+        logger.info("✅ Real database routes enabled")
+    else:
+        app.include_router(database_mock.router, prefix="/api/v1/db", tags=["database-mock"])
+        logger.info("✅ Mock database routes enabled (database not available)")
+except Exception as e:
+    app.include_router(database_mock.router, prefix="/api/v1/db", tags=["database-mock"])
+    logger.warning(f"⚠️  Mock database routes enabled (database error: {e})")
 
 # Include optional guidelines router
 if GUIDELINES_AVAILABLE:

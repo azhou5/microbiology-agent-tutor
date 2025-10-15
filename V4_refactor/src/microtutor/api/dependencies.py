@@ -140,8 +140,10 @@ def init_database():
         if database_url:
             try:
                 logger.info(f"Initializing database connection...")
+                # Add SSL parameter to the URL for Render PostgreSQL
+                db_url_with_ssl = database_url + "?sslmode=require"
                 _engine = create_engine(
-                    database_url,
+                    db_url_with_ssl,
                     pool_pre_ping=True,  # Enable connection health checks
                     pool_recycle=3600,   # Recycle connections after 1 hour
                 )

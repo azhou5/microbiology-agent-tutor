@@ -9,10 +9,11 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-# from microtutor.api.dependencies import get_db
+from microtutor.api.dependencies import get_db
 from microtutor.models.responses import ErrorResponse
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ async def get_all_cases(
     limit: int = Query(50, ge=1, le=1000, description="Maximum number of cases to return"),
     offset: int = Query(0, ge=0, description="Number of cases to skip"),
     organism: Optional[str] = Query(None, description="Filter by organism"),
-    db = None
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get all cases from the database.
     
@@ -42,7 +43,10 @@ async def get_all_cases(
         Dictionary with cases data and metadata
     """
     if db is None:
-        db = next(get_db())
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
     
     try:
         # Build query
@@ -108,7 +112,7 @@ async def get_all_cases(
 )
 async def get_case_by_id(
     case_id: str,
-    db = None
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get a specific case by ID.
     
@@ -120,7 +124,10 @@ async def get_case_by_id(
         Dictionary with case data and conversation history
     """
     if db is None:
-        db = next(get_db())
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
     
     try:
         # Get case info
@@ -198,7 +205,7 @@ async def get_case_by_id(
 async def get_recent_conversations(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of conversations to return"),
     hours: int = Query(24, ge=1, le=168, description="Number of hours to look back"),
-    db = None
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get recent conversation logs.
     
@@ -211,7 +218,10 @@ async def get_recent_conversations(
         Dictionary with recent conversation data
     """
     if db is None:
-        db = next(get_db())
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
     
     try:
         # Calculate time threshold
@@ -268,7 +278,7 @@ async def get_recent_conversations(
     summary="Get database statistics",
     description="Get overall statistics about the database content"
 )
-async def get_database_stats(db = None) -> Dict[str, Any]:
+async def get_database_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get database statistics.
     
     Args:
@@ -278,7 +288,10 @@ async def get_database_stats(db = None) -> Dict[str, Any]:
         Dictionary with database statistics
     """
     if db is None:
-        db = next(get_db())
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
     
     try:
         # Get table counts
@@ -341,7 +354,7 @@ async def get_database_stats(db = None) -> Dict[str, Any]:
     summary="List database tables",
     description="Get information about all tables in the database"
 )
-async def list_database_tables(db = None) -> Dict[str, Any]:
+async def list_database_tables(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """List all tables in the database.
     
     Args:
@@ -351,7 +364,10 @@ async def list_database_tables(db = None) -> Dict[str, Any]:
         Dictionary with table information
     """
     if db is None:
-        db = next(get_db())
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
     
     try:
         # Get table information
@@ -411,4 +427,160 @@ async def list_database_tables(db = None) -> Dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve table information"
+        )
+
+
+@router.get(
+    "/feedback",
+    summary="Get feedback data",
+    description="Retrieve feedback entries from the database with optional filtering"
+)
+async def get_feedback_data(
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of feedback entries to return"),
+    organism: Optional[str] = Query(None, description="Filter by organism"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get feedback data from the database.
+    
+    Args:
+        limit: Maximum number of feedback entries to return
+        organism: Optional organism filter
+        db: Database connection
+        
+    Returns:
+        Dictionary with feedback data
+    """
+    if db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
+    
+    try:
+        # Build query
+        query = """
+            SELECT 
+                id,
+                timestamp,
+                organism,
+                rating,
+                rated_message,
+                feedback_text,
+                replacement_text,
+                chat_history,
+                case_id
+            FROM feedback 
+        """
+        params = {"limit": limit}
+        
+        if organism:
+            query += " WHERE organism = :organism"
+            params["organism"] = organism
+        
+        query += " ORDER BY timestamp DESC LIMIT :limit"
+        
+        result = db.execute(text(query), params)
+        rows = result.fetchall()
+        
+        return {
+            "status": "success",
+            "data": [
+                {
+                    "id": row.id,
+                    "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                    "organism": row.organism,
+                    "rating": row.rating,
+                    "rated_message": row.rated_message,
+                    "feedback_text": row.feedback_text,
+                    "replacement_text": row.replacement_text,
+                    "chat_history": row.chat_history,
+                    "case_id": getattr(row, 'case_id', None)
+                }
+                for row in rows
+            ],
+            "count": len(rows)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get feedback data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve feedback data: {str(e)}"
+        )
+
+
+@router.get(
+    "/case_feedback",
+    summary="Get case feedback data",
+    description="Retrieve case feedback entries from the database with optional filtering"
+)
+async def get_case_feedback_data(
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of case feedback entries to return"),
+    organism: Optional[str] = Query(None, description="Filter by organism"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get case feedback data from the database.
+    
+    Args:
+        limit: Maximum number of case feedback entries to return
+        organism: Optional organism filter
+        db: Database connection
+        
+    Returns:
+        Dictionary with case feedback data
+    """
+    if db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
+    
+    try:
+        # Build query
+        query = """
+            SELECT 
+                id,
+                timestamp,
+                organism,
+                detail_rating,
+                helpfulness_rating,
+                accuracy_rating,
+                comments,
+                case_id
+            FROM case_feedback 
+        """
+        params = {"limit": limit}
+        
+        if organism:
+            query += " WHERE organism = :organism"
+            params["organism"] = organism
+        
+        query += " ORDER BY timestamp DESC LIMIT :limit"
+        
+        result = db.execute(text(query), params)
+        rows = result.fetchall()
+        
+        return {
+            "status": "success",
+            "data": [
+                {
+                    "id": row.id,
+                    "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                    "organism": row.organism,
+                    "detail_rating": row.detail_rating,
+                    "helpfulness_rating": row.helpfulness_rating,
+                    "accuracy_rating": row.accuracy_rating,
+                    "comments": row.comments,
+                    "case_id": row.case_id
+                }
+                for row in rows
+            ],
+            "count": len(rows)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get case feedback data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve case feedback data: {str(e)}"
         )

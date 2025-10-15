@@ -339,12 +339,12 @@ async def submit_case_feedback(
     
     try:
         # Log case feedback asynchronously
-        background_service.log_feedback_async(
+        background_service.log_case_feedback_async(
             case_id=request.case_id,
-            rating=request.detail,  # Use detail as primary rating
-            message=f"Case feedback: Detail={request.detail}, Helpfulness={request.helpfulness}, Accuracy={request.accuracy}",
-            feedback_text=request.comments or "",
-            replacement_text="",
+            detail_rating=request.detail,
+            helpfulness_rating=request.helpfulness,
+            accuracy_rating=request.accuracy,
+            comments=request.comments or "",
             organism=getattr(request, 'organism', '')
         )
         

@@ -27,6 +27,7 @@ class TaskType(Enum):
     DATABASE_LOG = "database_log"
     FILE_LOG = "file_log"
     FEEDBACK_PROCESSING = "feedback_processing"
+    CASE_FEEDBACK_PROCESSING = "case_feedback_processing"
     ANALYTICS = "analytics"
     COST_CALCULATION = "cost_calculation"
     METRICS_COLLECTION = "metrics_collection"
@@ -151,6 +152,8 @@ class BackgroundTaskService:
             self._process_file_log(task.data)
         elif task.task_type == TaskType.FEEDBACK_PROCESSING:
             self._process_feedback(task.data)
+        elif task.task_type == TaskType.CASE_FEEDBACK_PROCESSING:
+            self._process_case_feedback(task.data)
         elif task.task_type == TaskType.ANALYTICS:
             self._process_analytics(task.data)
         elif task.task_type == TaskType.COST_CALCULATION:
@@ -260,12 +263,86 @@ class BackgroundTaskService:
     def _process_feedback(self, data: Dict[str, Any]) -> None:
         """Process feedback analysis and storage."""
         try:
-            # This would integrate with your feedback system
             logger.info(f"Processing feedback for case {data.get('case_id')}")
-            # Add your feedback processing logic here
+            
+            if self._db_engine is None:
+                self._init_database_pool()
+            
+            if self._db_engine is None:
+                logger.warning("Database not available for feedback, falling back to file logging")
+                self._process_file_log({**data, 'role': 'feedback'})
+                return
+            
+            # Save feedback to database
+            with self._db_engine.connect() as conn:
+                # Insert into feedback table
+                conn.execute(text("""
+                    INSERT INTO feedback (
+                        timestamp, organism, rating, rated_message, 
+                        feedback_text, replacement_text, case_id
+                    ) VALUES (
+                        :timestamp, :organism, :rating, :message, 
+                        :feedback_text, :replacement_text, :case_id
+                    )
+                """), {
+                    'timestamp': data.get('timestamp', datetime.utcnow()),
+                    'organism': data.get('organism', ''),
+                    'rating': str(data.get('rating', '0')),
+                    'message': data.get('message', ''),
+                    'feedback_text': data.get('feedback_text', ''),
+                    'replacement_text': data.get('replacement_text', ''),
+                    'case_id': data.get('case_id', '')
+                })
+                conn.commit()
+                
+            logger.info(f"Feedback saved to database for case {data.get('case_id')}")
             
         except Exception as e:
             logger.error(f"Feedback processing failed: {e}")
+            # Fall back to file logging
+            self._process_file_log({**data, 'role': 'feedback'})
+    
+    def _process_case_feedback(self, data: Dict[str, Any]) -> None:
+        """Process case feedback storage."""
+        try:
+            logger.info(f"Processing case feedback for case {data.get('case_id')}")
+            
+            if self._db_engine is None:
+                self._init_database_pool()
+            
+            if self._db_engine is None:
+                logger.warning("Database not available for case feedback, falling back to file logging")
+                self._process_file_log({**data, 'role': 'case_feedback'})
+                return
+            
+            # Save case feedback to database
+            with self._db_engine.connect() as conn:
+                # Insert into case_feedback table
+                conn.execute(text("""
+                    INSERT INTO case_feedback (
+                        timestamp, organism, detail_rating, helpfulness_rating, 
+                        accuracy_rating, comments, case_id
+                    ) VALUES (
+                        :timestamp, :organism, :detail_rating, :helpfulness_rating, 
+                        :accuracy_rating, :comments, :case_id
+                    )
+                """), {
+                    'timestamp': data.get('timestamp', datetime.utcnow()),
+                    'organism': data.get('organism', ''),
+                    'detail_rating': str(data.get('detail_rating', '0')),
+                    'helpfulness_rating': str(data.get('helpfulness_rating', '0')),
+                    'accuracy_rating': str(data.get('accuracy_rating', '0')),
+                    'comments': data.get('comments', ''),
+                    'case_id': data.get('case_id', '')
+                })
+                conn.commit()
+                
+            logger.info(f"Case feedback saved to database for case {data.get('case_id')}")
+            
+        except Exception as e:
+            logger.error(f"Case feedback processing failed: {e}")
+            # Fall back to file logging
+            self._process_file_log({**data, 'role': 'case_feedback'})
     
     def _process_analytics(self, data: Dict[str, Any]) -> None:
         """Process analytics and metrics collection."""
@@ -306,18 +383,20 @@ class BackgroundTaskService:
     def _init_database_pool(self) -> None:
         """Initialize database connection pool."""
         try:
-            from microtutor.core.config_helper import config
+            from config.config import config
             database_url = getattr(config, 'database_url', None)
             
             if database_url:
+                # Add SSL parameter to the URL for Render PostgreSQL
+                db_url_with_ssl = database_url + "?sslmode=require"
                 self._db_engine = create_engine(
-                    database_url,
+                    db_url_with_ssl,
                     pool_size=self._db_pool_size,
                     max_overflow=10,
                     pool_pre_ping=True,
                     pool_recycle=3600,
                 )
-                logger.info("Database pool initialized")
+                logger.info("Database pool initialized with SSL")
             else:
                 logger.warning("No database URL configured")
                 
@@ -364,6 +443,31 @@ class BackgroundTaskService:
                 'message': message,
                 'feedback_text': feedback_text,
                 'replacement_text': replacement_text,
+                'organism': organism,
+                'timestamp': datetime.utcnow()
+            },
+            priority=2
+        )
+        return self.submit_task(task)
+    
+    def log_case_feedback_async(
+        self,
+        case_id: str,
+        detail_rating: int,
+        helpfulness_rating: int,
+        accuracy_rating: int,
+        comments: str = "",
+        organism: str = ""
+    ) -> bool:
+        """Log case feedback asynchronously."""
+        task = BackgroundTask(
+            task_type=TaskType.CASE_FEEDBACK_PROCESSING,
+            data={
+                'case_id': case_id,
+                'detail_rating': detail_rating,
+                'helpfulness_rating': helpfulness_rating,
+                'accuracy_rating': accuracy_rating,
+                'comments': comments,
                 'organism': organism,
                 'timestamp': datetime.utcnow()
             },
