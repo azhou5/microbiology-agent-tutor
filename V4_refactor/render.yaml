@@ -1,0 +1,68 @@
+# Render.com deployment configuration for MicroTutor V4
+services:
+  - type: web
+    name: microtutor-v4
+    env: python
+    plan: starter # Change to standard/pro for production
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: cd V4_refactor && ./start.sh
+    envVars:
+      # Application Settings
+      - key: DEBUG
+        value: false
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Database Configuration
+      - key: USE_GLOBAL_DB
+        value: true
+      - key: USE_LOCAL_DB
+        value: false
+      - key: GLOBAL_DATABASE_URL
+        fromDatabase:
+          name: microtutor-db
+          property: connectionString
+
+      # LLM Configuration
+      - key: USE_AZURE_OPENAI
+        value: true # Set to false to use personal OpenAI
+      - key: AZURE_OPENAI_API_KEY
+        sync: false # Set this in Render dashboard
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false # Set this in Render dashboard
+      - key: AZURE_OPENAI_API_VERSION
+        value: "2025-04-16"
+      - key: AZURE_OPENAI_O4_MINI_DEPLOYMENT
+        value: "o4-mini-0416"
+
+      # Personal OpenAI (alternative to Azure)
+      - key: OPENAI_API_KEY
+        sync: false # Set this in Render dashboard if using personal OpenAI
+      - key: PERSONAL_OPENAI_MODEL
+        value: "o4-mini-2025-04-16"
+
+      # Feature Flags
+      - key: USE_FAISS
+        value: true
+      - key: OUTPUT_TOOL_DIRECTLY
+        value: true
+      - key: IN_CONTEXT_LEARNING
+        value: true
+      - key: REWARD_MODEL_SAMPLING
+        value: false
+      - key: FAST_CLASSIFICATION_ENABLED
+        value: false
+
+      # Default Settings
+      - key: DEFAULT_ORGANISM
+        value: "staphylococcus aureus"
+      - key: LOG_LEVEL
+        value: "INFO"
+
+databases:
+  - name: microtutor-db
+    plan: starter # Change to standard/pro for production
+    databaseName: microtutor
+    user: microtutor_user

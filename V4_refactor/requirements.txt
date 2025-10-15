@@ -1,0 +1,47 @@
+# MicroTutor V4 - Production Requirements for Render
+# FastAPI + Pydantic refactored version
+
+# Web Framework & Server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+gunicorn==21.2.0
+python-multipart==0.0.6
+jinja2==3.1.2
+
+# Data Validation & Settings
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# LLM & AI
+openai==1.10.0
+anthropic==0.5.0
+
+# Vector Search & Embeddings
+faiss-cpu==1.7.4
+numpy==1.24.3
+
+# HTTP & Async
+httpx==0.26.0
+aiofiles==23.0.0
+
+# Environment & Configuration
+python-dotenv==1.0.0
+
+# Logging & Monitoring
+structlog==23.3.0
+
+# Optional: Guideline Search Tools
+# Uncomment if you want guideline search functionality
+# tooluniverse>=0.1.0
+# requests==2.31.0
+# beautifulsoup4==4.12.3
+# lxml==5.1.0
+
+# Production Dependencies
+# These are essential for Render deployment
+python-dotenv==1.0.0
