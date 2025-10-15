@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentOrganismKey = null;
     let currentPhase = 'information_gathering';
     let currentModelProvider = 'azure';
-    let currentModel = 'gpt-4o';
+    let currentModel = 'gpt-4.1';
 
     /**
      * Validate and filter chat history messages
@@ -298,19 +298,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Add Azure models (using verified model names)
             const azureOptions = [
-                { value: 'gpt-4o', text: 'GPT-4o (Latest)' },
-                { value: 'gpt-4-turbo', text: 'GPT-4 Turbo' },
-                { value: 'gpt-4', text: 'GPT-4' },
-                { value: 'gpt-3.5-turbo', text: 'GPT-3.5 Turbo' }
+                { value: 'gpt-4.1', text: 'GPT-4.1 (2025-04-14)' },
+                { value: 'gpt-4o-1120', text: 'GPT-4o (2024-11-20)' },
+                { value: 'o4-mini-0416', text: 'o4-mini (2025-04-16)' },
+                { value: 'o3-mini-0131', text: 'o3-mini (2025-01-31)' }
             ];
 
             azureOptions.forEach(option => {
                 const optionElement = document.createElement('option');
                 optionElement.value = option.value;
                 optionElement.textContent = option.text;
-                if (option.value === 'gpt-4o') {
+                if (option.value === 'gpt-4.1') {
                     optionElement.selected = true;
-                    currentModel = 'gpt-4o';
+                    currentModel = 'gpt-4.1';
                 }
                 modelSelect.appendChild(optionElement);
             });
