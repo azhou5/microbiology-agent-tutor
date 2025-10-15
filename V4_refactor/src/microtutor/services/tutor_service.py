@@ -63,6 +63,10 @@ class TutorService:
         # Phase management state (similar to V3 socratic mode)
         self.current_phase = TutorState.INFORMATION_GATHERING
         self.phase_locked = False  # Whether we're locked in current phase
+        
+        # Socratic routing state (from V3)
+        self.socratic_mode = False
+        self.socratic_conversation_count = 0
         self.phase_progress = {}  # Track progress within each phase
         self.phase_transition_history = []  # Track phase transitions
         self.phase_completion_signals = {
@@ -134,6 +138,10 @@ class TutorService:
         """
         start_time = datetime.now()
         model = model_name or self.model_name
+        
+        # Reset socratic mode state for new case
+        self.socratic_mode = False
+        self.socratic_conversation_count = 0
         
         logger.info(f"Starting case: organism={organism}, case_id={case_id}, use_hpi_only={use_hpi_only}")
         
@@ -213,6 +221,37 @@ class TutorService:
         """Process user message and return tutor response."""
         start_time = datetime.now()
         logger.info(f"Processing message for case_id={context.case_id}")
+        
+        # Check if we're in socratic mode and should route directly to socratic agent
+        if self.socratic_mode:
+            logger.info("In socratic mode, routing directly to socratic agent")
+            # Ensure phase is set to differential diagnosis when in socratic mode
+            if context.current_state != TutorState.DIFFERENTIAL_DIAGNOSIS:
+                context.current_state = TutorState.DIFFERENTIAL_DIAGNOSIS
+                logger.info("Setting phase to differential_diagnosis for socratic mode")
+            return await self._handle_socratic_direct_route(message, context)
+        
+        # Check for phase transition messages and update context
+        if "Let's move onto phase:" in message:
+            # Extract phase name from message
+            phase_name = message.split("Let's move onto phase:")[1].strip()
+            # Map phase name to TutorState
+            phase_mapping = {
+                "Information Gathering": TutorState.INFORMATION_GATHERING,
+                "Problem Representation": TutorState.PROBLEM_REPRESENTATION,
+                "Differential Diagnosis": TutorState.DIFFERENTIAL_DIAGNOSIS,
+                "Tests": TutorState.TESTS,
+                "Management": TutorState.MANAGEMENT,
+                "Feedback": TutorState.FEEDBACK
+            }
+            if phase_name in phase_mapping:
+                context.current_state = phase_mapping[phase_name]
+                logger.info(f"[PHASE] Updated context state to: {context.current_state}")
+        
+        # Check if we should route to phase-specific agent
+        phase_agent_response = await self._handle_phase_specific_routing(message, context)
+        if phase_agent_response:
+            return phase_agent_response
         
         # Load case if needed
         if not context.case_description:
@@ -373,8 +412,8 @@ class TutorService:
             logger.info(f"[PHASE] Updated via LLM tool: {phase_data['current_phase']}, locked: {self.phase_locked}")
         else:
             # Automatic phase detection as fallback
-        new_state = self._determine_state(response_text, context.current_state)
-        context.current_state = new_state
+            new_state = self._determine_state(response_text, context.current_state)
+            context.current_state = new_state
             logger.info(f"[PHASE] Auto-detected: {new_state}")
             
             # Force phase update tool call for consistency
@@ -397,6 +436,181 @@ class TutorService:
             feedback_examples=retrieved_feedback_examples
         )
     
+    async def _handle_socratic_direct_route(self, message: str, context: TutorContext) -> TutorResponse:
+        """
+        Handle direct routing to socratic agent when in socratic mode.
+        
+        Args:
+            message: The user's message
+            context: Tutor context
+            
+        Returns:
+            TutorResponse: The socratic agent's response
+        """
+        logger.info(f"Handling direct socratic route for: {message}")
+        
+        # Get socratic agent response
+        socratic_response = await self._call_socratic_agent(message, context)
+        
+        # Check for completion signal
+        completion_signal = "[SOCRATIC_COMPLETE]"
+        is_complete = completion_signal in socratic_response
+        
+        # Clean the response - remove completion signal
+        cleaned_response = socratic_response
+        if completion_signal in cleaned_response:
+            cleaned_response = cleaned_response.replace(completion_signal, "").strip()
+        
+        # Increment conversation count
+        self.socratic_conversation_count += 1
+        
+        # Check if socratic section is complete based on signal
+        if is_complete:
+            logger.info("Socratic section complete (signal detected), exiting socratic mode")
+            self.socratic_mode = False
+            self.socratic_conversation_count = 0
+        
+        # Create metadata
+        metadata = {
+            "socratic_mode": True,
+            "socratic_conversation_count": self.socratic_conversation_count,
+            "socratic_complete": is_complete,
+            "agent": "socratic",
+            "state": "differential_diagnosis",
+            "current_phase": "differential_diagnosis"
+        }
+        
+        return TutorResponse(
+            content=cleaned_response,
+            tools_used=["socratic"],
+            metadata=metadata,
+            feedback_examples=[]
+        )
+    
+    async def _call_socratic_agent(self, message: str, context: TutorContext) -> str:
+        """Call the socratic agent directly."""
+        from microtutor.agents.socratic import run_socratic
+        
+        # Prepare conversation history for socratic agent
+        conversation_history = []
+        if hasattr(context, 'conversation_history') and context.conversation_history:
+            conversation_history = context.conversation_history
+        
+        # Call socratic agent
+        socratic_response = run_socratic(
+            input_text=message,
+            case=context.case_description,
+            history=conversation_history,
+            model=context.model_name
+        )
+        
+        return socratic_response
+    
+    async def _handle_phase_specific_routing(self, message: str, context: TutorContext) -> Optional[TutorResponse]:
+        """
+        Handle routing to phase-specific agents based on current phase.
+        
+        Args:
+            message: The user's message
+            context: Tutor context
+            
+        Returns:
+            TutorResponse if routed to phase-specific agent, None otherwise
+        """
+        current_phase = context.current_state
+        
+        # Map phases to their corresponding agents
+        phase_agent_map = {
+            TutorState.INFORMATION_GATHERING: "patient",
+            TutorState.PROBLEM_REPRESENTATION: "problem_representation", 
+            TutorState.DIFFERENTIAL_DIAGNOSIS: "socratic",
+            TutorState.TESTS: "tests_management",
+            TutorState.MANAGEMENT: "tests_management",
+            TutorState.FEEDBACK: "feedback"
+        }
+        
+        agent_name = phase_agent_map.get(current_phase)
+        if not agent_name:
+            logger.info(f"No phase-specific agent for phase: {current_phase}")
+            return None
+        
+        logger.info(f"Routing to phase-specific agent: {agent_name} for phase: {current_phase}")
+        
+        try:
+            # Execute the phase-specific agent
+            result = self.tool_engine.execute_tool(agent_name, {
+                'input_text': message,
+                'case': context.case_description,
+                'conversation_history': context.conversation_history or [],
+                'model': context.model_name
+            })
+            
+            if result['success']:
+                response_content = result['result']
+                
+                # Check for completion signals and handle phase transitions
+                completion_signals = {
+                    'problem_representation': '[PROBLEM_REPRESENTATION_COMPLETE]',
+                    'tests_management': '[TESTS_MANAGEMENT_COMPLETE]',
+                    'feedback': '[FEEDBACK_COMPLETE]'
+                }
+                
+                completion_signal = completion_signals.get(agent_name)
+                is_complete = completion_signal and completion_signal in response_content
+                
+                # Clean response if completion signal present
+                if is_complete and completion_signal:
+                    response_content = response_content.replace(completion_signal, "").strip()
+                
+                # Handle phase transitions based on completion
+                if is_complete:
+                    next_phase = self._get_next_phase(current_phase)
+                    if next_phase:
+                        context.current_state = next_phase
+                        logger.info(f"Phase transition: {current_phase} -> {next_phase}")
+                
+                # Create metadata
+                metadata = {
+                    "phase_agent": agent_name,
+                    "current_phase": current_phase.value,
+                    "phase_complete": is_complete,
+                    "agent": agent_name
+                }
+                
+                return TutorResponse(
+                    content=response_content,
+                    tools_used=[agent_name],
+                    metadata=metadata,
+                    feedback_examples=[]
+                )
+            else:
+                logger.error(f"Phase-specific agent {agent_name} failed: {result.get('error', 'Unknown error')}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error in phase-specific routing for {agent_name}: {e}")
+            return None
+    
+    def _get_next_phase(self, current_phase: TutorState) -> Optional[TutorState]:
+        """Get the next phase in the sequence."""
+        phase_sequence = [
+            TutorState.INFORMATION_GATHERING,
+            TutorState.PROBLEM_REPRESENTATION,
+            TutorState.DIFFERENTIAL_DIAGNOSIS,
+            TutorState.TESTS,
+            TutorState.MANAGEMENT,
+            TutorState.FEEDBACK
+        ]
+        
+        try:
+            current_index = phase_sequence.index(current_phase)
+            if current_index < len(phase_sequence) - 1:
+                return phase_sequence[current_index + 1]
+        except ValueError:
+            pass
+        
+        return None
+    
     def _call_tutor_with_tools_and_phase(
         self,
         messages: List[Dict[str, str]],
@@ -404,16 +618,14 @@ class TutorService:
         model: str
     ) -> tuple[str, Optional[Dict[str, Any]], List[str]]:
         """Call tutor LLM with native function calling and phase management."""
-        system_msg = messages[0]["content"] if messages and messages[0]["role"] == "system" else ""
-        user_msg = messages[-1]["content"] if messages and messages[-1]["role"] == "user" else ""
-        
-        # Call LLM with tool schemas (native function calling) and full conversation history
+        # When conversation_history is provided, chat_complete uses that instead of system_prompt/user_prompt
+        # So we only need to pass the conversation history for proper context
         response = chat_complete(
-            system_prompt=system_msg,
-            user_prompt=user_msg,
+            system_prompt="",  # Not used when conversation_history is provided
+            user_prompt="",    # Not used when conversation_history is provided
             model=model,
             tools=self.tool_schemas,
-            conversation_history=messages,  # Pass full conversation history
+            conversation_history=messages,  # Pass full conversation history for proper context
             fallback_model="gpt-4.1"  # Use GPT-4.1 as fallback
         )
         
@@ -423,6 +635,26 @@ class TutorService:
         # Handle None response (all retries failed)
         if response is None:
             logger.error("LLM returned None after all retries")
+            # Try a simpler fallback approach
+            try:
+                # Extract the last user message for fallback
+                last_user_msg = ""
+                for msg in reversed(messages):
+                    if msg.get("role") == "user":
+                        last_user_msg = msg.get("content", "")
+                        break
+                
+                simple_response = chat_complete(
+                    system_prompt="You are a helpful microbiology tutor. Provide a brief, helpful response.",
+                    user_prompt=last_user_msg,
+                    model="gpt-4.1",  # Use reliable fallback
+                    max_retries=3
+                )
+                if simple_response and simple_response.strip():
+                    return simple_response, phase_data, tools_used
+            except Exception as e:
+                logger.error(f"Fallback response also failed: {e}")
+            
             return "I apologize, but I'm having trouble processing your request right now. Could you please try again?", phase_data, tools_used
         
         # Handle tool calls (native function calling format)
@@ -432,10 +664,10 @@ class TutorService:
             if tool_calls and len(tool_calls) > 0:
                 # Execute all tool calls
                 for tool_call in tool_calls:
-                tool_name = tool_call.function.name
-                tool_args = json.loads(tool_call.function.arguments)
-                
-                logger.info(f"Native function call: {tool_name}({list(tool_args.keys())})")
+                    tool_name = tool_call.function.name
+                    tool_args = json.loads(tool_call.function.arguments)
+                    
+                    logger.info(f"Native function call: {tool_name}({list(tool_args.keys())})")
                     
                     # Track tool usage
                     tools_used.append(tool_name)
@@ -458,6 +690,14 @@ class TutorService:
                                 logger.info(f"[PHASE] Phase update tool called: {phase_data['current_phase']}")
                             except json.JSONDecodeError:
                                 logger.warning("Failed to parse phase data from update_phase tool")
+                        elif tool_name == 'socratic':
+                            # Set socratic mode to True when socratic tool is called
+                            self.socratic_mode = True
+                            self.socratic_conversation_count = 1
+                            # Set phase to differential diagnosis for socratic mode
+                            self.current_phase = TutorState.DIFFERENTIAL_DIAGNOSIS
+                            logger.info("Entering socratic mode - future messages will route directly to socratic agent")
+                            logger.info("Setting phase to differential_diagnosis for socratic mode")
                         else:
                             # Regular tool - return its result
                             return tool_result['result'], phase_data, tools_used

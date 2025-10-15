@@ -13,7 +13,7 @@ Base = declarative_base()
 class ConversationLog(Base):
     """Log of all conversation messages between user and tutor."""
     
-    __tablename__ = 'conversation_log'
+    __tablename__ = 'conversation_logs'
     
     id = Column(Integer, primary_key=True)
     case_id = Column(String(128), nullable=False, index=True)

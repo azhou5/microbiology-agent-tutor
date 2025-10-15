@@ -33,12 +33,12 @@ class GuidelineSearchRequest(BaseModel):
     query: str = Field(
         ...,
         description="Medical condition, treatment, or clinical topic",
-        example="MRSA treatment"
+        json_schema_extra={"example": "MRSA treatment"}
     )
     sources: Optional[List[str]] = Field(
         None,
         description="List of sources to search (NICE, PubMed, WHO, etc.)",
-        example=["NICE", "PubMed"]
+        json_schema_extra={"example": ["NICE", "PubMed"]}
     )
     limit: int = Field(
         5,

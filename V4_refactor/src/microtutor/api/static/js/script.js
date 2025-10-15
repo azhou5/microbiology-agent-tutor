@@ -53,6 +53,45 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentCaseId = null;
     let currentOrganismKey = null;
     let currentPhase = 'information_gathering';
+    let currentModelProvider = 'azure';
+    let currentModel = 'gpt-4o';
+
+    /**
+     * Validate and filter chat history messages
+     */
+    function validateChatHistory(history) {
+        if (!Array.isArray(history)) {
+            return [];
+        }
+
+        return history.filter(msg => {
+            return msg &&
+                typeof msg === 'object' &&
+                msg.role &&
+                typeof msg.role === 'string' &&
+                msg.content &&
+                typeof msg.content === 'string' &&
+                msg.content.trim().length > 0 &&
+                ['user', 'assistant', 'system'].includes(msg.role);
+        });
+    }
+
+    /**
+     * Safely add a message to chat history with validation
+     */
+    function addMessageToHistory(role, content) {
+        if (!role || !content || typeof content !== 'string' || content.trim().length === 0) {
+            console.warn('[CHAT_HISTORY] Skipping invalid message:', { role, content });
+            return;
+        }
+
+        if (!['user', 'assistant', 'system'].includes(role)) {
+            console.warn('[CHAT_HISTORY] Invalid role:', role);
+            return;
+        }
+
+        chatHistory.push({ role, content: content.trim() });
+    }
     let phaseHistory = [];
 
     // Feedback state
@@ -226,6 +265,90 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Reset phase to information gathering
+     */
+    function resetPhaseToInformationGathering() {
+        currentPhase = 'information_gathering';
+        updatePhaseUI();
+        console.log('[PHASE] Reset to Information Gathering');
+    }
+
+    /**
+     * Update model selection based on provider
+     */
+    function updateModelSelection() {
+        const azureProvider = document.getElementById('azure-provider');
+        const personalProvider = document.getElementById('personal-provider');
+        const modelSelect = document.getElementById('model-select');
+
+        if (!azureProvider || !personalProvider || !modelSelect) {
+            return;
+        }
+
+        // Clear all options first
+        modelSelect.innerHTML = '';
+
+        // Update current provider
+        if (azureProvider.checked) {
+            currentModelProvider = 'azure';
+
+            // Add Azure models (using verified model names)
+            const azureOptions = [
+                { value: 'gpt-4o', text: 'GPT-4o (Latest)' },
+                { value: 'gpt-4-turbo', text: 'GPT-4 Turbo' },
+                { value: 'gpt-4', text: 'GPT-4' },
+                { value: 'gpt-3.5-turbo', text: 'GPT-3.5 Turbo' }
+            ];
+
+            azureOptions.forEach(option => {
+                const optionElement = document.createElement('option');
+                optionElement.value = option.value;
+                optionElement.textContent = option.text;
+                if (option.value === 'gpt-4o') {
+                    optionElement.selected = true;
+                    currentModel = 'gpt-4o';
+                }
+                modelSelect.appendChild(optionElement);
+            });
+
+        } else {
+            currentModelProvider = 'personal';
+
+            // Add Personal models
+            const personalOptions = [
+                { value: 'o4', text: 'o4' },
+                { value: 'gpt-5-mini-2025-08-07', text: 'GPT-5 Mini (2025-08-07)' },
+                { value: 'gpt-5-2025-08-07', text: 'GPT-5 (2025-08-07)' },
+                { value: 'gpt-4.1-2025-04-14', text: 'GPT-4.1 (2025-04-14)' }
+            ];
+
+            personalOptions.forEach(option => {
+                const optionElement = document.createElement('option');
+                optionElement.value = option.value;
+                optionElement.textContent = option.text;
+                if (option.value === 'o4') {
+                    optionElement.selected = true;
+                    currentModel = 'o4';
+                }
+                modelSelect.appendChild(optionElement);
+            });
+        }
+
+        console.log(`[MODEL] Provider: ${currentModelProvider}, Model: ${currentModel}`);
+    }
+
+    /**
+     * Update current model when selection changes
+     */
+    function updateCurrentModel() {
+        const modelSelect = document.getElementById('model-select');
+        if (modelSelect && modelSelect.value) {
+            currentModel = modelSelect.value;
+            console.log(`[MODEL] Selected model: ${currentModel}`);
+        }
+    }
+
+    /**
      * Update phase UI based on current state
      */
     function updatePhaseUI() {
@@ -289,19 +412,28 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus('Transitioning to new phase...');
             disableInput(true);
 
+            // Filter out malformed messages before sending
+            const validHistory = validateChatHistory(chatHistory);
+
+            const requestBody = {
+                message: transitionMessage,
+                case_id: currentCaseId,
+                organism_key: currentOrganismKey,
+                history: validHistory,
+                model_name: currentModel,
+                model_provider: currentModelProvider,
+                feedback_enabled: feedbackEnabled,
+                feedback_threshold: feedbackThreshold
+            };
+
+            console.log('[PHASE] Request body:', requestBody);
+
             const response = await fetch(`${API_BASE}/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    message: transitionMessage,
-                    case_id: currentCaseId,
-                    organism_key: currentOrganism,
-                    history: chatHistory,
-                    feedback_enabled: feedbackEnabled,
-                    feedback_threshold: feedbackThreshold
-                })
+                body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
@@ -312,11 +444,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Add user message
             addMessage('user', transitionMessage);
-            chatHistory.push({ role: 'user', content: transitionMessage });
+            addMessageToHistory('user', transitionMessage);
 
             // Add assistant response
             addMessage('assistant', data.content);
-            chatHistory.push({ role: 'assistant', content: data.content });
+            addMessageToHistory('assistant', data.content);
 
             setStatus('');
             disableInput(false);
@@ -694,7 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // If replacement provided, add it to chat
             if (replacementText.trim()) {
                 addMessage('assistant', replacementText, true);
-                chatHistory.push({ role: 'assistant', content: replacementText });
+                addMessageToHistory('assistant', replacementText);
                 saveConversationState();
             }
         });
@@ -787,6 +919,9 @@ document.addEventListener('DOMContentLoaded', () => {
         currentCaseId = generateCaseId();
         currentOrganismKey = selectedOrganism;
 
+        // Reset phase to Information Gathering
+        currentPhase = 'information_gathering';
+
         setStatus('Starting new case...');
         disableInput(true);
         finishBtn.disabled = true;
@@ -798,7 +933,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     organism: currentOrganismKey,
                     case_id: currentCaseId,
-                    model_name: 'o3-mini'
+                    model_name: currentModel,
+                    model_provider: currentModelProvider
                 }),
             });
 
@@ -810,8 +946,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             console.log('[START_CASE] Response:', data);
 
-            // Initialize history from response
-            chatHistory = data.history || [];
+            // Initialize history from response with validation
+            chatHistory = validateChatHistory(data.history);
 
             // Display messages
             chatbox.innerHTML = '';
@@ -867,19 +1003,24 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[CHAT] Sending message...');
 
         addMessage('user', messageText);
-        chatHistory.push({ role: 'user', content: messageText });
+        addMessageToHistory('user', messageText);
         userInput.value = '';
         disableInput(true);
 
         try {
+            // Filter out malformed messages before sending
+            const validHistory = validateChatHistory(chatHistory);
+
             const response = await fetch(`${API_BASE}/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: messageText,
-                    history: chatHistory,
+                    history: validHistory,
                     organism_key: currentOrganismKey,
                     case_id: currentCaseId,
+                    model_name: currentModel,
+                    model_provider: currentModelProvider,
                     feedback_enabled: feedbackEnabled,
                     feedback_threshold: feedbackThreshold
                 }),
@@ -911,8 +1052,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const messageId = addMessage('assistant', data.response, true);
-            chatHistory = data.history || chatHistory;
-            chatHistory.push({ role: 'assistant', content: data.response });
+
+            // Filter out malformed messages from server history
+            if (data.history) {
+                chatHistory = validateChatHistory(data.history);
+            }
+            addMessageToHistory('assistant', data.response);
 
             // Update phase information from backend metadata
             if (data.metadata) {
@@ -921,6 +1066,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentPhase = data.metadata.current_phase;
                     updatePhaseUI();
                     console.log('[PHASE] Backend phase update:', data.metadata.current_phase);
+                }
+
+                // Handle socratic mode phase updates
+                if (data.metadata.socratic_mode && data.metadata.current_phase === 'differential_diagnosis') {
+                    currentPhase = 'differential_diagnosis';
+                    updatePhaseUI();
+                    console.log('[SOCRATIC] Phase set to differential_diagnosis for socratic mode');
                 }
 
                 // Update phase locking
@@ -1076,12 +1228,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // Organism select change handler
     if (organismSelect) {
         organismSelect.addEventListener('change', () => {
+            // Reset phase to Information Gathering whenever organism selection changes
+            resetPhaseToInformationGathering();
+
             if (organismSelect.value === 'random') {
                 // If random is selected, immediately trigger random selection
                 selectRandomOrganism();
             }
         });
     }
+
+    // Model provider toggle handlers
+    const azureProvider = document.getElementById('azure-provider');
+    const personalProvider = document.getElementById('personal-provider');
+    const modelSelect = document.getElementById('model-select');
+
+    if (azureProvider) {
+        azureProvider.addEventListener('change', updateModelSelection);
+    }
+
+    if (personalProvider) {
+        personalProvider.addEventListener('change', updateModelSelection);
+    }
+
+    if (modelSelect) {
+        modelSelect.addEventListener('change', updateCurrentModel);
+    }
+
+    // Initialize model selection on page load
+    updateModelSelection();
 
     // Skip buttons
     document.querySelectorAll('.skip-btn').forEach(button => {
@@ -1437,12 +1612,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Add transcribed user message
             addMessage('user', data.transcribed_text);
-            chatHistory.push({ role: 'user', content: data.transcribed_text });
+            addMessageToHistory('user', data.transcribed_text);
 
             // Add assistant response
             const speakerIcon = data.speaker === 'patient' ? '🤒' : '👨‍⚕️';
             addMessage('assistant', `${speakerIcon} ${data.response_text}`, true);
-            chatHistory.push({ role: 'assistant', content: data.response_text });
+            addMessageToHistory('assistant', data.response_text);
 
             // Play audio response
             if (data.audio_base64) {
@@ -1697,15 +1872,23 @@ document.addEventListener('DOMContentLoaded', () => {
             givenAnswerDiv.className = 'feedback-given-answer';
             givenAnswerDiv.innerHTML = `<strong>4) Answer Given:</strong> ${example.entry.rated_message}`;
 
-            // 5) Answer that was suggested (replacement text)
+            // 5) Feedback text provided by user
+            const feedbackTextDiv = document.createElement('div');
+            feedbackTextDiv.className = 'feedback-text';
+            const feedbackText = example.entry.feedback_text || 'No feedback text provided';
+            feedbackTextDiv.innerHTML = `<strong>5) Feedback Text:</strong> ${feedbackText}`;
+
+            // 6) Answer that was suggested (replacement text)
             const suggestedAnswerDiv = document.createElement('div');
             suggestedAnswerDiv.className = 'feedback-suggested-answer';
-            suggestedAnswerDiv.innerHTML = `<strong>5) Suggested Answer:</strong> ${example.entry.replacement_text}`;
+            const suggestedText = example.entry.replacement_text || 'No suggested answer provided';
+            suggestedAnswerDiv.innerHTML = `<strong>6) Suggested Answer:</strong> ${suggestedText}`;
 
             feedbackContent.appendChild(inputDiv);
             feedbackContent.appendChild(similarityDiv);
             feedbackContent.appendChild(qualityDiv);
             feedbackContent.appendChild(givenAnswerDiv);
+            feedbackContent.appendChild(feedbackTextDiv);
             feedbackContent.appendChild(suggestedAnswerDiv);
 
             exampleDiv.appendChild(feedbackContent);

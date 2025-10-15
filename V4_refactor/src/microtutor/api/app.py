@@ -8,6 +8,13 @@ This is the main application file that sets up:
 """
 
 import logging
+import warnings
+
+# Suppress deprecation warnings from third-party libraries
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pkg_resources")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="admet_ai")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*boost::shared_ptr.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*path is deprecated.*")
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from pathlib import Path

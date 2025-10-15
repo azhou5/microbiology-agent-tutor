@@ -51,3 +51,4 @@ beautifulsoup4==4.12.3
 # Production Dependencies
 # These are essential for Render deployment
 python-dotenv==1.0.0
+pytz==2023.3

@@ -6,9 +6,10 @@ These models define the core data structures used throughout the application.
 from __future__ import annotations
 
 from datetime import datetime
+import pytz
 from typing import Optional, List, Dict, Any
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class TutorState(str, Enum):
@@ -41,8 +42,7 @@ class TutorContext(BaseModel):
     model_name: str = None
     session_metadata: Dict[str, Any] = Field(default_factory=dict)
     
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
     
     def get_model_name(self) -> str:
         """Get the model name, using config default if None."""
@@ -84,7 +84,7 @@ class Feedback(BaseModel):
     feedback_text: Optional[str] = None
     session_id: Optional[str] = None
     case_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.timezone('America/New_York')))
     extra: Dict[str, Any] = Field(default_factory=dict)
 
 

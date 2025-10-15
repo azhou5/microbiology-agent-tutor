@@ -7,6 +7,7 @@ for the live dashboard display.
 
 import logging
 from datetime import datetime, timedelta
+import pytz
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, desc
@@ -47,8 +48,9 @@ async def get_feedback_stats(
             FROM case_feedback
         """)).scalar() or 0
         
-        # Get today's counts
-        today = datetime.now().date()
+        # Get today's counts in EST timezone
+        est = pytz.timezone('America/New_York')
+        today = datetime.now(est).date()
         today_regular = db.execute(text("""
             SELECT COUNT(*) FROM feedback 
             WHERE DATE(timestamp) = :today
@@ -88,6 +90,14 @@ async def get_feedback_stats(
             last_regular or datetime.min,
             last_case or datetime.min
         )
+        
+        # Convert to EST if we have a valid timestamp
+        if last_update != datetime.min:
+            # If timestamp is naive, assume it's UTC and convert to EST
+            if last_update.tzinfo is None:
+                last_update = pytz.utc.localize(last_update).astimezone(est)
+            else:
+                last_update = last_update.astimezone(est)
         
         return {
             "status": "success",

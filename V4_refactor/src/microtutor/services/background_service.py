@@ -9,6 +9,7 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+import pytz
 from dataclasses import dataclass
 from enum import Enum
 import json
@@ -42,11 +43,11 @@ class BackgroundTask:
     priority: int = 0  # Higher number = higher priority
     created_at: datetime = None
     retry_count: int = 0
-    max_retries: int = 3
+    max_retries: int = 10
     
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(pytz.timezone('America/New_York'))
     
     def __lt__(self, other):
         """Less than comparison for priority queue ordering."""
@@ -288,7 +289,7 @@ class BackgroundTaskService:
                         :feedback_text, :replacement_text, :case_id
                     )
                 """), {
-                    'timestamp': data.get('timestamp', datetime.utcnow()),
+                    'timestamp': data.get('timestamp', datetime.now(pytz.timezone('America/New_York'))),
                     'organism': data.get('organism', ''),
                     'rating': str(data.get('rating', '0')),
                     'message': data.get('message', ''),
@@ -333,7 +334,7 @@ class BackgroundTaskService:
                         :accuracy_rating, :comments, :case_id
                     )
                 """), {
-                    'timestamp': data.get('timestamp', datetime.utcnow()),
+                    'timestamp': data.get('timestamp', datetime.now(pytz.timezone('America/New_York'))),
                     'organism': data.get('organism', ''),
                     'detail_rating': str(data.get('detail_rating', '0')),
                     'helpfulness_rating': str(data.get('helpfulness_rating', '0')),
@@ -449,7 +450,7 @@ class BackgroundTaskService:
                 'case_id': case_id,
                 'role': role,
                 'content': content,
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(pytz.timezone('America/New_York')),
                 'metadata': metadata or {}
             },
             priority=1
@@ -475,7 +476,7 @@ class BackgroundTaskService:
                 'feedback_text': feedback_text,
                 'replacement_text': replacement_text,
                 'organism': organism,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(pytz.timezone('America/New_York'))
             },
             priority=2
         )
@@ -500,7 +501,7 @@ class BackgroundTaskService:
                 'accuracy_rating': accuracy_rating,
                 'comments': comments,
                 'organism': organism,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(pytz.timezone('America/New_York'))
             },
             priority=2
         )
@@ -512,7 +513,7 @@ class BackgroundTaskService:
             task_type=TaskType.FAISS_INDEX_UPDATE,
             data={
                 'force_update': force_update,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(pytz.timezone('America/New_York'))
             },
             priority=1  # Lower priority than feedback processing
         )
@@ -534,7 +535,7 @@ class BackgroundTaskService:
                 'case_id': case_id,
                 'processing_time_ms': processing_time_ms,
                 'model': model,
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(pytz.timezone('America/New_York')),
                 'metadata': metadata or {}
             },
             priority=0
@@ -558,7 +559,7 @@ class BackgroundTaskService:
                 'completion_tokens': completion_tokens,
                 'case_id': case_id,
                 'request_type': request_type,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(pytz.timezone('America/New_York'))
             },
             priority=1
         )

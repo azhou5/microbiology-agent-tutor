@@ -1,6 +1,6 @@
 {
     "name": "socratic",
-    "description": "CRITERIA FOR CALLING SOCRATIC: When the student reaches a set of differential diagnoses, route it to the SOCRATIC tool. Example 1: 'I think it's flu A, TB, or lung cancer' -> use socratic tool. Example 2: (mid-socratic dialogue) 'Well I suspect it's TB because the history of immunosuppression, but you're right that it's less prevalent in the United States. I think this can be lower on my differential.' -> use socratic tool. Remember that this socratic conversation will go on for multiple turns, each one needs to be passed to the Socratic agent. CRITERIA FOR EXITING SOCRATIC: When the student and the socratic agent have completed their dialogue OR if the student asks to MOVE ON, DO NOT pass to the socratic agent, but instead continue with the case as the tutor.",
+    "description": "Facilitates differential diagnosis discussion through socratic questioning. Use when students propose differential diagnoses or discuss clinical reasoning about diagnoses. Example: 'I think it's flu A, TB, or lung cancer' -> use socratic tool. This agent challenges reasoning, asks probing questions, and guides critical thinking about differentials. NOT for test/treatment planning (use tests_management) or patient data (use patient).",
     "type": "SocraticTool",
     "category": "educational_agents",
     "cacheable": false,

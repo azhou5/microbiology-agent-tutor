@@ -1,6 +1,6 @@
 {
     "name": "patient",
-    "description": "When the question is directed to the PATIENT, use the PATIENT tool. Use this when the student asks for specific SYMPTOMS from the case about the patient. Example 1: 'How long have you had this?' -> use patient tool. Example 2: 'Any past medical history?' -> use patient tool. Example 3: 'How long for?' -> use patient tool. Example 4: 'When did it start?' -> use patient tool. Example 5: 'Any other symptoms?' -> use patient tool. The patient will respond realistically based on the case, only answering what is specifically asked.",
+    "description": "Provides actual patient state data (history, exam findings, test results, vitals). Use for ANY question asking for patient information: symptoms, duration, past medical history, family history, medications, allergies, physical exam findings, vital signs, test results. Example: 'How long for? what PMH, FH, current meds? had this before?' -> use patient tool. This agent gives factual patient data, NOT guidelines or recommendations.",
     "type": "PatientTool",
     "category": "educational_agents",
     "cacheable": false,

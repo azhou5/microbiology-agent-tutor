@@ -29,33 +29,57 @@
 
 
         <div class="case-setup">
-            <label for="organism-select">Select Organism:</label>
-            <select id="organism-select">
-                <option value="">-- Choose an organism --</option>
-                <option value="random">🎲 Random (No Repeats)</option>
-                <optgroup label="Bacteria">
-                    <option value="staphylococcus aureus">Staphylococcus aureus</option>
-                    <option value="escherichia coli">Escherichia coli</option>
-                    <option value="nocardia species">Nocardia species</option>
-                    <option value="borrelia burgdorferi">Borrelia burgdorferi</option>
-                    <option value="streptococcus pneumoniae">Streptococcus pneumoniae</option>
-                </optgroup>
-                <optgroup label="Viruses">
-                    <option value="hsv-1">HSV-1</option>
-                    <option value="influenza a">Influenza A</option>
-                    <option value="hiv">HIV</option>
-                    <option value="ebv">EBV</option>
-                </optgroup>
-                <optgroup label="Fungi">
-                    <option value="candida albicans">Candida albicans</option>
-                    <option value="aspergillus fumigatus">Aspergillus fumigatus</option>
-                </optgroup>
-                <optgroup label="Parasites">
-                    <option value="plasmodium falciparum">Plasmodium falciparum (malaria)</option>
-                    <option value="taenia solium">Taenia solium</option>
-                </optgroup>
-            </select>
-            <button id="start-case-btn" class="btn btn-primary">🚀 Start New Case</button>
+            <div class="setup-row">
+                <div class="setup-group">
+                    <label for="organism-select">Select Organism:</label>
+                    <select id="organism-select">
+                        <option value="">-- Choose an organism --</option>
+                        <option value="random">🎲 Random (No Repeats)</option>
+                        <optgroup label="Bacteria">
+                            <option value="staphylococcus aureus">Staphylococcus aureus</option>
+                            <option value="escherichia coli">Escherichia coli</option>
+                            <option value="nocardia species">Nocardia species</option>
+                            <option value="borrelia burgdorferi">Borrelia burgdorferi</option>
+                            <option value="streptococcus pneumoniae">Streptococcus pneumoniae</option>
+                        </optgroup>
+                        <optgroup label="Viruses">
+                            <option value="hsv-1">HSV-1</option>
+                            <option value="influenza a">Influenza A</option>
+                            <option value="hiv">HIV</option>
+                            <option value="ebv">EBV</option>
+                        </optgroup>
+                        <optgroup label="Fungi">
+                            <option value="candida albicans">Candida albicans</option>
+                            <option value="aspergillus fumigatus">Aspergillus fumigatus</option>
+                        </optgroup>
+                        <optgroup label="Parasites">
+                            <option value="plasmodium falciparum">Plasmodium falciparum (malaria)</option>
+                            <option value="taenia solium">Taenia solium</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <div class="setup-group">
+                    <label for="model-provider">Model Provider:</label>
+                    <div class="model-provider-toggle">
+                        <input type="radio" id="azure-provider" name="model-provider" value="azure" checked>
+                        <label for="azure-provider">Azure</label>
+                        <input type="radio" id="personal-provider" name="model-provider" value="personal">
+                        <label for="personal-provider">Personal</label>
+                    </div>
+                </div>
+
+                <div class="setup-group">
+                    <label for="model-select">Select Model:</label>
+                    <select id="model-select">
+                        <!-- Options will be dynamically populated based on provider selection -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="setup-actions">
+                <button id="start-case-btn" class="btn btn-primary">🚀 Start New Case</button>
+            </div>
         </div>
 
         <!-- Feedback Controls -->

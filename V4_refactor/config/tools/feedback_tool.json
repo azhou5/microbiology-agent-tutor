@@ -1,0 +1,47 @@
+{
+    "name": "feedback",
+    "description": "Provides comprehensive performance review and learning assessment. Use when students request feedback or at case completion. This agent reviews performance, highlights strengths/weaknesses, and makes connections between presentation, pathophysiology, and management. NOT for patient data or clinical guidance.",
+    "type": "AgenticTool",
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "input_text": {
+                "type": "string",
+                "description": "The student's question or input about feedback"
+            },
+            "case": {
+                "type": "string",
+                "description": "The case description"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Previous conversation history",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "model": {
+                "type": "string",
+                "description": "LLM model to use (optional)"
+            }
+        },
+        "required": [
+            "input_text",
+            "case"
+        ]
+    },
+    "cacheable": false,
+    "metadata": {
+        "phase": "feedback",
+        "agent_type": "guidance",
+        "completion_signal": "[FEEDBACK_COMPLETE]"
+    }
+}

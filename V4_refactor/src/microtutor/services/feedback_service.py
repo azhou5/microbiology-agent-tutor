@@ -8,6 +8,7 @@ This service handles:
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+import pytz
 import logging
 import json
 
@@ -54,8 +55,10 @@ class FeedbackService:
                 # Import DB model
                 from microtutor.core.database import FeedbackEntry
                 
+                # Use EST timezone for timestamps
+                est = pytz.timezone('America/New_York')
                 entry = FeedbackEntry(
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(est),
                     organism=organism,
                     rating=str(feedback.rating),
                     rated_message=feedback.message,
@@ -77,8 +80,9 @@ class FeedbackService:
                 raise
         else:
             # Log to file as fallback
+            est = pytz.timezone('America/New_York')
             log_entry = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(est).isoformat(),
                 "organism": organism,
                 "rating": feedback.rating,
                 "rated_message": feedback.message,

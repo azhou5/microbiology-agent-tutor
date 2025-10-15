@@ -1,0 +1,53 @@
+{
+    "name": "tests_management",
+    "description": "Discusses test selection guidelines and treatment planning approaches through socratic dialogue. Use when students ask 'What tests should I order?' or 'What treatment should I consider?' - this agent discusses guidelines and options, NOT actual test results (those go to patient agent)",
+    "type": "AgenticTool",
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "input_text": {
+                "type": "string",
+                "description": "The student's question or input about tests and management"
+            },
+            "case": {
+                "type": "string",
+                "description": "The case description"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Previous conversation history",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "model": {
+                "type": "string",
+                "description": "LLM model to use (optional)"
+            }
+        },
+        "required": [
+            "input_text",
+            "case"
+        ]
+    },
+    "cacheable": false,
+    "metadata": {
+        "phase": "tests_management",
+        "agent_type": "socratic_guidance",
+        "completion_signal": "[TESTS_MANAGEMENT_COMPLETE]",
+        "features": [
+            "guideline_search",
+            "real_time_guidelines",
+            "evidence_based"
+        ],
+        "tooluniverse_integration": true
+    }
+}

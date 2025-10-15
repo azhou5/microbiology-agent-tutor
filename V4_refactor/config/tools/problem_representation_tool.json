@@ -1,0 +1,47 @@
+{
+    "name": "problem_representation",
+    "description": "Guides students in organizing clinical information into a clear problem representation and illness script. Use when students need help structuring their clinical reasoning or organizing case information. This agent helps with clinical reasoning and case organization, NOT patient data (use patient) or differentials (use socratic).",
+    "type": "AgenticTool",
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "input_text": {
+                "type": "string",
+                "description": "The student's question or input about problem representation"
+            },
+            "case": {
+                "type": "string",
+                "description": "The case description"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Previous conversation history",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "model": {
+                "type": "string",
+                "description": "LLM model to use (optional)"
+            }
+        },
+        "required": [
+            "input_text",
+            "case"
+        ]
+    },
+    "cacheable": false,
+    "metadata": {
+        "phase": "problem_representation",
+        "agent_type": "guidance",
+        "completion_signal": "[PROBLEM_REPRESENTATION_COMPLETE]"
+    }
+}

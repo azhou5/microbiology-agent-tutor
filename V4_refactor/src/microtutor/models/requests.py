@@ -5,7 +5,8 @@ Each model includes validation, examples, and comprehensive documentation.
 """
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, validator, constr
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Annotated
 from datetime import datetime
 
 
@@ -26,21 +27,22 @@ class Message(BaseModel):
         description="Message content"
     )
     
-    @validator('role')
+    @field_validator('role')
+    @classmethod
     def validate_role(cls, v: str) -> str:
         """Validate that role is one of the accepted values."""
         if v not in ['user', 'assistant', 'system']:
             raise ValueError('Role must be user, assistant, or system')
         return v
     
-    class Config:
-        """Pydantic config."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "role": "user",
                 "content": "What are the patient's vital signs?"
             }
         }
+    )
 
 
 class StartCaseRequest(BaseModel):
@@ -53,15 +55,15 @@ class StartCaseRequest(BaseModel):
         use_hpi_only: If True, use shorter HPI version instead of full case
     """
     
-    organism: constr(min_length=1) = Field(
+    organism: Annotated[str, Field(min_length=1)] = Field(
         ..., 
         description="Organism name for the case",
-        example="staphylococcus aureus"
+        json_schema_extra={"example": "staphylococcus aureus"}
     )
-    case_id: constr(min_length=1) = Field(
+    case_id: Annotated[str, Field(min_length=1)] = Field(
         ...,
         description="Client-generated unique case ID",
-        example="case_2024_abc123"
+        json_schema_extra={"example": "case_2024_abc123"}
     )
     model_name: Optional[str] = Field(
         default=None,
@@ -72,16 +74,16 @@ class StartCaseRequest(BaseModel):
         description="Use shorter HPI (History of Present Illness) instead of full case"
     )
     
-    @validator('organism')
+    @field_validator('organism')
+    @classmethod
     def organism_not_empty(cls, v: str) -> str:
         """Ensure organism name is not just whitespace."""
         if not v.strip():
             raise ValueError('Organism name cannot be empty')
         return v.strip().lower()
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "organism": "staphylococcus aureus",
                 "case_id": "case_2024_abc123",
@@ -89,6 +91,7 @@ class StartCaseRequest(BaseModel):
                 "use_hpi_only": False
             }
         }
+    )
 
 
 class ChatRequest(BaseModel):
@@ -102,10 +105,10 @@ class ChatRequest(BaseModel):
         model_name: Optional LLM model to use
     """
     
-    message: constr(min_length=1) = Field(
+    message: Annotated[str, Field(min_length=1)] = Field(
         ...,
         description="User's message to the tutor",
-        example="What are the patient's symptoms?"
+        json_schema_extra={"example": "What are the patient's symptoms?"}
     )
     history: List[Message] = Field(
         default_factory=list,
@@ -134,16 +137,16 @@ class ChatRequest(BaseModel):
         description="Similarity threshold for feedback retrieval (0.1-1.0)"
     )
     
-    @validator('message')
+    @field_validator('message')
+    @classmethod
     def message_not_empty(cls, v: str) -> str:
         """Ensure message is not just whitespace."""
         if not v.strip():
             raise ValueError('Message cannot be empty')
         return v.strip()
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "message": "What are the patient's vital signs?",
                 "history": [
@@ -161,6 +164,7 @@ class ChatRequest(BaseModel):
                 "model_name": None
             }
         }
+    )
 
 
 class FeedbackRequest(BaseModel):
@@ -202,9 +206,8 @@ class FeedbackRequest(BaseModel):
         description="Associated case ID"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "rating": 4,
                 "message": "The patient's temperature is 38.5°C...",
@@ -214,6 +217,7 @@ class FeedbackRequest(BaseModel):
                 "case_id": "case_2024_abc123"
             }
         }
+    )
 
 
 class CaseFeedbackRequest(BaseModel):
@@ -254,9 +258,8 @@ class CaseFeedbackRequest(BaseModel):
         description="Case ID for this feedback"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "detail": 5,
                 "helpfulness": 4,
@@ -265,4 +268,5 @@ class CaseFeedbackRequest(BaseModel):
                 "case_id": "case_2024_abc123"
             }
         }
+    )
 

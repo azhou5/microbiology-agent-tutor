@@ -84,7 +84,7 @@ class LLMClient:
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
         tools: Optional[List[Dict]] = None,
-        retries: int = 3,
+        retries: int = 10,
         fallback_model: Optional[str] = None
     ) -> Union[str, Dict]:
         """
@@ -175,6 +175,9 @@ class LLMClient:
                     return content
                 else:
                     print(f"Warning: Empty response from {model} (attempt {attempt + 1}/{retries})")
+                    print(f"  - Response object: {response}")
+                    print(f"  - Message content: '{content}'")
+                    print(f"  - Message length: {len(content)}")
                     if attempt < retries - 1:
                         time.sleep(1)  # Short delay before retry
                         continue
@@ -183,6 +186,10 @@ class LLMClient:
                         return None
                 
             except openai.APIError as e:
+                error_code = getattr(e, 'code', None)
+                if error_code == 'model_not_found':
+                    print(f"Model {model} not found or no access - skipping retries")
+                    return None  # Don't retry for model not found errors
                 print(f"API Error with {model}: {e} (attempt {attempt + 1}/{retries})")
             except openai.RateLimitError as e:
                 print(f"Rate limit with {model}: {e} (attempt {attempt + 1}/{retries})")

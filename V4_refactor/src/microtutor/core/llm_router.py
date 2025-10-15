@@ -26,7 +26,7 @@ def chat_complete(
     user_prompt: str,
     model: Optional[str] = None,
     tools: Optional[List[Dict]] = None,
-    max_retries: int = 3,
+    max_retries: int = 10,
     conversation_history: Optional[List[Dict[str, str]]] = None,
     fallback_model: Optional[str] = None
 ) -> Union[str, Dict]:

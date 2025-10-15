@@ -5,7 +5,7 @@ Each model ensures consistent response structure and automatic documentation.
 """
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from .requests import Message
 
@@ -37,9 +37,8 @@ class StartCaseResponse(BaseModel):
         description="Organism for this case"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "initial_message": "Welcome! Let me present a 45-year-old patient...",
                 "history": [
@@ -56,6 +55,7 @@ class StartCaseResponse(BaseModel):
                 "organism": "staphylococcus aureus"
             }
         }
+    )
 
 
 class ChatResponse(BaseModel):
@@ -89,9 +89,8 @@ class ChatResponse(BaseModel):
         description="AI feedback examples used to guide the response"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "response": "The patient's temperature is 38.5°C, indicating fever.",
                 "history": [
@@ -109,6 +108,7 @@ class ChatResponse(BaseModel):
                 }
             }
         }
+    )
 
 
 class FeedbackResponse(BaseModel):
@@ -128,14 +128,14 @@ class FeedbackResponse(BaseModel):
         description="Database ID of the feedback entry"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "status": "Feedback received",
                 "feedback_id": 12345
             }
         }
+    )
 
 
 class CaseFeedbackResponse(BaseModel):
@@ -155,14 +155,14 @@ class CaseFeedbackResponse(BaseModel):
         description="Database ID of the feedback entry"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "status": "Case feedback received",
                 "feedback_id": 67890
             }
         }
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -192,9 +192,8 @@ class ErrorResponse(BaseModel):
         description="Whether the client should start a new case"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "error": "No active case ID. Please start a new case.",
                 "error_code": "NO_CASE_ID",
@@ -202,6 +201,7 @@ class ErrorResponse(BaseModel):
                 "needs_new_case": True
             }
         }
+    )
 
 
 class OrganismListResponse(BaseModel):
@@ -221,9 +221,8 @@ class OrganismListResponse(BaseModel):
         description="Number of organisms available"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "organisms": [
                     "staphylococcus aureus",
@@ -233,6 +232,7 @@ class OrganismListResponse(BaseModel):
                 "count": 3
             }
         }
+    )
 
 
 class HealthCheckResponse(BaseModel):
@@ -257,15 +257,15 @@ class HealthCheckResponse(BaseModel):
         description="API version"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "status": "healthy",
                 "timestamp": "2024-10-13T12:34:56.789Z",
                 "version": "4.0.0"
             }
         }
+    )
 
 
 class VoiceTranscriptionResponse(BaseModel):
@@ -285,14 +285,14 @@ class VoiceTranscriptionResponse(BaseModel):
         description="Language code (e.g., 'en', 'es') or 'auto' if auto-detected"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "text": "What are the patient's vital signs?",
                 "language": "en"
             }
         }
+    )
 
 
 class VoiceChatResponse(BaseModel):
@@ -332,9 +332,8 @@ class VoiceChatResponse(BaseModel):
         description="Updated conversation history"
     )
     
-    class Config:
-        """Pydantic config with example."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "transcribed_text": "What symptoms does the patient have?",
                 "response_text": "I've been experiencing fever and chills for 3 days.",
@@ -347,4 +346,5 @@ class VoiceChatResponse(BaseModel):
                 ]
             }
         }
+    )
 
