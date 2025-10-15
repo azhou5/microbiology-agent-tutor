@@ -247,6 +247,13 @@ class TutorService:
             if phase_name in phase_mapping:
                 context.current_state = phase_mapping[phase_name]
                 logger.info(f"[PHASE] Updated context state to: {context.current_state}")
+                
+                # Immediately route to the phase-specific agent for phase transitions
+                phase_agent_response = await self._handle_phase_specific_routing(
+                    f"Let's start the {phase_name} phase", context
+                )
+                if phase_agent_response:
+                    return phase_agent_response
         
         # Check if we should route to phase-specific agent
         phase_agent_response = await self._handle_phase_specific_routing(message, context)
@@ -389,7 +396,8 @@ class TutorService:
             response_text, phase_data, tools_used = self._call_tutor_with_tools_and_phase(
                 messages=context.conversation_history,
                 case_description=context.case_description,
-                model=context.model_name
+                model=context.model_name,
+                use_azure=context.use_azure
             )
             
             if not response_text:
@@ -615,7 +623,8 @@ class TutorService:
         self,
         messages: List[Dict[str, str]],
         case_description: str,
-        model: str
+        model: str,
+        use_azure: Optional[bool] = None
     ) -> tuple[str, Optional[Dict[str, Any]], List[str]]:
         """Call tutor LLM with native function calling and phase management."""
         # When conversation_history is provided, chat_complete uses that instead of system_prompt/user_prompt
@@ -626,7 +635,8 @@ class TutorService:
             model=model,
             tools=self.tool_schemas,
             conversation_history=messages,  # Pass full conversation history for proper context
-            fallback_model="gpt-4.1"  # Use GPT-4.1 as fallback
+            fallback_model="gpt-4.1",  # Use GPT-4.1 as fallback
+            use_azure=use_azure
         )
         
         phase_data = None

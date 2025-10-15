@@ -9,12 +9,12 @@ import sys
 import logging
 from pathlib import Path
 
+# Add src to path FIRST before any microtutor imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 # Suppress warnings from third-party libraries
 from microtutor.core.warning_suppression import setup_warning_suppression
 setup_warning_suppression(verbose=False)
-
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 def setup_logging() -> None:
     """Configure logging for production."""

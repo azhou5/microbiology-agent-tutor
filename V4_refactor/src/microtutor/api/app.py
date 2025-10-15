@@ -91,7 +91,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             error="Invalid request data",
             error_code="VALIDATION_ERROR",
             details={"errors": exc.errors()}
-        ).dict()
+        ).model_dump()
     )
 
 
@@ -104,7 +104,7 @@ async def value_error_handler(request: Request, exc: ValueError):
         content=ErrorResponse(
             error=str(exc),
             error_code="VALUE_ERROR"
-        ).dict()
+        ).model_dump()
     )
 
 
@@ -117,7 +117,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         content=ErrorResponse(
             error="Internal server error",
             error_code="INTERNAL_ERROR"
-        ).dict()
+        ).model_dump()
     )
 
 

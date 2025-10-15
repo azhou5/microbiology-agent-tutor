@@ -28,7 +28,8 @@ def chat_complete(
     tools: Optional[List[Dict]] = None,
     max_retries: int = 10,
     conversation_history: Optional[List[Dict[str, str]]] = None,
-    fallback_model: Optional[str] = None
+    fallback_model: Optional[str] = None,
+    use_azure: Optional[bool] = None
 ) -> Union[str, Dict]:
     """
     Generate LLM response with optional tool support and fallback model.
@@ -41,6 +42,7 @@ def chat_complete(
         max_retries: Number of retry attempts
         conversation_history: Optional full conversation history
         fallback_model: Fallback model to try if primary model fails
+        use_azure: Whether to use Azure OpenAI (None = use config default)
     
     Returns:
         str: Text response (if no tool calls)
@@ -57,8 +59,16 @@ def chat_complete(
             {"role": "user", "content": user_prompt}
         ]
     
+    # Determine which client to use
+    if use_azure is not None:
+        # Use specific provider as requested
+        client = LLMClient(model=model or config.API_MODEL_NAME, use_azure=use_azure)
+    else:
+        # Use global client (backward compatibility)
+        client = llm_client
+    
     # The LLM client now handles retries internally, so we just need to call it once
-    response = llm_client.generate(
+    response = client.generate(
         messages=messages,
         model=model,
         tools=tools,

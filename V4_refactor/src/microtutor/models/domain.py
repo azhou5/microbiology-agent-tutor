@@ -40,6 +40,7 @@ class TutorContext(BaseModel):
     conversation_history: List[Dict[str, str]] = Field(default_factory=list)
     current_state: TutorState = TutorState.INITIALIZING
     model_name: str = None
+    use_azure: Optional[bool] = None
     session_metadata: Dict[str, Any] = Field(default_factory=dict)
     
     model_config = ConfigDict(use_enum_values=True)

@@ -31,14 +31,22 @@ class MicroTutorToolEngine:
             from microtutor.tools.hint import HintTool
             from microtutor.tools.ddx_case_search import DDXCaseSearchTool
             from microtutor.tools.update_phase import UpdatePhaseTool
+            from microtutor.tools.tests_management import TestsManagementTool
+            from microtutor.tools.problem_representation import ProblemRepresentationTool
+            from microtutor.tools.feedback import FeedbackTool
+            from microtutor.tools.mcq_tool import MCQTool
             
             register_tool_class("PatientTool", PatientTool)
             register_tool_class("SocraticTool", SocraticTool)
             register_tool_class("HintTool", HintTool)
             register_tool_class("DDXCaseSearchTool", DDXCaseSearchTool)
             register_tool_class("UpdatePhaseTool", UpdatePhaseTool)
+            register_tool_class("TestsManagementTool", TestsManagementTool)
+            register_tool_class("ProblemRepresentationTool", ProblemRepresentationTool)
+            register_tool_class("FeedbackTool", FeedbackTool)
+            register_tool_class("MCQTool", MCQTool)
             
-            logger.info("Registered 5 tool classes")
+            logger.info("Registered 9 tool classes")
         except ImportError as e:
             logger.warning(f"Could not import tool classes: {e}")
     

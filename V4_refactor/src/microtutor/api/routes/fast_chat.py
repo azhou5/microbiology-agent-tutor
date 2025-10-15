@@ -75,7 +75,7 @@ async def chat_ultra_fast(
         context = TutorContext(
             case_id=request.case_id,
             organism=request.organism_key,
-            conversation_history=[msg.dict() for msg in request.history],
+            conversation_history=[msg.model_dump() for msg in request.history],
             model_name=request.model_name or default_model
         )
         

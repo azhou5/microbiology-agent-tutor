@@ -179,11 +179,18 @@ async def chat(
         # Create context from request
         # Get model name from request or config (with safe fallback)
         default_model = getattr(config, 'API_MODEL_NAME', 'o4-mini-2025-04-16')
+        
+        # Determine if we should use Azure based on model provider
+        use_azure = None
+        if request.model_provider:
+            use_azure = request.model_provider.lower() == 'azure'
+        
         context = TutorContext(
             case_id=request.case_id,
             organism=request.organism_key,
-            conversation_history=[msg.dict() for msg in request.history],
-            model_name=request.model_name or default_model
+            conversation_history=[msg.model_dump() for msg in request.history],
+            model_name=request.model_name or default_model,
+            use_azure=use_azure
         )
         
         # Log user message asynchronously
@@ -515,7 +522,7 @@ async def chat_stream(
         context = TutorContext(
             case_id=request.case_id,
             organism=request.organism_key,
-            conversation_history=[msg.dict() for msg in request.history],
+            conversation_history=[msg.model_dump() for msg in request.history],
             model_name=request.model_name or default_model
         )
         

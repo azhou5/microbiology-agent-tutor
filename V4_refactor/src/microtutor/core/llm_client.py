@@ -17,14 +17,15 @@ from microtutor.core.config_helper import config
 class LLMClient:
     """Unified client for Azure and OpenAI APIs with cost tracking."""
     
-    def __init__(self, model: Optional[str] = None, use_azure: bool = True):
+    def __init__(self, model: Optional[str] = None, use_azure: Optional[bool] = None):
         """Initialize LLM client."""
         self.model = model or config.API_MODEL_NAME
         self.cost_tracker = CostTracker()
         
-        # Check environment override
+        # Use the provided use_azure parameter, but allow environment override if not explicitly set
         use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
-        self.use_azure = use_azure_env
+        # If use_azure is explicitly provided (not None), use it; otherwise use environment
+        self.use_azure = use_azure if use_azure is not None else use_azure_env
         
         # Initialize appropriate client
         if self.use_azure:

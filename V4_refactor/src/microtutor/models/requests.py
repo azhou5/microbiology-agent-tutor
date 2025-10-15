@@ -126,6 +126,10 @@ class ChatRequest(BaseModel):
         None,
         description="LLM model to use for this chat"
     )
+    model_provider: Optional[str] = Field(
+        None,
+        description="Model provider: 'azure' or 'personal'"
+    )
     feedback_enabled: Optional[bool] = Field(
         True,
         description="Whether to enable AI feedback for this request"
