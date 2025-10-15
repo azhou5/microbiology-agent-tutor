@@ -30,13 +30,15 @@ class MicroTutorToolEngine:
             from microtutor.tools.socratic import SocraticTool
             from microtutor.tools.hint import HintTool
             from microtutor.tools.ddx_case_search import DDXCaseSearchTool
+            from microtutor.tools.update_phase import UpdatePhaseTool
             
             register_tool_class("PatientTool", PatientTool)
             register_tool_class("SocraticTool", SocraticTool)
             register_tool_class("HintTool", HintTool)
             register_tool_class("DDXCaseSearchTool", DDXCaseSearchTool)
+            register_tool_class("UpdatePhaseTool", UpdatePhaseTool)
             
-            logger.info("Registered 4 tool classes")
+            logger.info("Registered 5 tool classes")
         except ImportError as e:
             logger.warning(f"Could not import tool classes: {e}")
     

@@ -30,13 +30,18 @@ except ImportError:
         """Fallback config class that reads from environment."""
         
         # LLM Configuration
-        API_MODEL_NAME = os.getenv("API_MODEL_NAME", "gpt-4")
+        USE_AZURE_OPENAI = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
+        API_MODEL_NAME = (
+            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "o4-mini-0416")
+            if USE_AZURE_OPENAI
+            else os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
+        )
         LLM_BACKEND = os.getenv("LLM_BACKEND", "azure")
         
         # Azure OpenAI
         AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
         AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
-        AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+        AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
         
         # OpenAI
         OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

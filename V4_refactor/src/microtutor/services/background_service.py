@@ -31,6 +31,7 @@ class TaskType(Enum):
     ANALYTICS = "analytics"
     COST_CALCULATION = "cost_calculation"
     METRICS_COLLECTION = "metrics_collection"
+    FAISS_INDEX_UPDATE = "faiss_index_update"
 
 
 @dataclass
@@ -160,6 +161,8 @@ class BackgroundTaskService:
             self._process_cost_calculation(task.data)
         elif task.task_type == TaskType.METRICS_COLLECTION:
             self._process_metrics(task.data)
+        elif task.task_type == TaskType.FAISS_INDEX_UPDATE:
+            self._process_faiss_index_update(task.data)
         else:
             logger.warning(f"Unknown task type: {task.task_type}")
     
@@ -297,6 +300,9 @@ class BackgroundTaskService:
                 
             logger.info(f"Feedback saved to database for case {data.get('case_id')}")
             
+            # Trigger FAISS index update (low priority)
+            self.update_faiss_indices_async(force_update=False)
+            
         except Exception as e:
             logger.error(f"Feedback processing failed: {e}")
             # Fall back to file logging
@@ -339,6 +345,9 @@ class BackgroundTaskService:
                 
             logger.info(f"Case feedback saved to database for case {data.get('case_id')}")
             
+            # Trigger FAISS index update (low priority)
+            self.update_faiss_indices_async(force_update=False)
+            
         except Exception as e:
             logger.error(f"Case feedback processing failed: {e}")
             # Fall back to file logging
@@ -379,6 +388,28 @@ class BackgroundTaskService:
             
         except Exception as e:
             logger.error(f"Metrics collection failed: {e}")
+    
+    def _process_faiss_index_update(self, data: Dict[str, Any]) -> None:
+        """Process FAISS index update."""
+        try:
+            logger.info("Updating FAISS indices from database feedback...")
+            
+            from microtutor.feedback.auto_faiss_generator import get_auto_faiss_generator
+            
+            generator = get_auto_faiss_generator()
+            force_update = data.get('force_update', False)
+            
+            result = generator.generate_indices(force_update=force_update)
+            
+            if result['status'] == 'success':
+                logger.info(f"Successfully updated FAISS indices: {result['metadata']}")
+            elif result['status'] == 'skipped':
+                logger.info(f"FAISS index update skipped: {result['reason']}")
+            else:
+                logger.error(f"FAISS index update failed: {result['reason']}")
+                
+        except Exception as e:
+            logger.error(f"FAISS index update failed: {e}")
     
     def _init_database_pool(self) -> None:
         """Initialize database connection pool."""
@@ -472,6 +503,18 @@ class BackgroundTaskService:
                 'timestamp': datetime.utcnow()
             },
             priority=2
+        )
+        return self.submit_task(task)
+    
+    def update_faiss_indices_async(self, force_update: bool = False) -> bool:
+        """Update FAISS indices asynchronously."""
+        task = BackgroundTask(
+            task_type=TaskType.FAISS_INDEX_UPDATE,
+            data={
+                'force_update': force_update,
+                'timestamp': datetime.utcnow()
+            },
+            priority=1  # Lower priority than feedback processing
         )
         return self.submit_task(task)
     

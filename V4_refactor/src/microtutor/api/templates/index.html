@@ -27,10 +27,12 @@
             </ol>
         </div>
 
+
         <div class="case-setup">
             <label for="organism-select">Select Organism:</label>
             <select id="organism-select">
                 <option value="">-- Choose an organism --</option>
+                <option value="random">🎲 Random (No Repeats)</option>
                 <optgroup label="Bacteria">
                     <option value="staphylococcus aureus">Staphylococcus aureus</option>
                     <option value="escherichia coli">Escherichia coli</option>
@@ -76,34 +78,141 @@
             </div>
         </div>
 
-        <div id="chatbox" class="chatbox">
-            <div class="welcome-message">
-                <p>👋 Welcome to MicroTutor V4!</p>
-                <p>Select an organism above and click "Start New Case" to begin your interactive microbiology case
-                    study.</p>
-            </div>
-        </div>
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Chat Area -->
+            <div class="chat-container">
+                <div id="chatbox" class="chatbox">
+                    <div class="welcome-message">
+                        <p>👋 Welcome to MicroTutor V4!</p>
+                        <p>Select an organism above and click "Start New Case" to begin your interactive microbiology
+                            case
+                            study.</p>
+                    </div>
+                </div>
 
-        <div id="input-area" class="input-area">
-            <textarea id="user-input" placeholder="Enter your message or use voice..." rows="1" disabled></textarea>
-            <div class="button-group">
-                <button id="voice-btn" class="btn btn-voice" title="Click to start/stop recording">
-                    🎤
-                </button>
-                <button id="send-btn" class="btn btn-success" disabled>
-                    <span class="btn-icon">📤</span> Send
-                </button>
-                <button id="finish-btn" class="btn btn-warning" disabled>
-                    <span class="btn-icon">🏁</span> Finish Case
-                </button>
+                <div id="input-area" class="input-area">
+                    <textarea id="user-input" placeholder="Enter your message or use voice..." rows="1"
+                        disabled></textarea>
+                    <div class="button-group">
+                        <button id="voice-btn" class="btn btn-voice" title="Click to start/stop recording">
+                            🎤 Voice
+                        </button>
+                        <button id="send-btn" class="btn btn-success" disabled>
+                            <span class="btn-icon">📤</span> Send
+                        </button>
+                        <button id="finish-btn" class="btn btn-warning" disabled>
+                            <span class="btn-icon">🏁</span> Finish Case
+                        </button>
+                    </div>
+                    <div class="voice-controls">
+                        <p id="voice-status" class="voice-status">🎤 Initializing...</p>
+                        <audio id="response-audio" controls hidden></audio>
+                    </div>
+                </div>
             </div>
-            <div class="voice-controls">
-                <p id="voice-status" class="voice-status">🎤 Initializing...</p>
-                <audio id="response-audio" controls hidden></audio>
+
+            <!-- Phase Progression Sidebar -->
+            <div id="phase-progression" class="phase-progression" style="display: none;">
+                <h3>🎯 Case Progress</h3>
+                <div class="phase-buttons">
+                    <button class="phase-btn" data-phase="information_gathering">
+                        <span class="phase-icon">📋</span>
+                        <span class="phase-text">Information Gathering</span>
+                    </button>
+                    <button class="phase-btn" data-phase="problem_representation">
+                        <span class="phase-icon">🧠</span>
+                        <span class="phase-text">Problem Representation</span>
+                    </button>
+                    <button class="phase-btn" data-phase="differential_diagnosis">
+                        <span class="phase-icon">🔍</span>
+                        <span class="phase-text">Differential Diagnosis</span>
+                    </button>
+                    <button class="phase-btn" data-phase="tests">
+                        <span class="phase-icon">🧪</span>
+                        <span class="phase-text">Tests</span>
+                    </button>
+                    <button class="phase-btn" data-phase="management">
+                        <span class="phase-icon">💊</span>
+                        <span class="phase-text">Management</span>
+                    </button>
+                    <button class="phase-btn" data-phase="feedback">
+                        <span class="phase-icon">✅</span>
+                        <span class="phase-text">Feedback</span>
+                    </button>
+                </div>
+                <div class="phase-guidance">
+                    <p id="phase-guidance-text">Start by gathering patient history and examination findings.</p>
+                </div>
             </div>
         </div>
 
         <p id="status-message" class="status"></p>
+
+        <!-- Compact Feedback Dashboard -->
+        <div id="feedback-dashboard" class="feedback-dashboard compact">
+            <div class="dashboard-header">
+                <h3>📊 Live Feedback Analytics</h3>
+                <div class="dashboard-controls">
+                    <button id="refresh-stats-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    <label class="auto-refresh-toggle">
+                        <input type="checkbox" id="auto-refresh-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Auto-refresh (30s)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Statistics Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">💬</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Message Feedback</div>
+                        <div id="message-feedback-count" class="stat-value">Loading...</div>
+                        <div class="stat-trend" id="message-trend">+0 today</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Case Feedback</div>
+                        <div id="case-feedback-count" class="stat-value">Loading...</div>
+                        <div class="stat-trend" id="case-trend">+0 today</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⭐</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Avg Rating</div>
+                        <div id="avg-rating" class="stat-value">Loading...</div>
+                        <div class="stat-trend" id="rating-trend">+0.0 vs yesterday</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🕒</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Last Updated</div>
+                        <div id="last-updated" class="stat-value">Never</div>
+                        <div class="stat-trend" id="update-trend">System active</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feedback Trends Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h4>📈 Feedback Trends Over Time</h4>
+                    <div class="chart-controls">
+                        <button id="toggle-chart-btn" class="btn btn-small">📊 Toggle Chart</button>
+                    </div>
+                </div>
+                <div id="feedback-chart" class="chart">
+                    <canvas id="trends-canvas" width="800" height="300"></canvas>
+                </div>
+            </div>
+
+        </div>
 
         <footer>
             <p>Powered by FastAPI & OpenAI | Version 4.0.0</p>
@@ -170,6 +279,8 @@
         </div>
     </div>
 
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/static/js/script.js"></script>
 </body>
 

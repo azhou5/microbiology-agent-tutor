@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from microtutor.models.responses import ErrorResponse
-from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database, database_mock
+from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database, database_mock, faiss_management, analytics
 from microtutor.core.startup import get_lifespan
 
 # Try to import guidelines router (optional)
@@ -137,6 +137,14 @@ try:
 except Exception as e:
     app.include_router(database_mock.router, prefix="/api/v1/db", tags=["database-mock"])
     logger.warning(f"⚠️  Mock database routes enabled (database error: {e})")
+
+# Include FAISS management routes
+app.include_router(faiss_management.router, prefix="/api/v1/faiss", tags=["faiss-management"])
+logger.info("✅ FAISS management routes enabled")
+
+# Include analytics routes
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
+logger.info("✅ Analytics routes enabled")
 
 # Include optional guidelines router
 if GUIDELINES_AVAILABLE:

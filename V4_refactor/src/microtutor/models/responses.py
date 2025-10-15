@@ -39,7 +39,7 @@ class StartCaseResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "initial_message": "Welcome! Let me present a 45-year-old patient...",
                 "history": [
@@ -91,7 +91,7 @@ class ChatResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "response": "The patient's temperature is 38.5°C, indicating fever.",
                 "history": [
@@ -130,7 +130,7 @@ class FeedbackResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "status": "Feedback received",
                 "feedback_id": 12345
@@ -157,7 +157,7 @@ class CaseFeedbackResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "status": "Case feedback received",
                 "feedback_id": 67890
@@ -194,7 +194,7 @@ class ErrorResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "error": "No active case ID. Please start a new case.",
                 "error_code": "NO_CASE_ID",
@@ -223,7 +223,7 @@ class OrganismListResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "organisms": [
                     "staphylococcus aureus",
@@ -259,7 +259,7 @@ class HealthCheckResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "status": "healthy",
                 "timestamp": "2024-10-13T12:34:56.789Z",
@@ -287,7 +287,7 @@ class VoiceTranscriptionResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "text": "What are the patient's vital signs?",
                 "language": "en"
@@ -334,7 +334,7 @@ class VoiceChatResponse(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "transcribed_text": "What symptoms does the patient have?",
                 "response_text": "I've been experiencing fever and chills for 3 days.",

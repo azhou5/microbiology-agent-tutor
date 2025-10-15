@@ -93,7 +93,7 @@ def main():
         from microtutor.api.app import app
         
         # Get port from environment (Render sets this)
-        port = int(os.getenv("PORT", "5001"))
+        port = int(os.getenv("PORT", "10000"))
         
         logger.info(f"Starting server on port {port}")
         

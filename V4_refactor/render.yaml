@@ -7,6 +7,8 @@ services:
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
+      # Copy environment file to expected location
+      cp dot_env_microtutor.txt src/dot_env_microtutor.txt || echo "Environment file not found, using environment variables"
     startCommand: cd V4_refactor && ./start.sh
     envVars:
       # Application Settings
@@ -27,14 +29,14 @@ services:
 
       # LLM Configuration
       - key: USE_AZURE_OPENAI
-        value: true # Set to false to use personal OpenAI
+        value: true # Set to true to use Azure OpenAI
       - key: AZURE_OPENAI_API_KEY
         sync: false # Set this in Render dashboard
       - key: AZURE_OPENAI_ENDPOINT
         sync: false # Set this in Render dashboard
       - key: AZURE_OPENAI_API_VERSION
-        value: "2025-04-16"
-      - key: AZURE_OPENAI_O4_MINI_DEPLOYMENT
+        value: "2024-12-01-preview"
+      - key: AZURE_OPENAI_DEPLOYMENT_NAME
         value: "o4-mini-0416"
 
       # Personal OpenAI (alternative to Azure)

@@ -52,9 +52,11 @@ class LLMClient:
             
             # Load deployment mapping
             self.deployment_map = {}
-            o4_deployment = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT")
-            if o4_deployment:
-                self.deployment_map['o4-mini-0416'] = o4_deployment
+            deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+            if deployment_name:
+                # Map both the old name and the actual deployment name
+                self.deployment_map['o4-mini-0416'] = deployment_name
+                self.deployment_map[deployment_name] = deployment_name
             
             print(f"Azure OpenAI client initialized (API version: {api_version})")
         except Exception as e:
@@ -82,20 +84,47 @@ class LLMClient:
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
         tools: Optional[List[Dict]] = None,
-        retries: int = 3
+        retries: int = 3,
+        fallback_model: Optional[str] = None
     ) -> Union[str, Dict]:
         """
-        Generate response from LLM.
+        Generate response from LLM with automatic retry for empty responses and fallback model.
+        
+        Args:
+            messages: List of message dictionaries
+            model: Primary model to use
+            tools: Optional tool schemas
+            retries: Number of retry attempts
+            fallback_model: Fallback model to try if primary model fails
         
         Returns:
             str: Text response (normal)
             Dict: {'content': str, 'tool_calls': list} if tools were called
+            None: If all retries failed on both models
         """
         if not self.client:
             raise Exception("LLM client not initialized")
         
-        model = model or self.model
+        primary_model = model or self.model
+        fallback_model = fallback_model or "gpt-4.1"
         
+        # Try primary model first
+        result = self._try_model(primary_model, messages, tools, retries)
+        if result is not None:
+            return result
+        
+        # If primary model failed, try fallback model
+        if fallback_model != primary_model:
+            print(f"Primary model {primary_model} failed, trying fallback model {fallback_model}")
+            result = self._try_model(fallback_model, messages, tools, retries)
+            if result is not None:
+                return result
+        
+        print(f"Error: Both primary model {primary_model} and fallback model {fallback_model} failed")
+        return None
+    
+    def _try_model(self, model: str, messages: List[Dict[str, str]], tools: Optional[List[Dict]], retries: int) -> Union[str, Dict, None]:
+        """Try a specific model with retries."""
         for attempt in range(retries):
             try:
                 # Get deployment name for Azure
@@ -130,26 +159,40 @@ class LLMClient:
                 
                 self.cost_tracker.add_usage(model, usage, input_text, output_text)
                 
-                # Return tool calls if present
+                # Check for empty response
                 message = response.choices[0].message
+                content = message.content or ""
+                
+                # If we have tool calls, return them regardless of content
                 if tools and hasattr(message, 'tool_calls') and message.tool_calls:
                     return {
-                        'content': message.content,
+                        'content': content,
                         'tool_calls': message.tool_calls
                     }
                 
-                return message.content
+                # For text responses, check if content is not empty
+                if content.strip():
+                    return content
+                else:
+                    print(f"Warning: Empty response from {model} (attempt {attempt + 1}/{retries})")
+                    if attempt < retries - 1:
+                        time.sleep(1)  # Short delay before retry
+                        continue
+                    else:
+                        print(f"Error: {model} returned empty response after {retries} attempts")
+                        return None
                 
             except openai.APIError as e:
-                print(f"API Error: {e} (attempt {attempt + 1}/{retries})")
+                print(f"API Error with {model}: {e} (attempt {attempt + 1}/{retries})")
             except openai.RateLimitError as e:
-                print(f"Rate limit: {e} (attempt {attempt + 1}/{retries})")
+                print(f"Rate limit with {model}: {e} (attempt {attempt + 1}/{retries})")
             except Exception as e:
-                print(f"Error: {e} (attempt {attempt + 1}/{retries})")
+                print(f"Error with {model}: {e} (attempt {attempt + 1}/{retries})")
             
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)  # Exponential backoff
         
+        print(f"Error: {model} failed after {retries} attempts")
         return None
     
     def get_cost_summary(self) -> Dict:

@@ -35,7 +35,7 @@ class Message(BaseModel):
     
     class Config:
         """Pydantic config."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "role": "user",
                 "content": "What are the patient's vital signs?"
@@ -81,7 +81,7 @@ class StartCaseRequest(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "organism": "staphylococcus aureus",
                 "case_id": "case_2024_abc123",
@@ -143,7 +143,7 @@ class ChatRequest(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "message": "What are the patient's vital signs?",
                 "history": [
@@ -204,7 +204,7 @@ class FeedbackRequest(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "rating": 4,
                 "message": "The patient's temperature is 38.5°C...",
@@ -256,7 +256,7 @@ class CaseFeedbackRequest(BaseModel):
     
     class Config:
         """Pydantic config with example."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "detail": 5,
                 "helpfulness": 4,

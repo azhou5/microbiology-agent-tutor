@@ -15,6 +15,9 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Import database engine from dependencies
+from microtutor.api.dependencies import _engine
+
 
 @router.get(
     "/feedback",
@@ -36,7 +39,6 @@ async def get_feedback_data(
     """
     try:
         # Use the same database engine as the app
-        from microtutor.api.dependencies import _engine
         
         if _engine is None:
             raise HTTPException(
@@ -107,7 +109,6 @@ async def get_database_stats() -> Dict[str, Any]:
         Dictionary with database statistics
     """
     try:
-        from microtutor.api.dependencies import _engine
         
         if _engine is None:
             raise HTTPException(
@@ -117,7 +118,7 @@ async def get_database_stats() -> Dict[str, Any]:
         
         with _engine.connect() as conn:
             # Get table counts
-            tables = ["case_feedback", "conversation_logs", "cases", "cost_logs"]
+            tables = ["case_feedback", "conversation_log", "feedback"]
             stats = {}
             
             for table in tables:
@@ -133,6 +134,7 @@ async def get_database_stats() -> Dict[str, Any]:
             org_query = """
                 SELECT organism, COUNT(*) as count
                 FROM case_feedback 
+                WHERE organism IS NOT NULL
                 GROUP BY organism 
                 ORDER BY count DESC
             """
@@ -150,6 +152,9 @@ async def get_database_stats() -> Dict[str, Any]:
                     AVG(CAST(accuracy_rating AS INTEGER)) as avg_accuracy,
                     COUNT(*) as total_ratings
                 FROM case_feedback
+                WHERE detail_rating IS NOT NULL 
+                  AND helpfulness_rating IS NOT NULL 
+                  AND accuracy_rating IS NOT NULL
             """
             rating_result = conn.execute(text(rating_query)).fetchone()
             
@@ -188,7 +193,6 @@ async def list_database_tables() -> Dict[str, Any]:
         Dictionary with table information
     """
     try:
-        from microtutor.api.dependencies import _engine
         
         if _engine is None:
             raise HTTPException(

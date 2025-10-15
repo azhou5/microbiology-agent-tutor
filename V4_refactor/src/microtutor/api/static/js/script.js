@@ -27,6 +27,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const thresholdSlider = document.getElementById('threshold-slider');
     const thresholdValue = document.getElementById('threshold-value');
 
+    // Dashboard elements
+    const messageFeedbackCount = document.getElementById('message-feedback-count');
+    const caseFeedbackCount = document.getElementById('case-feedback-count');
+    const avgRating = document.getElementById('avg-rating');
+    const lastUpdated = document.getElementById('last-updated');
+    const refreshStatsBtn = document.getElementById('refresh-stats-btn');
+    const autoRefreshToggle = document.getElementById('auto-refresh-toggle');
+
+    // Chart elements
+    const trendsCanvas = document.getElementById('trends-canvas');
+    const toggleChartBtn = document.getElementById('toggle-chart-btn');
+
+    // Trend elements
+    const messageTrend = document.getElementById('message-trend');
+    const caseTrend = document.getElementById('case-trend');
+    const ratingTrend = document.getElementById('rating-trend');
+    const updateTrend = document.getElementById('update-trend');
+
     // API Configuration
     const API_BASE = '/api/v1';
 
@@ -34,10 +52,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
     let currentCaseId = null;
     let currentOrganismKey = null;
+    let currentPhase = 'information_gathering';
+    let phaseHistory = [];
 
     // Feedback state
     let feedbackEnabled = true;
     let feedbackThreshold = 0.7;
+
+    // Dashboard state
+    let chartInstance = null;
+    let chartVisible = true;
 
     // Voice state
     let mediaRecorder = null;
@@ -47,11 +71,58 @@ document.addEventListener('DOMContentLoaded', () => {
     let voiceInitialized = false; // Track if we've attempted initialization
     let recordingStartTime = null; // Track when recording started
 
+    // Feedback counter state
+    let autoRefreshInterval = null;
+    let isRefreshing = false;
+
     // LocalStorage keys
     const STORAGE_KEYS = {
         HISTORY: 'microtutor_v4_chat_history',
         CASE_ID: 'microtutor_v4_case_id',
-        ORGANISM: 'microtutor_v4_organism'
+        ORGANISM: 'microtutor_v4_organism',
+        SEEN_ORGANISMS: 'microtutor_v4_seen_organisms',
+        PHASE: 'microtutor_v4_current_phase',
+        PHASE_HISTORY: 'microtutor_v4_phase_history'
+    };
+
+    // Phase definitions and guidance
+    const PHASE_DEFINITIONS = {
+        information_gathering: {
+            name: 'Information Gathering',
+            icon: '📋',
+            guidance: 'Gather key history and examination findings from the patient. Ask about symptoms, duration, and physical exam.',
+            nextPhase: 'problem_representation'
+        },
+        problem_representation: {
+            name: 'Problem Representation',
+            icon: '🧠',
+            guidance: 'Present illness script. Summarize the key findings and your initial clinical reasoning.',
+            nextPhase: 'differential_diagnosis'
+        },
+        differential_diagnosis: {
+            name: 'Differential Diagnosis',
+            icon: '🔍',
+            guidance: 'List differential diagnoses and their reasoning. Consider the most likely causes based on your findings.',
+            nextPhase: 'tests'
+        },
+        tests: {
+            name: 'Tests',
+            icon: '🧪',
+            guidance: 'Order relevant investigations to narrow down your differentials. Consider what would confirm or rule out each diagnosis.',
+            nextPhase: 'management'
+        },
+        management: {
+            name: 'Management',
+            icon: '💊',
+            guidance: 'Propose treatments and follow-up plan. Consider both immediate and long-term management.',
+            nextPhase: 'feedback'
+        },
+        feedback: {
+            name: 'Feedback',
+            icon: '✅',
+            guidance: 'Receive feedback on the case. Review your performance and clinical reasoning.',
+            nextPhase: null
+        }
     };
 
     /**
@@ -62,9 +133,12 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(chatHistory));
             localStorage.setItem(STORAGE_KEYS.CASE_ID, currentCaseId || '');
             localStorage.setItem(STORAGE_KEYS.ORGANISM, currentOrganismKey || '');
+            localStorage.setItem(STORAGE_KEYS.PHASE, currentPhase);
+            localStorage.setItem(STORAGE_KEYS.PHASE_HISTORY, JSON.stringify(phaseHistory));
             console.log('[SAVE] State saved:', {
                 historyLength: chatHistory.length,
-                caseId: currentCaseId
+                caseId: currentCaseId,
+                phase: currentPhase
             });
         } catch (e) {
             console.error('[SAVE] Error saving state:', e);
@@ -80,11 +154,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const savedHistory = localStorage.getItem(STORAGE_KEYS.HISTORY);
             const savedCaseId = localStorage.getItem(STORAGE_KEYS.CASE_ID);
             const savedOrganism = localStorage.getItem(STORAGE_KEYS.ORGANISM);
+            const savedPhase = localStorage.getItem(STORAGE_KEYS.PHASE);
+            const savedPhaseHistory = localStorage.getItem(STORAGE_KEYS.PHASE_HISTORY);
 
             if (savedHistory && savedCaseId && savedOrganism) {
                 chatHistory = JSON.parse(savedHistory);
                 currentCaseId = savedCaseId;
                 currentOrganismKey = savedOrganism;
+                currentPhase = savedPhase || 'information_gathering';
+                phaseHistory = savedPhaseHistory ? JSON.parse(savedPhaseHistory) : [];
 
                 if (chatHistory.length > 0) {
                     chatbox.innerHTML = '';
@@ -97,6 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     disableInput(false);
                     finishBtn.disabled = false;
                     organismSelect.value = currentOrganismKey;
+                    showPhaseProgression();
+                    updatePhaseUI();
                     setStatus(`Resumed case. Case ID: ${currentCaseId}`);
                     console.log('[LOAD] State loaded successfully');
                     return true;
@@ -117,10 +197,291 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.removeItem(STORAGE_KEYS.HISTORY);
             localStorage.removeItem(STORAGE_KEYS.CASE_ID);
             localStorage.removeItem(STORAGE_KEYS.ORGANISM);
+            localStorage.removeItem(STORAGE_KEYS.PHASE);
+            localStorage.removeItem(STORAGE_KEYS.PHASE_HISTORY);
             console.log('[CLEAR] State cleared');
         } catch (e) {
             console.error('[CLEAR] Error clearing state:', e);
         }
+    }
+
+    /**
+     * Show phase progression UI
+     */
+    function showPhaseProgression() {
+        const phaseProgression = document.getElementById('phase-progression');
+        if (phaseProgression) {
+            phaseProgression.style.display = 'block';
+        }
+    }
+
+    /**
+     * Hide phase progression UI
+     */
+    function hidePhaseProgression() {
+        const phaseProgression = document.getElementById('phase-progression');
+        if (phaseProgression) {
+            phaseProgression.style.display = 'none';
+        }
+    }
+
+    /**
+     * Update phase UI based on current state
+     */
+    function updatePhaseUI() {
+        const phaseButtons = document.querySelectorAll('.phase-btn');
+        const guidanceText = document.getElementById('phase-guidance-text');
+
+        if (!phaseButtons.length || !guidanceText) return;
+
+        // Reset all buttons
+        phaseButtons.forEach(btn => {
+            btn.classList.remove('active', 'completed');
+            btn.disabled = false; // Make all buttons clickable
+        });
+
+        // Set active phase
+        phaseButtons.forEach(btn => {
+            const phase = btn.dataset.phase;
+
+            if (phase === currentPhase) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Update guidance text
+        const phaseDef = PHASE_DEFINITIONS[currentPhase];
+        if (phaseDef) {
+            guidanceText.textContent = phaseDef.guidance;
+        }
+    }
+
+    /**
+     * Transition to a new phase
+     */
+    async function transitionToPhase(newPhase) {
+        if (!currentCaseId || !currentOrganismKey) {
+            setStatus('Please start a case first', true);
+            return;
+        }
+
+        const phaseDef = PHASE_DEFINITIONS[newPhase];
+        if (!phaseDef) {
+            console.error('[PHASE] Unknown phase:', newPhase);
+            return;
+        }
+
+        // Add phase transition to history
+        phaseHistory.push({
+            from: currentPhase,
+            to: newPhase,
+            timestamp: new Date().toISOString()
+        });
+
+        currentPhase = newPhase;
+        updatePhaseUI();
+        saveConversationState();
+
+        // Send phase transition message to tutor
+        const transitionMessage = `Let's move onto phase: ${phaseDef.name}`;
+
+        try {
+            setStatus('Transitioning to new phase...');
+            disableInput(true);
+
+            const response = await fetch(`${API_BASE}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: transitionMessage,
+                    case_id: currentCaseId,
+                    organism_key: currentOrganism,
+                    history: chatHistory,
+                    feedback_enabled: feedbackEnabled,
+                    feedback_threshold: feedbackThreshold
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Add user message
+            addMessage('user', transitionMessage);
+            chatHistory.push({ role: 'user', content: transitionMessage });
+
+            // Add assistant response
+            addMessage('assistant', data.content);
+            chatHistory.push({ role: 'assistant', content: data.content });
+
+            setStatus('');
+            disableInput(false);
+            saveConversationState();
+
+        } catch (error) {
+            console.error('[PHASE] Error transitioning phase:', error);
+            setStatus(`Error transitioning phase: ${error.message}`, true);
+            disableInput(false);
+        }
+    }
+
+    /**
+     * Update phase locking state
+     */
+    function updatePhaseLocking(isLocked) {
+        const phaseButtons = document.querySelectorAll('.phase-btn');
+        phaseButtons.forEach(btn => {
+            if (isLocked) {
+                btn.classList.add('locked');
+                btn.title = 'Phase is locked - complete current phase first';
+            } else {
+                btn.classList.remove('locked');
+                btn.title = '';
+            }
+        });
+    }
+
+    /**
+     * Update phase progress indicator
+     */
+    function updatePhaseProgress(progress) {
+        const activeBtn = document.querySelector('.phase-btn.active');
+        if (activeBtn) {
+            // Add progress bar or visual indicator
+            let progressBar = activeBtn.querySelector('.progress-bar');
+            if (!progressBar) {
+                progressBar = document.createElement('div');
+                progressBar.className = 'progress-bar';
+                activeBtn.appendChild(progressBar);
+            }
+            progressBar.style.width = `${progress * 100}%`;
+        }
+    }
+
+    /**
+     * Update phase guidance text
+     */
+    function updatePhaseGuidance(guidance) {
+        const guidanceText = document.getElementById('phase-guidance-text');
+        if (guidanceText && guidance) {
+            guidanceText.textContent = guidance;
+        }
+    }
+
+    /**
+     * Update completion criteria
+     */
+    function updateCompletionCriteria(criteria) {
+        const guidanceDiv = document.querySelector('.phase-guidance');
+        if (guidanceDiv && criteria && criteria.length > 0) {
+            let criteriaDiv = guidanceDiv.querySelector('.completion-criteria');
+            if (!criteriaDiv) {
+                criteriaDiv = document.createElement('div');
+                criteriaDiv.className = 'completion-criteria';
+                criteriaDiv.innerHTML = '<strong>Completion Criteria:</strong><ul></ul>';
+                guidanceDiv.appendChild(criteriaDiv);
+            }
+
+            const criteriaList = criteriaDiv.querySelector('ul');
+            criteriaList.innerHTML = criteria.map(c => `<li>${c}</li>`).join('');
+        }
+    }
+
+    /**
+     * Get all available organisms from the select element
+     */
+    function getAllOrganisms() {
+        const organisms = [];
+        const optgroups = organismSelect.getElementsByTagName('optgroup');
+
+        for (let group of optgroups) {
+            const groupOptions = group.getElementsByTagName('option');
+            for (let option of groupOptions) {
+                if (option.value && option.value !== 'random') {
+                    organisms.push(option.value);
+                }
+            }
+        }
+        return organisms;
+    }
+
+    /**
+     * Select a random organism using sampling without replacement
+     */
+    function selectRandomOrganism() {
+        console.log('[RANDOM] Starting random organism selection');
+
+        const allAvailableOrganisms = getAllOrganisms();
+
+        if (allAvailableOrganisms.length === 0) {
+            console.log('[RANDOM] No organisms available');
+            setStatus('No organisms available to start a case.', true);
+            return null;
+        }
+
+        // Get seen organisms from localStorage
+        let seenOrganisms = [];
+        try {
+            const savedSeen = localStorage.getItem(STORAGE_KEYS.SEEN_ORGANISMS);
+            if (savedSeen) {
+                seenOrganisms = JSON.parse(savedSeen);
+            }
+        } catch (e) {
+            console.error('[RANDOM] Error parsing seen organisms:', e);
+            seenOrganisms = [];
+        }
+
+        console.log('[RANDOM] Previously seen organisms:', seenOrganisms);
+
+        // Determine unseen organisms
+        let unseenOrganisms = allAvailableOrganisms.filter(o => !seenOrganisms.includes(o));
+        console.log('[RANDOM] Unseen organisms:', unseenOrganisms);
+
+        // Check if we need to reset
+        if (unseenOrganisms.length === 0 && allAvailableOrganisms.length > 0) {
+            console.log('[RANDOM] All organisms have been seen. Resetting the list.');
+            localStorage.removeItem(STORAGE_KEYS.SEEN_ORGANISMS);
+            seenOrganisms = [];
+            unseenOrganisms = allAvailableOrganisms;
+            setStatus('You have completed all available organisms! The cycle will now repeat.');
+
+            // Try to avoid the very last organism from the previous cycle
+            if (unseenOrganisms.length > 1 && currentOrganismKey) {
+                const finalPool = unseenOrganisms.filter(o => o !== currentOrganismKey);
+                if (finalPool.length > 0) {
+                    unseenOrganisms = finalPool;
+                    console.log(`[RANDOM] Starting new cycle, avoiding last organism '${currentOrganismKey}'`);
+                }
+            }
+        }
+
+        // Select from the available pool
+        const optionsToUse = unseenOrganisms;
+        if (optionsToUse.length === 0) {
+            console.error('[RANDOM] No options to select from');
+            return null;
+        }
+
+        const randomIndex = Math.floor(Math.random() * optionsToUse.length);
+        const randomOrganismValue = optionsToUse[randomIndex];
+        console.log(`[RANDOM] Selected random organism: ${randomOrganismValue}`);
+
+        // Update the select element to show the random selection
+        organismSelect.value = 'random';
+        organismSelect.dataset.randomlySelectedValue = randomOrganismValue;
+
+        // Find the display text for the selected organism
+        const allOptions = getAllOrganisms();
+        const matchedOption = Array.from(organismSelect.options).find(opt => opt.value === randomOrganismValue);
+        const randomOrganismText = matchedOption ? matchedOption.textContent : randomOrganismValue;
+        organismSelect.dataset.randomlySelectedText = randomOrganismText;
+
+        console.log(`[RANDOM] Random selection complete: ${randomOrganismValue} (${randomOrganismText})`);
+        return randomOrganismValue;
     }
 
     /**
@@ -130,18 +491,82 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'case_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
 
+    // Track the last tool used to determine speaker
+    let lastToolUsed = null;
+
+    /**
+     * Set the last tool used (called when processing tool responses)
+     */
+    function setLastToolUsed(toolName) {
+        lastToolUsed = toolName;
+    }
+
+    /**
+     * Detect speaker type based on tool usage flow
+     */
+    function detectSpeakerType(messageContent) {
+        // If we know the last tool used, determine speaker based on that
+        if (lastToolUsed) {
+            switch (lastToolUsed) {
+                case 'patient':
+                    return 'patient';
+                case 'socratic':
+                    return 'socratic';
+                case 'hint':
+                    return 'hint';
+                case 'update_phase':
+                    return 'tutor'; // Phase updates are from tutor
+                default:
+                    return 'tutor';
+            }
+        }
+
+        // Fallback: if no tool info, assume tutor
+        return 'tutor';
+    }
+
+    /**
+     * Get avatar for speaker type
+     */
+    function getSpeakerAvatar(speakerType) {
+        const avatars = {
+            'patient': '🏥',      // Hospital emoji for patient
+            'tutor': '👨‍🏫',      // Teacher emoji for tutor
+            'socratic': '🤔',     // Thinking emoji for socratic agent
+            'hint': '💡'          // Lightbulb emoji for hints
+        };
+        return avatars[speakerType] || '👨‍🏫';
+    }
+
     /**
      * Add a message to the chatbox
      */
-    function addMessage(sender, messageContent, addFeedbackUI = false) {
+    function addMessage(sender, messageContent, addFeedbackUI = false, speakerType = null) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'assistant-message');
         const messageId = 'msg-' + Date.now();
         messageDiv.id = messageId;
 
+        // Create message content wrapper
+        const messageContentDiv = document.createElement('div');
+        messageContentDiv.classList.add('message-content');
+
+        // Add avatar for assistant messages
+        if (sender === 'assistant') {
+            const detectedSpeakerType = speakerType || detectSpeakerType(messageContent);
+            const avatar = getSpeakerAvatar(detectedSpeakerType);
+
+            const avatarSpan = document.createElement('span');
+            avatarSpan.textContent = avatar;
+            avatarSpan.classList.add('message-avatar');
+            messageContentDiv.appendChild(avatarSpan);
+        }
+
         const messageTextSpan = document.createElement('span');
         messageTextSpan.textContent = messageContent;
-        messageDiv.appendChild(messageTextSpan);
+        messageContentDiv.appendChild(messageTextSpan);
+
+        messageDiv.appendChild(messageContentDiv);
 
         // Add feedback UI for assistant messages
         if (sender === 'assistant' && addFeedbackUI) {
@@ -303,6 +728,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             setStatus('Feedback submitted — thank you!');
+
+            // Refresh dashboard data
+            loadDashboardData();
         } catch (error) {
             console.error('[FEEDBACK] Error:', error);
             setStatus(`Error: ${error.message}`, true);
@@ -336,7 +764,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleStartCase() {
         console.log('[START_CASE] Starting new case...');
 
-        const selectedOrganism = organismSelect.value;
+        let selectedOrganism = organismSelect.value;
+
+        // Handle random selection
+        if (selectedOrganism === 'random') {
+            selectedOrganism = selectRandomOrganism();
+            if (!selectedOrganism) {
+                setStatus('Failed to select random organism.', true);
+                return;
+            }
+        }
+
         if (!selectedOrganism) {
             setStatus('Please select an organism first.', true);
             return;
@@ -386,7 +824,23 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus(`Case started. Case ID: ${currentCaseId}`);
             disableInput(false);
             finishBtn.disabled = false;
+            showPhaseProgression();
+            updatePhaseUI();
             saveConversationState();
+
+            // Update seen organisms list for random selection
+            try {
+                const savedSeen = localStorage.getItem(STORAGE_KEYS.SEEN_ORGANISMS);
+                let seenOrganisms = savedSeen ? JSON.parse(savedSeen) : [];
+                if (!seenOrganisms.includes(currentOrganismKey)) {
+                    seenOrganisms.push(currentOrganismKey);
+                    localStorage.setItem(STORAGE_KEYS.SEEN_ORGANISMS, JSON.stringify(seenOrganisms));
+                    console.log('[START_CASE] Updated seen organisms list:', seenOrganisms);
+                }
+            } catch (e) {
+                console.error('[START_CASE] Error updating seen organisms list:', e);
+            }
+
             console.log('[START_CASE] Success!');
         } catch (error) {
             console.error('[START_CASE] Error:', error);
@@ -403,6 +857,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSendMessage() {
         const messageText = userInput.value.trim();
         if (!messageText) return;
+
+        // Validate that a case is active
+        if (!currentCaseId || !currentOrganismKey) {
+            setStatus('Please start a case first before sending messages.', true);
+            return;
+        }
 
         console.log('[CHAT] Sending message...');
 
@@ -442,9 +902,45 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             console.log('[CHAT] Response:', data);
 
+            // Set tool tracking based on backend response
+            if (data.tools_used && data.tools_used.length > 0) {
+                // Use the first tool (most relevant for speaker detection)
+                setLastToolUsed(data.tools_used[0]);
+            } else {
+                lastToolUsed = null;
+            }
+
             const messageId = addMessage('assistant', data.response, true);
             chatHistory = data.history || chatHistory;
             chatHistory.push({ role: 'assistant', content: data.response });
+
+            // Update phase information from backend metadata
+            if (data.metadata) {
+                // Update current phase
+                if (data.metadata.current_phase && data.metadata.current_phase !== currentPhase) {
+                    currentPhase = data.metadata.current_phase;
+                    updatePhaseUI();
+                    console.log('[PHASE] Backend phase update:', data.metadata.current_phase);
+                }
+
+                // Update phase locking
+                if (data.metadata.phase_locked !== undefined) {
+                    updatePhaseLocking(data.metadata.phase_locked);
+                }
+
+                // Update phase progress and guidance
+                if (data.metadata.phase_progress !== undefined) {
+                    updatePhaseProgress(data.metadata.phase_progress);
+                }
+
+                if (data.metadata.phase_guidance) {
+                    updatePhaseGuidance(data.metadata.phase_guidance);
+                }
+
+                if (data.metadata.completion_criteria) {
+                    updateCompletionCriteria(data.metadata.completion_criteria);
+                }
+            }
 
             // Display feedback examples if available
             if (data.feedback_examples && data.feedback_examples.length > 0) {
@@ -521,6 +1017,9 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus('Case feedback submitted! Thank you. You can start a new case.');
             closeFeedbackModal();
 
+            // Refresh dashboard data
+            loadDashboardData();
+
             // Reset UI
             chatbox.innerHTML = '<div class="welcome-message"><p>👋 Case completed!</p><p>Select an organism and start a new case.</p></div>';
             disableInput(true);
@@ -572,6 +1071,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (submitFeedbackBtn) {
         submitFeedbackBtn.addEventListener('click', submitCaseFeedback);
+    }
+
+    // Organism select change handler
+    if (organismSelect) {
+        organismSelect.addEventListener('change', () => {
+            if (organismSelect.value === 'random') {
+                // If random is selected, immediately trigger random selection
+                selectRandomOrganism();
+            }
+        });
     }
 
     // Skip buttons
@@ -1213,11 +1722,415 @@ document.addEventListener('DOMContentLoaded', () => {
     // END FEEDBACK CONTROL FUNCTIONALITY
     // ============================================================
 
+    // ============================================================
+    // FEEDBACK COUNTER FUNCTIONALITY
+    // ============================================================
+
+    /**
+     * Fetch feedback statistics from the API
+     */
+    async function fetchFeedbackStats() {
+        if (isRefreshing) return;
+
+        isRefreshing = true;
+        console.log('[FEEDBACK_STATS] Fetching feedback statistics...');
+
+        try {
+            // Add loading animation
+            if (caseFeedbackCount) caseFeedbackCount.classList.add('loading');
+            if (messageFeedbackCount) messageFeedbackCount.classList.add('loading');
+
+            // Fetch database stats
+            const statsResponse = await fetch(`${API_BASE}/db/stats`);
+            if (!statsResponse.ok) {
+                throw new Error(`Stats API error: ${statsResponse.status}`);
+            }
+            const statsData = await statsResponse.json();
+
+            // Fetch feedback data for message feedback count
+            const feedbackResponse = await fetch(`${API_BASE}/db/feedback?limit=1`);
+            let messageFeedbackCountValue = 0;
+            if (feedbackResponse.ok) {
+                const feedbackData = await feedbackResponse.json();
+                messageFeedbackCountValue = feedbackData.count || 0;
+            }
+
+            // Update the display
+            updateFeedbackStatsDisplay({
+                totalFeedback: (statsData.stats?.case_feedback || 0) + messageFeedbackCountValue,
+                caseFeedback: statsData.stats?.case_feedback || 0,
+                messageFeedback: messageFeedbackCountValue,
+                lastUpdated: new Date().toLocaleTimeString()
+            });
+
+            console.log('[FEEDBACK_STATS] Successfully updated stats:', {
+                total: (statsData.stats?.case_feedback || 0) + messageFeedbackCountValue,
+                case: statsData.stats?.case_feedback || 0,
+                message: messageFeedbackCountValue
+            });
+
+        } catch (error) {
+            console.error('[FEEDBACK_STATS] Error fetching stats:', error);
+            updateFeedbackStatsDisplay({
+                totalFeedback: 'Error',
+                caseFeedback: 'Error',
+                messageFeedback: 'Error',
+                lastUpdated: 'Error'
+            });
+        } finally {
+            isRefreshing = false;
+            // Remove loading animation
+            if (caseFeedbackCount) caseFeedbackCount.classList.remove('loading');
+            if (messageFeedbackCount) messageFeedbackCount.classList.remove('loading');
+        }
+    }
+
+    /**
+     * Update the feedback statistics display
+     */
+    function updateFeedbackStatsDisplay(stats) {
+        if (caseFeedbackCount) {
+            caseFeedbackCount.textContent = stats.caseFeedback;
+        }
+        if (messageFeedbackCount) {
+            messageFeedbackCount.textContent = stats.messageFeedback;
+        }
+        if (lastUpdated) {
+            lastUpdated.textContent = stats.lastUpdated;
+        }
+    }
+
+    /**
+     * Start auto-refresh for feedback stats
+     */
+    function startAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+
+        autoRefreshInterval = setInterval(() => {
+            if (autoRefreshToggle && autoRefreshToggle.checked) {
+                fetchFeedbackStats();
+            }
+        }, 30000); // 30 seconds
+
+        console.log('[FEEDBACK_STATS] Auto-refresh started (30s interval)');
+    }
+
+    /**
+     * Stop auto-refresh for feedback stats
+     */
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        console.log('[FEEDBACK_STATS] Auto-refresh stopped');
+    }
+
+    /**
+     * Initialize feedback counter functionality
+     */
+    function initializeFeedbackCounter() {
+        // Event listeners
+        if (refreshStatsBtn) {
+            refreshStatsBtn.addEventListener('click', () => {
+                console.log('[FEEDBACK_STATS] Manual refresh triggered');
+                fetchFeedbackStats();
+            });
+        }
+
+        if (autoRefreshToggle) {
+            autoRefreshToggle.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            });
+        }
+
+        // Initial load
+        fetchFeedbackStats();
+
+        // Start auto-refresh if enabled
+        if (autoRefreshToggle && autoRefreshToggle.checked) {
+            startAutoRefresh();
+        }
+
+        console.log('[FEEDBACK_STATS] Feedback counter initialized');
+    }
+
+    // ============================================================
+    // END FEEDBACK COUNTER FUNCTIONALITY
+    // ============================================================
+
+    // ============================================================
+    // DASHBOARD FUNCTIONALITY
+    // ============================================================
+
+    /**
+     * Initialize dashboard functionality
+     */
+    function initDashboard() {
+        console.log('[DASHBOARD] Initializing dashboard...');
+
+        // Load initial data
+        loadDashboardData();
+
+        // Set up event listeners
+        if (refreshStatsBtn) {
+            refreshStatsBtn.addEventListener('click', loadDashboardData);
+        }
+
+        if (autoRefreshToggle) {
+            autoRefreshToggle.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    startAutoRefresh();
+                } else {
+                    stopAutoRefresh();
+                }
+            });
+        }
+
+
+        if (toggleChartBtn) {
+            toggleChartBtn.addEventListener('click', toggleChart);
+            // Set initial button text
+            toggleChartBtn.textContent = '📊 Hide Chart';
+        }
+
+        // Start auto-refresh if enabled
+        if (autoRefreshToggle && autoRefreshToggle.checked) {
+            startAutoRefresh();
+        }
+
+        console.log('[DASHBOARD] Dashboard initialized');
+    }
+
+    /**
+     * Load dashboard data (stats, trends)
+     */
+    async function loadDashboardData() {
+        try {
+            console.log('[DASHBOARD] Loading dashboard data...');
+
+            // Load stats and trends in parallel
+            const [statsResponse, trendsResponse] = await Promise.all([
+                fetch(`${API_BASE}/analytics/feedback/stats`),
+                fetch(`${API_BASE}/analytics/feedback/trends?time_range=all`)
+            ]);
+
+            if (statsResponse.ok) {
+                const statsData = await statsResponse.json();
+                updateStatsDisplay(statsData.data);
+            }
+
+            if (trendsResponse.ok) {
+                const trendsData = await trendsResponse.json();
+                updateTrendsChart(trendsData.data);
+            }
+
+            console.log('[DASHBOARD] Dashboard data loaded successfully');
+
+        } catch (error) {
+            console.error('[DASHBOARD] Error loading dashboard data:', error);
+        }
+    }
+
+    /**
+     * Load only trends data (for time range changes)
+     */
+    async function loadTrendsData() {
+        try {
+            const response = await fetch(`${API_BASE}/analytics/feedback/trends?time_range=${timeRangeSelect.value}`);
+            if (response.ok) {
+                const data = await response.json();
+                updateTrendsChart(data.data);
+            }
+        } catch (error) {
+            console.error('[DASHBOARD] Error loading trends data:', error);
+        }
+    }
+
+    /**
+     * Update statistics display
+     */
+    function updateStatsDisplay(data) {
+        // Message feedback
+        if (messageFeedbackCount) {
+            messageFeedbackCount.textContent = data.message_feedback.total;
+        }
+        if (messageTrend) {
+            const trend = data.message_feedback.trend;
+            messageTrend.textContent = trend > 0 ? `+${trend} today` : trend < 0 ? `${trend} today` : 'No change today';
+            messageTrend.className = `stat-trend ${trend > 0 ? '' : trend < 0 ? 'negative' : 'neutral'}`;
+        }
+
+        // Case feedback
+        if (caseFeedbackCount) {
+            caseFeedbackCount.textContent = data.case_feedback.total;
+        }
+        if (caseTrend) {
+            const trend = data.case_feedback.trend;
+            caseTrend.textContent = trend > 0 ? `+${trend} today` : trend < 0 ? `${trend} today` : 'No change today';
+            caseTrend.className = `stat-trend ${trend > 0 ? '' : trend < 0 ? 'negative' : 'neutral'}`;
+        }
+
+        // Average rating
+        if (avgRating) {
+            avgRating.textContent = data.overall.avg_rating;
+        }
+        if (ratingTrend) {
+            ratingTrend.textContent = `Avg: ${data.overall.avg_rating}/5`;
+        }
+
+        // Last updated
+        if (lastUpdated && data.overall.last_update) {
+            const updateTime = new Date(data.overall.last_update);
+            lastUpdated.textContent = updateTime.toLocaleString('en-US', {
+                timeZone: 'America/New_York',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            }) + ' EST';
+        }
+        if (updateTrend) {
+            updateTrend.textContent = 'System active';
+        }
+    }
+
+    /**
+     * Update trends chart
+     */
+    function updateTrendsChart(data) {
+        if (!trendsCanvas || !chartVisible) return;
+
+        const ctx = trendsCanvas.getContext('2d');
+
+        // Destroy existing chart
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        // Create new chart
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: data.datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Cumulative Feedback Over Time'
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Cumulative Feedback Entries'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+
+
+    /**
+     * Toggle chart visibility
+     */
+    function toggleChart() {
+        chartVisible = !chartVisible;
+        const chartContainer = document.getElementById('feedback-chart');
+
+        if (chartVisible) {
+            chartContainer.style.display = 'block';
+            toggleChartBtn.textContent = '📊 Hide Chart';
+            loadTrendsData(); // Reload data when showing
+        } else {
+            chartContainer.style.display = 'none';
+            toggleChartBtn.textContent = '📊 Show Chart';
+        }
+    }
+
+    /**
+     * Start auto-refresh
+     */
+    function startAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+
+        autoRefreshInterval = setInterval(() => {
+            loadDashboardData();
+        }, 30000); // 30 seconds
+
+        console.log('[DASHBOARD] Auto-refresh started');
+    }
+
+    /**
+     * Stop auto-refresh
+     */
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+
+        console.log('[DASHBOARD] Auto-refresh stopped');
+    }
+
+    // ============================================================
+    // END DASHBOARD FUNCTIONALITY
+    // ============================================================
+
+    // Phase button event listeners
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.phase-btn')) {
+            const btn = e.target.closest('.phase-btn');
+            const phase = btn.dataset.phase;
+            if (phase && !btn.disabled) {
+                transitionToPhase(phase);
+            }
+        }
+    });
+
     // Initialize
     console.log('[INIT] MicroTutor V4 Frontend initialized');
     if (!loadConversationState()) {
         disableInput(true);
         finishBtn.disabled = true;
     }
+
+    // Initialize dashboard
+    initDashboard();
+
+    // Initialize feedback counter
+    initializeFeedbackCounter();
 });
 

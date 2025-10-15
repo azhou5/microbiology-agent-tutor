@@ -156,10 +156,25 @@ def init_database():
                 
                 # Create tables if they don't exist
                 from microtutor.models.database import Base
+                logger.info("Creating database tables...")
                 Base.metadata.create_all(bind=_engine)
+                
+                # Verify tables were created by checking if they exist
+                with _engine.connect() as conn:
+                    result = conn.execute(text("""
+                        SELECT table_name 
+                        FROM information_schema.tables 
+                        WHERE table_schema = 'public' 
+                        AND table_name IN ('cases', 'conversation_logs', 'feedback', 'cost_logs')
+                    """))
+                    tables = [row[0] for row in result.fetchall()]
+                    logger.info(f"✅ Database tables created: {tables}")
+                
                 logger.info("✅ Successfully connected to database and created/verified tables")
             except Exception as e:
                 logger.error(f"Failed to initialize database: {e}")
+                import traceback
+                logger.error(f"Database initialization error: {traceback.format_exc()}")
                 logger.warning("⚠️  Falling back to file logging - database will not be used")
                 _engine = None
                 _SessionLocal = None

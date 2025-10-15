@@ -16,7 +16,7 @@ import faiss
 import pickle
 from tqdm import tqdm
 
-from microtutor.utils import get_embedding
+from microtutor.utils.embedding_utils import get_embedding
 
 logger = logging.getLogger(__name__)
 

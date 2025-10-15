@@ -10,7 +10,26 @@ load_dotenv()
 
 # Construct path to the .env file in the same directory as this script
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'dot_env_microtutor.txt')
-load_dotenv(dotenv_path=dotenv_path)
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path=dotenv_path)
+    print(f"✅ Environment file loaded from: {dotenv_path}")
+else:
+    print(f"⚠️  Environment file not found: {dotenv_path}")
+    # Try alternative paths for different deployment scenarios
+    alt_paths = [
+        os.path.join(os.path.dirname(__file__), '..', '..', 'dot_env_microtutor.txt'),
+        os.path.join(os.path.dirname(__file__), '..', '..', '..', 'dot_env_microtutor.txt'),
+        '/opt/render/project/src/dot_env_microtutor.txt',
+        '/opt/render/project/src/V4_refactor/dot_env_microtutor.txt'
+    ]
+    
+    for alt_path in alt_paths:
+        if os.path.exists(alt_path):
+            load_dotenv(dotenv_path=alt_path)
+            print(f"✅ Environment file loaded from alternative path: {alt_path}")
+            break
+    else:
+        print("⚠️  No environment file found, using system environment variables only")
 
 class Config(BaseConfig):
     """Main configuration class with environment-specific settings."""
@@ -48,7 +67,7 @@ class Config(BaseConfig):
     AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
     AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-    AZURE_OPENAI_O4_MINI_DEPLOYMENT: str = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", "o4-mini-0416")
+    AZURE_OPENAI_DEPLOYMENT_NAME: str = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "o4-mini-0416")
     
     # Personal OpenAI settings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
@@ -57,7 +76,7 @@ class Config(BaseConfig):
     # Determine which model to use based on USE_AZURE_OPENAI flag
     # This is computed at initialization time
     API_MODEL_NAME: str = (
-        os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", "o4-mini-0416")
+        os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "o4-mini-0416")
         if os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
         else os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
     )

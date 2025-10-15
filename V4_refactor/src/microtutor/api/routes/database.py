@@ -294,40 +294,85 @@ async def get_database_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         )
     
     try:
-        # Get table counts
+        # First check if tables exist
+        table_check_query = """
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name IN ('cases', 'conversation_logs', 'feedback', 'cost_logs')
+        """
+        existing_tables_result = db.execute(text(table_check_query))
+        existing_tables = [row[0] for row in existing_tables_result.fetchall()]
+        
+        if not existing_tables:
+            logger.warning("No database tables found - returning empty stats")
+            return {
+                "status": "success",
+                "data": {
+                    "table_counts": {
+                        "cases": 0,
+                        "conversation_logs": 0,
+                        "feedback": 0,
+                        "cost_logs": 0
+                    },
+                    "organism_distribution": [],
+                    "recent_activity": {
+                        "conversations_last_24h": 0
+                    },
+                    "generated_at": datetime.utcnow().isoformat(),
+                    "note": "Database tables not yet created"
+                }
+            }
+        
+        # Get table counts for existing tables
         tables = ["cases", "conversation_logs", "feedback", "cost_logs"]
         stats = {}
         
         for table in tables:
+            if table in existing_tables:
+                try:
+                    count_query = f"SELECT COUNT(*) FROM {table}"
+                    count = db.execute(text(count_query)).scalar()
+                    stats[table] = count
+                except Exception as e:
+                    logger.warning(f"Could not count {table}: {e}")
+                    stats[table] = "error"
+            else:
+                stats[table] = 0
+        
+        # Get organism distribution (only if cases table exists)
+        organism_stats = []
+        if "cases" in existing_tables:
             try:
-                count_query = f"SELECT COUNT(*) FROM {table}"
-                count = db.execute(text(count_query)).scalar()
-                stats[table] = count
+                org_query = """
+                    SELECT organism, COUNT(*) as count
+                    FROM cases 
+                    GROUP BY organism 
+                    ORDER BY count DESC
+                """
+                org_result = db.execute(text(org_query))
+                organism_stats = [
+                    {"organism": row.organism, "count": row.count}
+                    for row in org_result.fetchall()
+                ]
             except Exception as e:
-                logger.warning(f"Could not count {table}: {e}")
-                stats[table] = "error"
+                logger.warning(f"Could not get organism distribution: {e}")
+                organism_stats = []
         
-        # Get organism distribution
-        org_query = """
-            SELECT organism, COUNT(*) as count
-            FROM cases 
-            GROUP BY organism 
-            ORDER BY count DESC
-        """
-        org_result = db.execute(text(org_query))
-        organism_stats = [
-            {"organism": row.organism, "count": row.count}
-            for row in org_result.fetchall()
-        ]
-        
-        # Get recent activity
-        recent_query = """
-            SELECT COUNT(*) as count
-            FROM conversation_logs 
-            WHERE timestamp >= :recent_time
-        """
-        recent_time = datetime.utcnow() - timedelta(hours=24)
-        recent_count = db.execute(text(recent_query), {"recent_time": recent_time}).scalar()
+        # Get recent activity (only if conversation_logs table exists)
+        recent_count = 0
+        if "conversation_logs" in existing_tables:
+            try:
+                recent_query = """
+                    SELECT COUNT(*) as count
+                    FROM conversation_logs 
+                    WHERE timestamp >= :recent_time
+                """
+                recent_time = datetime.utcnow() - timedelta(hours=24)
+                recent_count = db.execute(text(recent_query), {"recent_time": recent_time}).scalar()
+            except Exception as e:
+                logger.warning(f"Could not get recent activity: {e}")
+                recent_count = 0
         
         return {
             "status": "success",
@@ -343,10 +388,24 @@ async def get_database_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Failed to get database stats: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve database statistics"
-        )
+        # Return empty stats instead of raising an error
+        return {
+            "status": "success",
+            "data": {
+                "table_counts": {
+                    "cases": 0,
+                    "conversation_logs": 0,
+                    "feedback": 0,
+                    "cost_logs": 0
+                },
+                "organism_distribution": [],
+                "recent_activity": {
+                    "conversations_last_24h": 0
+                },
+                "generated_at": datetime.utcnow().isoformat(),
+                "note": "Database not available"
+            }
+        }
 
 
 @router.get(

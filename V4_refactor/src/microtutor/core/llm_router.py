@@ -27,10 +27,11 @@ def chat_complete(
     model: Optional[str] = None,
     tools: Optional[List[Dict]] = None,
     max_retries: int = 3,
-    conversation_history: Optional[List[Dict[str, str]]] = None
+    conversation_history: Optional[List[Dict[str, str]]] = None,
+    fallback_model: Optional[str] = None
 ) -> Union[str, Dict]:
     """
-    Generate LLM response with optional tool support.
+    Generate LLM response with optional tool support and fallback model.
     
     Args:
         system_prompt: System prompt
@@ -39,11 +40,12 @@ def chat_complete(
         tools: Optional tool schemas for native function calling
         max_retries: Number of retry attempts
         conversation_history: Optional full conversation history
+        fallback_model: Fallback model to try if primary model fails
     
     Returns:
         str: Text response (if no tool calls)
         Dict: {'content': str, 'tool_calls': list} (if tool called)
-        None: If all retries failed
+        None: If all retries failed on both models
         """
     if conversation_history:
         # Use full conversation history if provided
@@ -55,23 +57,23 @@ def chat_complete(
             {"role": "user", "content": user_prompt}
         ]
     
-    for attempt in range(max_retries):
-        response = llm_client.generate(
-            messages=messages,
-            model=model,
-            tools=tools
-        )
-        
-        # Success
-        if response:
-            if isinstance(response, dict):
-                return response  # Tool call response
-            if isinstance(response, str) and response.strip():
-                return response  # Text response
-        
-        print(f"Warning: Empty response (attempt {attempt + 1}/{max_retries})")
+    # The LLM client now handles retries internally, so we just need to call it once
+    response = llm_client.generate(
+        messages=messages,
+        model=model,
+        tools=tools,
+        retries=max_retries,
+        fallback_model=fallback_model
+    )
     
-    print(f"Error: Failed after {max_retries} attempts")
+    # Success
+    if response:
+        if isinstance(response, dict):
+            return response  # Tool call response
+        if isinstance(response, str) and response.strip():
+            return response  # Text response
+    
+    print(f"Error: LLM returned empty response after {max_retries} attempts")
     return None
 
 

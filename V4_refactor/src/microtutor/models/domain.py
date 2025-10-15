@@ -17,10 +17,10 @@ class TutorState(str, Enum):
     INFORMATION_GATHERING = "information_gathering"
     PROBLEM_REPRESENTATION = "problem_representation"
     DIFFERENTIAL_DIAGNOSIS = "differential_diagnosis"
-    INVESTIGATIONS = "investigations"
-    TREATMENT = "treatment"
+    TESTS = "tests"
+    MANAGEMENT = "management"
     SOCRATIC_MODE = "socratic_mode"
-    COMPLETED = "completed"
+    FEEDBACK = "feedback"
 
 
 class TokenUsage(BaseModel):

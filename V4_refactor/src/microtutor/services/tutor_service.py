@@ -15,6 +15,7 @@ from microtutor.core.llm_router import chat_complete, get_llm_client
 from microtutor.core.tutor_prompt import get_system_message_template
 
 from microtutor.models.domain import TutorContext, TutorResponse, TokenUsage, TutorState
+from microtutor.models.phase_models import PhaseState, PhaseConfidence, PhaseTransitionReason, TutorStructuredResponse
 from microtutor.core.config_helper import config
 from microtutor.core.logging_config import log_agent_context
 
@@ -58,6 +59,50 @@ class TutorService:
         # Initialize feedback retriever if available
         self.feedback_retriever = None
         self.interaction_counter = 0  # Track interaction count per service instance
+        
+        # Phase management state (similar to V3 socratic mode)
+        self.current_phase = TutorState.INFORMATION_GATHERING
+        self.phase_locked = False  # Whether we're locked in current phase
+        self.phase_progress = {}  # Track progress within each phase
+        self.phase_transition_history = []  # Track phase transitions
+        self.phase_completion_signals = {
+            'information_gathering': '[PHASE_COMPLETE: information_gathering]',
+            'problem_representation': '[PHASE_COMPLETE: problem_representation]',
+            'differential_diagnosis': '[PHASE_COMPLETE: differential_diagnosis]',
+            'tests': '[PHASE_COMPLETE: tests]',
+            'management': '[PHASE_COMPLETE: management]',
+            'feedback': '[PHASE_COMPLETE: feedback]'
+        }
+        
+        # Phase-specific validation rules
+        self.phase_validation_rules = {
+            TutorState.INFORMATION_GATHERING: {
+                'min_messages': 3,
+                'required_keywords': ['history', 'symptoms', 'exam', 'physical', 'vital'],
+                'completion_threshold': 0.6
+            },
+            TutorState.PROBLEM_REPRESENTATION: {
+                'min_messages': 2,
+                'required_keywords': ['problem', 'representation', 'illness', 'script', 'reasoning'],
+                'completion_threshold': 0.5
+            },
+            TutorState.DIFFERENTIAL_DIAGNOSIS: {
+                'min_messages': 2,
+                'required_keywords': ['differential', 'diagnosis', 'ddx', 'consider', 'suspect'],
+                'completion_threshold': 0.5
+            },
+            TutorState.TESTS: {
+                'min_messages': 2,
+                'required_keywords': ['test', 'investigation', 'culture', 'lab', 'imaging'],
+                'completion_threshold': 0.5
+            },
+            TutorState.MANAGEMENT: {
+                'min_messages': 2,
+                'required_keywords': ['treatment', 'management', 'therapy', 'medication'],
+                'completion_threshold': 0.5
+            }
+        }
+        
         if self.enable_feedback:
             try:
                 feedback_path = feedback_dir or config.get('FEEDBACK_DIR', 'data/feedback')
@@ -104,25 +149,43 @@ class TutorService:
             Examples_of_Good_and_Bad_Responses=""
         )
         
-        # Generate initial message
-        initial_prompt = (
-            "Welcome the student and introduce the case. "
-            "Present the initial chief complaint and basic demographics."
-        )
-        
+        # Use HPI data for initial presentation instead of LLM call
         try:
-            response_text = chat_complete(
-                system_prompt=system_message,
-                user_prompt=initial_prompt,
-                model=model,
-                tools=self.tool_schemas  # Native function calling
-            )
+            import json
+            import os
             
-            if not response_text:
-                raise ValueError("LLM returned empty response")
+            # Load ambiguous case data for concise initial presentations
+            hpi_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'Case_Outputs', 'ambiguous_with_ages.json')
+            with open(hpi_file, 'r') as f:
+                hpi_data = json.load(f)
+            
+            # Get HPI for this organism (convert spaces to underscores for key matching)
+            organism_key = organism.replace(' ', '_')
+            hpi_text = hpi_data.get(organism_key)
+            if not hpi_text:
+                logger.warning(f"No HPI data for organism: {organism}")
+                # Fallback to LLM if no HPI data
+                initial_prompt = (
+                    "Welcome the student and introduce the case. "
+                    "Present the initial chief complaint and basic demographics."
+                )
+                response_text = chat_complete(
+                    system_prompt=system_message,
+                    user_prompt=initial_prompt,
+                    model=model,
+                    tools=self.tool_schemas,
+                    fallback_model="gpt-4.1"
+                )
+                if not response_text:
+                    # Fallback message if LLM fails after all retries
+                    response_text = "Welcome to today's case. I'm having trouble generating the case details right now. Please try starting a new case."
+            else:
+                # Use ambiguous case data directly for initial presentation
+                response_text = f"Welcome to today's case.\n\n{hpi_text}\n\n Begin by asking a more detailed history, requesting specific physical exam findings, and ordering initial studies. Then we will move onto problem representation, differential diagnosis, management and feedback."
+                logger.info(f"Using ambiguous case data for initial presentation: {organism}")
                 
         except Exception as e:
-            logger.error(f"Error calling LLM: {e}", exc_info=True)
+            logger.error(f"Error generating initial message: {e}", exc_info=True)
             raise ValueError(f"Failed to generate initial message: {e}")
         
         processing_time = (datetime.now() - start_time).total_seconds() * 1000
@@ -284,14 +347,14 @@ class TutorService:
         
         # Call LLM with native function calling
         try:
-            response_text = self._call_tutor_with_tools(
+            response_text, phase_data, tools_used = self._call_tutor_with_tools_and_phase(
                 messages=context.conversation_history,
                 case_description=context.case_description,
                 model=context.model_name
             )
             
             if not response_text:
-                raise ValueError("LLM returned empty response")
+                raise ValueError("LLM returned empty response after all retries")
                 
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
@@ -300,32 +363,47 @@ class TutorService:
         # Add assistant response
         context.conversation_history.append({"role": "assistant", "content": response_text})
         
-        # Update state
+        # Update phase state - either from tool call or automatic detection
+        if phase_data:
+            # Phase data from LLM tool call
+            new_state = TutorState(phase_data['current_phase'])
+            self.current_phase = new_state
+            self.phase_locked = phase_data.get('phase_locked', False)
+            context.current_state = new_state
+            logger.info(f"[PHASE] Updated via LLM tool: {phase_data['current_phase']}, locked: {self.phase_locked}")
+        else:
+            # Automatic phase detection as fallback
         new_state = self._determine_state(response_text, context.current_state)
         context.current_state = new_state
+            logger.info(f"[PHASE] Auto-detected: {new_state}")
+            
+            # Force phase update tool call for consistency
+            self._force_phase_update(context, response_text, message)
         
         processing_time = (datetime.now() - start_time).total_seconds() * 1000
         logger.info(f"Message processed in {processing_time:.2f}ms, state: {new_state}")
         
         return TutorResponse(
             content=response_text,
-            tools_used=[],
+            tools_used=tools_used,
             processing_time_ms=processing_time,
             metadata={
                 "case_id": context.case_id,
                 "state": new_state.value,
-                "organism": context.organism
+                "organism": context.organism,
+                "phase_locked": self.phase_locked,
+                "current_phase": self.current_phase.value
             },
             feedback_examples=retrieved_feedback_examples
         )
     
-    def _call_tutor_with_tools(
+    def _call_tutor_with_tools_and_phase(
         self,
         messages: List[Dict[str, str]],
         case_description: str,
         model: str
-    ) -> str:
-        """Call tutor LLM with native function calling support."""
+    ) -> tuple[str, Optional[Dict[str, Any]], List[str]]:
+        """Call tutor LLM with native function calling and phase management."""
         system_msg = messages[0]["content"] if messages and messages[0]["role"] == "system" else ""
         user_msg = messages[-1]["content"] if messages and messages[-1]["role"] == "user" else ""
         
@@ -335,20 +413,32 @@ class TutorService:
             user_prompt=user_msg,
             model=model,
             tools=self.tool_schemas,
-            conversation_history=messages  # Pass full conversation history
+            conversation_history=messages,  # Pass full conversation history
+            fallback_model="gpt-4.1"  # Use GPT-4.1 as fallback
         )
         
-        # Handle tool call (native function calling format)
+        phase_data = None
+        tools_used = []
+        
+        # Handle None response (all retries failed)
+        if response is None:
+            logger.error("LLM returned None after all retries")
+            return "I apologize, but I'm having trouble processing your request right now. Could you please try again?", phase_data, tools_used
+        
+        # Handle tool calls (native function calling format)
         if isinstance(response, dict) and 'tool_calls' in response:
             tool_calls = response['tool_calls']
             
             if tool_calls and len(tool_calls) > 0:
-                # Execute first tool call
-                tool_call = tool_calls[0]
+                # Execute all tool calls
+                for tool_call in tool_calls:
                 tool_name = tool_call.function.name
                 tool_args = json.loads(tool_call.function.arguments)
                 
                 logger.info(f"Native function call: {tool_name}({list(tool_args.keys())})")
+                    
+                    # Track tool usage
+                    tools_used.append(tool_name)
                 
                 # Add context to arguments
                 tool_args.update({
@@ -361,20 +451,370 @@ class TutorService:
                 tool_result = self.tool_engine.execute_tool(tool_name, tool_args)
                 
                 if tool_result['success']:
-                    return tool_result['result']
+                        # Check if this is a phase update tool
+                        if tool_name == 'update_phase':
+                            try:
+                                phase_data = json.loads(tool_result['result'])
+                                logger.info(f"[PHASE] Phase update tool called: {phase_data['current_phase']}")
+                            except json.JSONDecodeError:
+                                logger.warning("Failed to parse phase data from update_phase tool")
+                        else:
+                            # Regular tool - return its result
+                            return tool_result['result'], phase_data, tools_used
                 else:
                     error = tool_result.get('error', {})
                     logger.error(f"Tool failed: {error.get('message', 'Unknown error')}")
-                    return f"An error occurred while using the {tool_name} tool."
+                    return f"An error occurred while using the {tool_name} tool.", phase_data, tools_used
             
             # No tool calls, return content
-            return response.get('content', '')
+            content = response.get('content', '')
+            if not content.strip():
+                content = "I apologize, but I'm having trouble processing your request right now. Could you please try again?"
+            return content, phase_data, tools_used
         
         # Normal text response
-        return response
+        if not response.strip():
+            response = "I apologize, but I'm having trouble processing your request right now. Could you please try again?"
+        return response, phase_data, tools_used
+    
+    def _force_phase_update(self, context: TutorContext, response_text: str, user_message: str) -> None:
+        """Force a phase update when LLM doesn't call the update_phase tool."""
+        try:
+            # Determine phase based on content
+            current_phase = self._determine_state(response_text, context.current_state)
+            
+            # Calculate progress based on conversation length and content
+            progress = self._calculate_phase_progress(context.conversation_history, current_phase)
+            
+            # Generate phase guidance
+            guidance = self._generate_phase_guidance(current_phase, progress)
+            
+            # Create phase data
+            phase_data = {
+                'current_phase': current_phase.value,
+                'phase_locked': self.phase_locked,
+                'confidence': 'medium',
+                'transition_reason': 'content_analysis',
+                'phase_progress': progress,
+                'phase_guidance': guidance,
+                'completion_criteria': self._get_completion_criteria(current_phase),
+                'reasoning': f"Auto-detected phase from content analysis",
+                'suggestions': self._get_phase_suggestions(current_phase)
+            }
+            
+            # Update internal state
+            self.current_phase = current_phase
+            context.current_state = current_phase
+            
+            logger.info(f"[PHASE] Forced update: {current_phase.value}, progress: {progress:.2f}")
+            
+        except Exception as e:
+            logger.error(f"Error in forced phase update: {e}", exc_info=True)
+    
+    def _calculate_phase_progress(self, conversation: List[Dict[str, str]], phase: TutorState) -> float:
+        """Calculate progress within current phase based on conversation content."""
+        if phase == TutorState.INFORMATION_GATHERING:
+            # Count history and exam-related questions and responses
+            info_indicators = ['symptom', 'history', 'pain', 'fever', 'cough', 'breathing', 'exam', 'physical', 'vital']
+            count = sum(1 for msg in conversation 
+                       if any(indicator in msg.get('content', '').lower() 
+                             for indicator in info_indicators))
+            return min(count * 0.1, 1.0)
+        
+        elif phase == TutorState.DIFFERENTIAL_DIAGNOSIS:
+            # Count differential mentions
+            diff_indicators = ['differential', 'diagnosis', 'consider', 'rule out', 'likely']
+            count = sum(1 for msg in conversation 
+                       if any(indicator in msg.get('content', '').lower() 
+                             for indicator in diff_indicators))
+            return min(count * 0.2, 1.0)
+        
+        elif phase == TutorState.TESTS:
+            # Count test mentions
+            test_indicators = ['test', 'lab', 'x-ray', 'ct', 'mri', 'blood', 'urine']
+            count = sum(1 for msg in conversation 
+                       if any(indicator in msg.get('content', '').lower() 
+                             for indicator in test_indicators))
+            return min(count * 0.15, 1.0)
+        
+        elif phase == TutorState.MANAGEMENT:
+            # Count treatment mentions
+            treatment_indicators = ['treatment', 'medication', 'therapy', 'antibiotic', 'dose']
+            count = sum(1 for msg in conversation 
+                       if any(indicator in msg.get('content', '').lower() 
+                             for indicator in treatment_indicators))
+            return min(count * 0.2, 1.0)
+        
+        return 0.0
+    
+    def _generate_phase_guidance(self, phase: TutorState, progress: float) -> str:
+        """Generate specific guidance for the current phase."""
+        if phase == TutorState.INFORMATION_GATHERING:
+            if progress < 0.3:
+                return "Start by gathering the chief complaint and history of present illness."
+            elif progress < 0.7:
+                return "Continue asking about symptoms, duration, and associated factors. Include physical examination findings."
+            else:
+                return "Complete the information gathering with past medical history, social history, and vital signs."
+        
+        elif phase == TutorState.DIFFERENTIAL_DIAGNOSIS:
+            if progress < 0.5:
+                return "Present your differential diagnoses with supporting evidence."
+            else:
+                return "Refine your differentials and explain your reasoning."
+        
+        elif phase == TutorState.TESTS:
+            return "Request appropriate diagnostic tests and explain their rationale."
+        
+        elif phase == TutorState.MANAGEMENT:
+            return "Propose a treatment plan with specific medications and dosages."
+        
+        return "Continue working through the case systematically."
+    
+    def _get_completion_criteria(self, phase: TutorState) -> List[str]:
+        """Get completion criteria for the current phase."""
+        if phase == TutorState.INFORMATION_GATHERING:
+            return [
+                "Chief complaint identified",
+                "History of present illness gathered",
+                "Physical examination findings documented",
+                "Key symptoms and vital signs recorded"
+            ]
+        elif phase == TutorState.DIFFERENTIAL_DIAGNOSIS:
+            return [
+                "At least 3-5 differential diagnoses proposed",
+                "Supporting evidence for each diagnosis",
+                "Most likely diagnosis identified"
+            ]
+        elif phase == TutorState.TESTS:
+            return [
+                "Relevant diagnostic tests identified",
+                "Rationale for each test explained",
+                "Test results interpreted"
+            ]
+        elif phase == TutorState.MANAGEMENT:
+            return [
+                "Treatment plan proposed",
+                "Specific medications and dosages",
+                "Follow-up plan established"
+            ]
+        return []
+    
+    def _get_phase_suggestions(self, phase: TutorState) -> List[str]:
+        """Get suggestions for the current phase."""
+        if phase == TutorState.INFORMATION_GATHERING:
+            return [
+                "Ask about symptom onset and progression",
+                "Inquire about associated symptoms",
+                "Gather past medical history",
+                "Perform physical examination"
+            ]
+        elif phase == TutorState.DIFFERENTIAL_DIAGNOSIS:
+            return [
+                "Consider common vs. rare diagnoses",
+                "Think about red flag symptoms",
+                "Use the VINDICATE mnemonic"
+            ]
+        elif phase == TutorState.TESTS:
+            return [
+                "Start with basic labs",
+                "Consider imaging if indicated",
+                "Think about cost-effectiveness"
+            ]
+        elif phase == TutorState.MANAGEMENT:
+            return [
+                "Consider patient allergies",
+                "Think about drug interactions",
+                "Plan for follow-up"
+            ]
+        return []
+    
+    def _call_tutor_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        case_description: str,
+        model: str
+    ) -> str:
+        """Call tutor LLM with native function calling support (legacy method)."""
+        response_text, _ = self._call_tutor_with_tools_and_phase(messages, case_description, model)
+        return response_text
+    
+    def _detect_phase_transition(self, response: str, user_message: str, conversation_history: List[Dict[str, str]]) -> Optional[TutorState]:
+        """Robust phase transition detection using multiple signals and context analysis."""
+        response_lower = response.lower()
+        user_lower = user_message.lower()
+        
+        # 1. Check for explicit phase completion signals in tutor response
+        for phase, signal in self.phase_completion_signals.items():
+            if signal in response:
+                logger.info(f"[PHASE] Completion signal detected: {signal}")
+                return self._get_next_phase(phase)
+        
+        # 2. Check for user transition requests with context validation
+        transition_phrases = [
+            "let's move on", "move on", "continue", "next phase", "proceed",
+            "let's continue", "back to the case", "done with", "finished with",
+            "ready for the next", "let's go to", "transition to", "next step",
+            "move forward", "let's proceed", "ready to move on"
+        ]
+        
+        if any(phrase in user_lower for phrase in transition_phrases):
+            # Validate that user has made sufficient progress in current phase
+            if self._validate_phase_completion(user_message, self.current_phase, conversation_history):
+                logger.info(f"[PHASE] User transition request validated: {user_message}")
+                return self._get_next_phase(self.current_phase.value)
+            else:
+                logger.info(f"[PHASE] User transition request rejected - insufficient progress")
+                return None
+        
+        # 3. Analyze conversation content for implicit phase transitions
+        content_based_transition = self._analyze_content_for_phase_transition(response, user_message)
+        if content_based_transition:
+            logger.info(f"[PHASE] Content-based transition detected: {content_based_transition}")
+            return content_based_transition
+        
+        return None
+    
+    def _validate_phase_completion(self, user_message: str, current_phase: TutorState, conversation_history: List[Dict[str, str]]) -> bool:
+        """Robust validation that user has made sufficient progress to transition from current phase."""
+        if current_phase not in self.phase_validation_rules:
+            return True  # Allow transition from completed phase
+        
+        rules = self.phase_validation_rules[current_phase]
+        
+        # Check minimum message count
+        user_messages = [msg for msg in conversation_history if msg.get("role") == "user"]
+        if len(user_messages) < rules['min_messages']:
+            logger.info(f"[PHASE] Insufficient messages for phase completion: {len(user_messages)} < {rules['min_messages']}")
+            return False
+        
+        # Analyze recent conversation for phase-relevant content
+        recent_messages = conversation_history[-10:] if len(conversation_history) >= 10 else conversation_history
+        recent_text = " ".join([msg.get("content", "") for msg in recent_messages]).lower()
+        
+        # Calculate keyword coverage
+        required_keywords = rules['required_keywords']
+        found_keywords = [kw for kw in required_keywords if kw in recent_text]
+        keyword_coverage = len(found_keywords) / len(required_keywords)
+        
+        # Check if coverage meets threshold
+        meets_threshold = keyword_coverage >= rules['completion_threshold']
+        
+        # Additional validation: check for phase-specific completion patterns
+        completion_patterns = self._get_phase_completion_patterns(current_phase)
+        has_completion_pattern = any(pattern in recent_text for pattern in completion_patterns)
+        
+        # Log validation details
+        logger.info(f"[PHASE] Validation for {current_phase}: coverage={keyword_coverage:.2f}, "
+                   f"threshold={rules['completion_threshold']}, pattern={has_completion_pattern}")
+        
+        return meets_threshold or has_completion_pattern
+    
+    def _get_phase_completion_patterns(self, phase: TutorState) -> List[str]:
+        """Get completion patterns specific to each phase."""
+        patterns = {
+            TutorState.INFORMATION_GATHERING: [
+                "sufficient history", "enough information", "gathered enough",
+                "complete history", "thorough exam", "comprehensive history"
+            ],
+            TutorState.PROBLEM_REPRESENTATION: [
+                "problem representation", "illness script", "clinical reasoning",
+                "key findings", "presentation summary", "case summary"
+            ],
+            TutorState.DIFFERENTIAL_DIAGNOSIS: [
+                "differential diagnosis", "differentials", "ddx complete",
+                "considered all", "comprehensive differentials"
+            ],
+            TutorState.INVESTIGATIONS: [
+                "sufficient evidence", "enough tests", "investigation complete",
+                "diagnostic workup", "test results"
+            ],
+            TutorState.TREATMENT: [
+                "treatment plan", "management plan", "therapeutic approach",
+                "treatment strategy", "management strategy"
+            ]
+        }
+        return patterns.get(phase, [])
+    
+    def _analyze_content_for_phase_transition(self, response: str, user_message: str) -> Optional[TutorState]:
+        """Analyze conversation content to detect implicit phase transitions."""
+        combined_text = f"{response} {user_message}".lower()
+        
+        # Define phase transition indicators
+        phase_indicators = {
+            TutorState.PROBLEM_REPRESENTATION: [
+                "problem representation", "illness script", "clinical reasoning",
+                "summarize", "key findings", "presentation"
+            ],
+            TutorState.DIFFERENTIAL_DIAGNOSIS: [
+                "differential diagnosis", "differentials", "ddx", "consider",
+                "suspect", "think it's", "most likely"
+            ],
+            TutorState.INVESTIGATIONS: [
+                "investigation", "test", "culture", "lab work", "imaging",
+                "order", "request", "check"
+            ],
+            TutorState.TREATMENT: [
+                "treatment", "management", "therapy", "medication", "antibiotic",
+                "treat", "manage", "prescribe"
+            ],
+            TutorState.COMPLETED: [
+                "feedback", "conclusion", "summary", "review", "performance",
+                "well done", "excellent work"
+            ]
+        }
+        
+        # Check for strong indicators of phase transition
+        for phase, indicators in phase_indicators.items():
+            if any(indicator in combined_text for indicator in indicators):
+                # Additional validation: check if this is a natural progression
+                if self._is_valid_phase_progression(self.current_phase, phase):
+                    return phase
+        
+        return None
+    
+    def _is_valid_phase_progression(self, current_phase: TutorState, target_phase: TutorState) -> bool:
+        """Validate that phase progression follows logical sequence."""
+        phase_order = [
+            TutorState.INFORMATION_GATHERING,
+            TutorState.PROBLEM_REPRESENTATION,
+            TutorState.DIFFERENTIAL_DIAGNOSIS,
+            TutorState.INVESTIGATIONS,
+            TutorState.TREATMENT,
+            TutorState.COMPLETED
+        ]
+        
+        try:
+            current_index = phase_order.index(current_phase)
+            target_index = phase_order.index(target_phase)
+            return target_index > current_index  # Can only move forward
+        except ValueError:
+            return False
+    
+    
+    def _get_next_phase(self, current_phase: str) -> TutorState:
+        """Get the next phase in sequence."""
+        phase_sequence = [
+            TutorState.INFORMATION_GATHERING,
+            TutorState.PROBLEM_REPRESENTATION,
+            TutorState.DIFFERENTIAL_DIAGNOSIS,
+            TutorState.INVESTIGATIONS,
+            TutorState.TREATMENT,
+            TutorState.COMPLETED
+        ]
+        
+        try:
+            current_index = phase_sequence.index(TutorState(current_phase))
+            if current_index < len(phase_sequence) - 1:
+                return phase_sequence[current_index + 1]
+            else:
+                return TutorState.COMPLETED
+        except (ValueError, IndexError):
+            logger.warning(f"[PHASE] Unknown phase: {current_phase}")
+            return TutorState.INFORMATION_GATHERING
     
     def _determine_state(self, response: str, current_state: TutorState) -> TutorState:
-        """Determine new state based on response content."""
+        """Determine new state based on response content (fallback method)."""
         resp = response.lower()
         
         if "problem representation" in resp:
