@@ -71,6 +71,7 @@ class Config(BaseConfig):
     REWARD_MODEL_SAMPLING: bool = os.getenv("REWARD_MODEL_SAMPLING", "False").lower() == "true"
     IN_CONTEXT_LEARNING: bool = os.getenv("IN_CONTEXT_LEARNING", "True").lower() == "true"
     TERMINAL_MODE: bool = os.getenv("TERMINAL_MODE", "False").lower() == "true"
+    FAST_CLASSIFICATION_ENABLED: bool = os.getenv("FAST_CLASSIFICATION_ENABLED", "False").lower() == "true"
     
     # Default organism for cases
     DEFAULT_ORGANISM: str = os.getenv("DEFAULT_ORGANISM", "staphylococcus aureus")
