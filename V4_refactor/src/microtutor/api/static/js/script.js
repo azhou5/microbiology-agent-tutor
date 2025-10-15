@@ -45,6 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const ratingTrend = document.getElementById('rating-trend');
     const updateTrend = document.getElementById('update-trend');
 
+    // FAISS status elements
+    const faissStatus = document.getElementById('faiss-status');
+    const faissTrend = document.getElementById('faiss-trend');
+    const faissIcon = document.getElementById('faiss-icon');
+    const faissLoading = document.getElementById('faiss-loading');
+
     // API Configuration
     const API_BASE = '/api/v1';
 
@@ -386,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Transition to a new phase
      */
-    async function transitionToPhase(newPhase) {
+    function transitionToPhase(newPhase) {
         if (!currentCaseId || !currentOrganismKey) {
             setStatus('Please start a case first', true);
             return;
@@ -398,71 +404,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Add phase transition to history
-        phaseHistory.push({
-            from: currentPhase,
-            to: newPhase,
-            timestamp: new Date().toISOString()
-        });
-
+        // Update UI state
         currentPhase = newPhase;
         updatePhaseUI();
         saveConversationState();
 
-        // Send phase transition message to tutor
+        // Simply write the phase message to the input textbox and trigger send
         const transitionMessage = `Let's move onto phase: ${phaseDef.name}`;
+        userInput.value = transitionMessage;
 
-        try {
-            setStatus('Transitioning to new phase...');
-            disableInput(true);
-
-            // Filter out malformed messages before sending
-            const validHistory = validateChatHistory(chatHistory);
-
-            const requestBody = {
-                message: transitionMessage,
-                case_id: currentCaseId,
-                organism_key: currentOrganismKey,
-                history: validHistory,
-                model_name: currentModel,
-                model_provider: currentModelProvider,
-                feedback_enabled: feedbackEnabled,
-                feedback_threshold: feedbackThreshold
-            };
-
-            console.log('[PHASE] Request body:', requestBody);
-
-            const response = await fetch(`${API_BASE}/chat`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            // Add user message
-            addMessage('user', transitionMessage);
-            addMessageToHistory('user', transitionMessage);
-
-            // Add assistant response
-            addMessage('assistant', data.content);
-            addMessageToHistory('assistant', data.content);
-
-            setStatus('');
-            disableInput(false);
-            saveConversationState();
-
-        } catch (error) {
-            console.error('[PHASE] Error transitioning phase:', error);
-            setStatus(`Error transitioning phase: ${error.message}`, true);
-            disableInput(false);
-        }
+        // Trigger the normal send flow
+        handleSendMessage();
     }
 
     /**
@@ -675,9 +627,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Create audio player for respiratory sounds
+     */
+    function createAudioPlayer(audioData) {
+        const audioContainer = document.createElement('div');
+        audioContainer.classList.add('audio-player-container');
+
+        // Create description
+        const description = document.createElement('div');
+        description.classList.add('audio-description');
+        description.textContent = audioData.description || 'Lung sounds';
+        audioContainer.appendChild(description);
+
+        // Create audio element
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.preload = 'metadata';
+        audio.classList.add('respiratory-audio');
+
+        // Set audio source
+        const audioUrl = `${API_BASE}/audio/respiratory/${audioData.filename}`;
+        audio.src = audioUrl;
+
+        // Add error handling
+        audio.addEventListener('error', function (e) {
+            console.error('Audio loading error:', e);
+            const errorDiv = document.createElement('div');
+            errorDiv.classList.add('audio-error');
+            errorDiv.textContent = 'Audio file could not be loaded';
+            audioContainer.appendChild(errorDiv);
+        });
+
+        // Add loading indicator
+        const loadingDiv = document.createElement('div');
+        loadingDiv.classList.add('audio-loading');
+        loadingDiv.textContent = 'Loading audio...';
+        audioContainer.appendChild(loadingDiv);
+
+        audio.addEventListener('canplay', function () {
+            loadingDiv.style.display = 'none';
+        });
+
+        audioContainer.appendChild(audio);
+
+        // Add play/pause button for better UX
+        const playButton = document.createElement('button');
+        playButton.classList.add('audio-play-button');
+        playButton.innerHTML = '▶️ Play Lung Sounds';
+        playButton.addEventListener('click', function () {
+            if (audio.paused) {
+                audio.play();
+                playButton.innerHTML = '⏸️ Pause';
+            } else {
+                audio.pause();
+                playButton.innerHTML = '▶️ Play Lung Sounds';
+            }
+        });
+
+        audio.addEventListener('play', function () {
+            playButton.innerHTML = '⏸️ Pause';
+        });
+
+        audio.addEventListener('pause', function () {
+            playButton.innerHTML = '▶️ Play Lung Sounds';
+        });
+
+        audioContainer.appendChild(playButton);
+
+        return audioContainer;
+    }
+
+    /**
      * Add a message to the chatbox
      */
-    function addMessage(sender, messageContent, addFeedbackUI = false, speakerType = null) {
+    function addMessage(sender, messageContent, addFeedbackUI = false, speakerType = null, audioData = null) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'assistant-message');
         const messageId = 'msg-' + Date.now();
@@ -703,6 +726,12 @@ document.addEventListener('DOMContentLoaded', () => {
         messageContentDiv.appendChild(messageTextSpan);
 
         messageDiv.appendChild(messageContentDiv);
+
+        // Add audio player if audio data is provided
+        if (audioData && audioData.has_audio) {
+            const audioPlayer = createAudioPlayer(audioData.audio_data);
+            messageDiv.appendChild(audioPlayer);
+        }
 
         // Add feedback UI for assistant messages
         if (sender === 'assistant' && addFeedbackUI) {
@@ -1055,7 +1084,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastToolUsed = null;
             }
 
-            const messageId = addMessage('assistant', data.response, true);
+            // Check for audio data in response
+            let audioData = null;
+            let responseText = data.response;
+
+            // Try to parse JSON response for audio data
+            try {
+                const parsedResponse = JSON.parse(data.response);
+                if (parsedResponse.has_audio && parsedResponse.audio_data) {
+                    audioData = parsedResponse;
+                    responseText = parsedResponse.response;
+                }
+            } catch (e) {
+                // Not JSON, use as plain text
+            }
+
+            const messageId = addMessage('assistant', responseText, true, null, audioData);
 
             // Filter out malformed messages from server history
             if (data.history) {
@@ -1998,6 +2042,7 @@ document.addEventListener('DOMContentLoaded', () => {
         autoRefreshInterval = setInterval(() => {
             if (autoRefreshToggle && autoRefreshToggle.checked) {
                 fetchFeedbackStats();
+                fetchFAISSStatus(); // Also poll FAISS status
             }
         }, 30000); // 30 seconds
 
@@ -2039,6 +2084,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Initial load
         fetchFeedbackStats();
+        fetchFAISSStatus();
 
         // Start auto-refresh if enabled
         if (autoRefreshToggle && autoRefreshToggle.checked) {
@@ -2188,6 +2234,90 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (updateTrend) {
             updateTrend.textContent = 'System active';
+        }
+    }
+
+    /**
+     * Update FAISS status display
+     */
+    function updateFAISSStatus(data) {
+        if (!data) return;
+
+        const isReindexing = data.is_reindexing;
+        const lastComplete = data.last_reindex_complete;
+        const currentDuration = data.current_duration;
+        const reindexCount = data.reindex_count;
+        const lastError = data.last_error;
+
+        // Update status text
+        if (faissStatus) {
+            if (isReindexing) {
+                faissStatus.textContent = 'Re-indexing...';
+                faissStatus.className = 'stat-value reindexing';
+            } else if (lastError) {
+                faissStatus.textContent = 'Error';
+                faissStatus.className = 'stat-value error';
+            } else {
+                faissStatus.textContent = 'Ready';
+                faissStatus.className = 'stat-value ready';
+            }
+        }
+
+        // Update trend text
+        if (faissTrend) {
+            if (isReindexing) {
+                const duration = currentDuration ? Math.round(currentDuration) : 0;
+                faissTrend.textContent = `Re-indexing for ${duration}s...`;
+            } else if (lastComplete) {
+                const completeTime = new Date(lastComplete);
+                const timeStr = completeTime.toLocaleString('en-US', {
+                    timeZone: 'America/New_York',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                faissTrend.textContent = `Last update: ${timeStr} (${reindexCount} total)`;
+            } else {
+                faissTrend.textContent = 'Never updated';
+            }
+        }
+
+        // Update icon and loading animation
+        if (faissIcon) {
+            if (isReindexing) {
+                faissIcon.textContent = '🔄';
+                faissIcon.className = 'stat-icon spinning';
+            } else if (lastError) {
+                faissIcon.textContent = '⚠️';
+                faissIcon.className = 'stat-icon error';
+            } else {
+                faissIcon.textContent = '✅';
+                faissIcon.className = 'stat-icon ready';
+            }
+        }
+
+        // Show/hide loading animation
+        if (faissLoading) {
+            faissLoading.style.display = isReindexing ? 'flex' : 'none';
+        }
+    }
+
+    /**
+     * Fetch FAISS re-indexing status
+     */
+    async function fetchFAISSStatus() {
+        try {
+            const response = await fetch(`${API_BASE}/faiss/reindex-status`);
+            if (response.ok) {
+                const data = await response.json();
+                updateFAISSStatus(data);
+            } else {
+                console.warn('Failed to fetch FAISS status:', response.status);
+            }
+        } catch (error) {
+            console.warn('Error fetching FAISS status:', error);
         }
     }
 
@@ -2553,6 +2683,6 @@ function enhancedSendMessage() {
     }
 
     // Regular message handling
-    sendMessage();
+    handleSendMessage();
 }
 

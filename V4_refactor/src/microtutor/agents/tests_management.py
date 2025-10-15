@@ -13,7 +13,7 @@ import logging
 
 try:
     import faiss
-    from microtutor.Feedback.feedback_faiss import retrieve_similar_examples, get_embedding, index, texts
+    from microtutor.feedback.feedback_faiss import retrieve_similar_examples, get_embedding, index, texts
     FAISS_AVAILABLE = True
 except ImportError:
     # FAISS is optional

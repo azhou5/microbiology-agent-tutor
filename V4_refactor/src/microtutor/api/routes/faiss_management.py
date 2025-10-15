@@ -51,6 +51,17 @@ class FAISSStatusResponse(BaseModel):
     index_files_exist: Dict[str, bool]
 
 
+class FAISSReindexStatusResponse(BaseModel):
+    """Response model for FAISS re-indexing status."""
+    is_reindexing: bool
+    last_reindex_start: Optional[str]
+    last_reindex_complete: Optional[str]
+    last_reindex_duration: Optional[float]
+    current_duration: Optional[float]
+    reindex_count: int
+    last_error: Optional[str]
+
+
 @router.get(
     "/status",
     response_model=FAISSStatusResponse,
@@ -76,6 +87,28 @@ async def get_faiss_status() -> FAISSStatusResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get FAISS status"
+        )
+
+
+@router.get(
+    "/reindex-status",
+    response_model=FAISSReindexStatusResponse,
+    summary="Get FAISS re-indexing status",
+    description="Get current status of FAISS re-indexing operations"
+)
+async def get_faiss_reindex_status(
+    background_service: BackgroundTaskService = Depends(get_background_service)
+) -> FAISSReindexStatusResponse:
+    """Get current FAISS re-indexing status."""
+    try:
+        status = background_service.get_faiss_status()
+        return FAISSReindexStatusResponse(**status)
+        
+    except Exception as e:
+        logger.error(f"Failed to get FAISS reindex status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get FAISS reindex status"
         )
 
 

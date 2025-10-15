@@ -1,0 +1,273 @@
+{
+  "test_key": "test_value",
+  "streptococcus_pneumoniae_219316148542608980": {
+    "organism": "streptococcus_pneumoniae",
+    "analysis": {
+      "respiratory_findings": "On examination, the patient would present with crackles (rales) over the affected lung fields, possibly decreased breath sounds, and increased vocal fremitus. There may be bronchial breath sounds over areas of consolidation.",
+      "primary_sound_category": "Crackles",
+      "patient_age": 50,
+      "patient_sex": "Male",
+      "confidence": 0.95,
+      "reasoning": "Streptococcus pneumoniae is the most common cause of community-acquired pneumonia. Pneumonia leads to alveolar consolidation, resulting in crackles/rales as air bubbles through fluid in the alveoli. Crackles are the classic finding in bacterial pneumonia. This is most typical in middle-aged to older adults."
+    },
+    "matching_files": [
+      {
+        "filename": "patient101_1b1_Al_sc_Meditron.wav",
+        "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+        "file_size": 1024,
+        "match_score": 0.5,
+        "category": "Crackles",
+        "analysis": {
+          "respiratory_findings": "On examination, the patient would present with crackles (rales) over the affected lung fields, possibly decreased breath sounds, and increased vocal fremitus. There may be bronchial breath sounds over areas of consolidation.",
+          "primary_sound_category": "Crackles",
+          "patient_age": 50,
+          "patient_sex": "Male",
+          "confidence": 0.95,
+          "reasoning": "Streptococcus pneumoniae is the most common cause of community-acquired pneumonia. Pneumonia leads to alveolar consolidation, resulting in crackles/rales as air bubbles through fluid in the alveoli. Crackles are the classic finding in bacterial pneumonia. This is most typical in middle-aged to older adults."
+        }
+      }
+    ],
+    "best_match": {
+      "filename": "patient101_1b1_Al_sc_Meditron.wav",
+      "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+      "file_size": 1024,
+      "match_score": 0.5,
+      "category": "Crackles",
+      "analysis": {
+        "respiratory_findings": "On examination, the patient would present with crackles (rales) over the affected lung fields, possibly decreased breath sounds, and increased vocal fremitus. There may be bronchial breath sounds over areas of consolidation.",
+        "primary_sound_category": "Crackles",
+        "patient_age": 50,
+        "patient_sex": "Male",
+        "confidence": 0.95,
+        "reasoning": "Streptococcus pneumoniae is the most common cause of community-acquired pneumonia. Pneumonia leads to alveolar consolidation, resulting in crackles/rales as air bubbles through fluid in the alveoli. Crackles are the classic finding in bacterial pneumonia. This is most typical in middle-aged to older adults."
+      }
+    },
+    "total_matches": 1,
+    "cache_key": "streptococcus_pneumoniae_219316148542608980"
+  },
+  "streptococcus_pneumoniae_6492050985430714874": {
+    "organism": "streptococcus_pneumoniae",
+    "analysis": {
+      "respiratory_findings": "On physical examination, the lungs may reveal decreased breath sounds, bronchial breath sounds over the area of consolidation, and most notably, fine crackles (rales) due to alveolar filling from pneumonia.",
+      "primary_sound_category": "Crackles",
+      "patient_age": 45,
+      "patient_sex": "Male",
+      "confidence": 0.95,
+      "reasoning": "Streptococcus pneumoniae is the most common cause of community-acquired pneumonia. Classic findings include fever, cough, and chest pain. Consolidation in pneumonia typically results in crackles (rales) due to alveolar fluid, as well as possible bronchial breath sounds and decreased air entry, but crackles are the hallmark auscultatory finding."
+    },
+    "matching_files": [
+      {
+        "filename": "patient101_1b1_Al_sc_Meditron.wav",
+        "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+        "file_size": 1024,
+        "match_score": 0.5,
+        "category": "Crackles",
+        "analysis": {
+          "respiratory_findings": "On physical examination, the lungs may reveal decreased breath sounds, bronchial breath sounds over the area of consolidation, and most notably, fine crackles (rales) due to alveolar filling from pneumonia.",
+          "primary_sound_category": "Crackles",
+          "patient_age": 45,
+          "patient_sex": "Male",
+          "confidence": 0.95,
+          "reasoning": "Streptococcus pneumoniae is the most common cause of community-acquired pneumonia. Classic findings include fever, cough, and chest pain. Consolidation in pneumonia typically results in crackles (rales) due to alveolar fluid, as well as possible bronchial breath sounds and decreased air entry, but crackles are the hallmark auscultatory finding."
+        }
+      }
+    ],
+    "best_match": {
+      "filename": "patient101_1b1_Al_sc_Meditron.wav",
+      "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+      "file_size": 1024,
+      "match_score": 0.5,
+      "category": "Crackles",
+      "analysis": {
+        "respiratory_findings": "On physical examination, the lungs may reveal decreased breath sounds, bronchial breath sounds over the area of consolidation, and most notably, fine crackles (rales) due to alveolar filling from pneumonia.",
+        "primary_sound_category": "Crackles",
+        "patient_age": 45,
+        "patient_sex": "Male",
+        "confidence": 0.95,
+        "reasoning": "Streptococcus pneumoniae is the most common cause of community-acquired pneumonia. Classic findings include fever, cough, and chest pain. Consolidation in pneumonia typically results in crackles (rales) due to alveolar fluid, as well as possible bronchial breath sounds and decreased air entry, but crackles are the hallmark auscultatory finding."
+      }
+    },
+    "total_matches": 1,
+    "cache_key": "streptococcus_pneumoniae_6492050985430714874"
+  },
+  "streptococcus_pneumoniae_5734549305143689773": {
+    "organism": "streptococcus_pneumoniae",
+    "analysis": {
+      "respiratory_findings": "On auscultation, patients with pneumonia due to Streptococcus pneumoniae typically have inspiratory crackles (rales) over the affected lung fields. Bronchial breath sounds and possible areas of decreased breath sounds may also be noted if there is consolidation. Occasionally, dullness to percussion and increased tactile fremitus may accompany the auscultatory findings.",
+      "primary_sound_category": "Crackles",
+      "patient_age": 55,
+      "patient_sex": "Male",
+      "confidence": 0.95,
+      "reasoning": "Streptococcus pneumoniae is a common cause of community-acquired pneumonia, which classically presents with crackles on auscultation due to alveolar filling with inflammatory exudate. Crackles are the primary auscultatory finding, with other features possibly present, but crackles are most reliably associated."
+    },
+    "matching_files": [
+      {
+        "filename": "patient101_1b1_Al_sc_Meditron.wav",
+        "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+        "file_size": 1024,
+        "match_score": 0.5,
+        "category": "Crackles",
+        "analysis": {
+          "respiratory_findings": "On auscultation, patients with pneumonia due to Streptococcus pneumoniae typically have inspiratory crackles (rales) over the affected lung fields. Bronchial breath sounds and possible areas of decreased breath sounds may also be noted if there is consolidation. Occasionally, dullness to percussion and increased tactile fremitus may accompany the auscultatory findings.",
+          "primary_sound_category": "Crackles",
+          "patient_age": 55,
+          "patient_sex": "Male",
+          "confidence": 0.95,
+          "reasoning": "Streptococcus pneumoniae is a common cause of community-acquired pneumonia, which classically presents with crackles on auscultation due to alveolar filling with inflammatory exudate. Crackles are the primary auscultatory finding, with other features possibly present, but crackles are most reliably associated."
+        }
+      }
+    ],
+    "best_match": {
+      "filename": "patient101_1b1_Al_sc_Meditron.wav",
+      "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+      "file_size": 1024,
+      "match_score": 0.5,
+      "category": "Crackles",
+      "analysis": {
+        "respiratory_findings": "On auscultation, patients with pneumonia due to Streptococcus pneumoniae typically have inspiratory crackles (rales) over the affected lung fields. Bronchial breath sounds and possible areas of decreased breath sounds may also be noted if there is consolidation. Occasionally, dullness to percussion and increased tactile fremitus may accompany the auscultatory findings.",
+        "primary_sound_category": "Crackles",
+        "patient_age": 55,
+        "patient_sex": "Male",
+        "confidence": 0.95,
+        "reasoning": "Streptococcus pneumoniae is a common cause of community-acquired pneumonia, which classically presents with crackles on auscultation due to alveolar filling with inflammatory exudate. Crackles are the primary auscultatory finding, with other features possibly present, but crackles are most reliably associated."
+      }
+    },
+    "total_matches": 1,
+    "cache_key": "streptococcus_pneumoniae_5734549305143689773"
+  },
+  "staphylococcus_aureus_-5197626208724680673": {
+    "organism": "staphylococcus_aureus",
+    "analysis": {
+      "respiratory_findings": "If the staphylococcus aureus infection has led to pneumonia, physical examination would likely reveal signs of consolidation such as decreased breath sounds, bronchial breath sounds, and the presence of crackles (rales), particularly if there is alveolar involvement. There may also be dullness to percussion and increased tactile fremitus.",
+      "primary_sound_category": "Crackles",
+      "patient_age": 35,
+      "patient_sex": "Male",
+      "confidence": 0.8,
+      "reasoning": "Staphylococcus aureus commonly causes a form of bacterial pneumonia that results in consolidation and alveolar filling, leading to crackles on auscultation. Although the patient's sex and age are not specified, young to middle-aged adults are a typical group affected. Other auscultatory findings may be present, but crackles are the most classic and reliable finding."
+    },
+    "matching_files": [
+      {
+        "filename": "patient101_1b1_Al_sc_Meditron.wav",
+        "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+        "file_size": 1024,
+        "match_score": 0.5,
+        "category": "Crackles",
+        "analysis": {
+          "respiratory_findings": "If the staphylococcus aureus infection has led to pneumonia, physical examination would likely reveal signs of consolidation such as decreased breath sounds, bronchial breath sounds, and the presence of crackles (rales), particularly if there is alveolar involvement. There may also be dullness to percussion and increased tactile fremitus.",
+          "primary_sound_category": "Crackles",
+          "patient_age": 35,
+          "patient_sex": "Male",
+          "confidence": 0.8,
+          "reasoning": "Staphylococcus aureus commonly causes a form of bacterial pneumonia that results in consolidation and alveolar filling, leading to crackles on auscultation. Although the patient's sex and age are not specified, young to middle-aged adults are a typical group affected. Other auscultatory findings may be present, but crackles are the most classic and reliable finding."
+        }
+      }
+    ],
+    "best_match": {
+      "filename": "patient101_1b1_Al_sc_Meditron.wav",
+      "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+      "file_size": 1024,
+      "match_score": 0.5,
+      "category": "Crackles",
+      "analysis": {
+        "respiratory_findings": "If the staphylococcus aureus infection has led to pneumonia, physical examination would likely reveal signs of consolidation such as decreased breath sounds, bronchial breath sounds, and the presence of crackles (rales), particularly if there is alveolar involvement. There may also be dullness to percussion and increased tactile fremitus.",
+        "primary_sound_category": "Crackles",
+        "patient_age": 35,
+        "patient_sex": "Male",
+        "confidence": 0.8,
+        "reasoning": "Staphylococcus aureus commonly causes a form of bacterial pneumonia that results in consolidation and alveolar filling, leading to crackles on auscultation. Although the patient's sex and age are not specified, young to middle-aged adults are a typical group affected. Other auscultatory findings may be present, but crackles are the most classic and reliable finding."
+      }
+    },
+    "total_matches": 1,
+    "cache_key": "staphylococcus_aureus_-5197626208724680673"
+  },
+  "streptococcus_pneumoniae": {
+    "organism": "streptococcus_pneumoniae",
+    "analysis": {
+      "respiratory_findings": "On auscultation, patients with pneumonia due to Streptococcus pneumoniae typically have inspiratory crackles (rales) over the affected lung fields. Bronchial breath sounds and possible areas of decreased breath sounds may also be noted if there is consolidation. Occasionally, dullness to percussion and increased tactile fremitus may accompany the auscultatory findings.",
+      "primary_sound_category": "Crackles",
+      "patient_age": 55,
+      "patient_sex": "Male",
+      "confidence": 0.95,
+      "reasoning": "Streptococcus pneumoniae is a common cause of community-acquired pneumonia, which classically presents with crackles on auscultation due to alveolar filling with inflammatory exudate. Crackles are the primary auscultatory finding, with other features possibly present, but crackles are most reliably associated."
+    },
+    "matching_files": [
+      {
+        "filename": "patient101_1b1_Al_sc_Meditron.wav",
+        "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+        "file_size": 1024,
+        "match_score": 0.5,
+        "category": "Crackles",
+        "analysis": {
+          "respiratory_findings": "On auscultation, patients with pneumonia due to Streptococcus pneumoniae typically have inspiratory crackles (rales) over the affected lung fields. Bronchial breath sounds and possible areas of decreased breath sounds may also be noted if there is consolidation. Occasionally, dullness to percussion and increased tactile fremitus may accompany the auscultatory findings.",
+          "primary_sound_category": "Crackles",
+          "patient_age": 55,
+          "patient_sex": "Male",
+          "confidence": 0.95,
+          "reasoning": "Streptococcus pneumoniae is a common cause of community-acquired pneumonia, which classically presents with crackles on auscultation due to alveolar filling with inflammatory exudate. Crackles are the primary auscultatory finding, with other features possibly present, but crackles are most reliably associated."
+        }
+      }
+    ],
+    "best_match": {
+      "filename": "patient101_1b1_Al_sc_Meditron.wav",
+      "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+      "file_size": 1024,
+      "match_score": 0.5,
+      "category": "Crackles",
+      "analysis": {
+        "respiratory_findings": "On auscultation, patients with pneumonia due to Streptococcus pneumoniae typically have inspiratory crackles (rales) over the affected lung fields. Bronchial breath sounds and possible areas of decreased breath sounds may also be noted if there is consolidation. Occasionally, dullness to percussion and increased tactile fremitus may accompany the auscultatory findings.",
+        "primary_sound_category": "Crackles",
+        "patient_age": 55,
+        "patient_sex": "Male",
+        "confidence": 0.95,
+        "reasoning": "Streptococcus pneumoniae is a common cause of community-acquired pneumonia, which classically presents with crackles on auscultation due to alveolar filling with inflammatory exudate. Crackles are the primary auscultatory finding, with other features possibly present, but crackles are most reliably associated."
+      }
+    },
+    "total_matches": 1,
+    "cache_key": "streptococcus_pneumoniae_5734549305143689773"
+  },
+  "staphylococcus_aureus": {
+    "organism": "staphylococcus_aureus",
+    "analysis": {
+      "respiratory_findings": "If the staphylococcus aureus infection has led to pneumonia, physical examination would likely reveal signs of consolidation such as decreased breath sounds, bronchial breath sounds, and the presence of crackles (rales), particularly if there is alveolar involvement. There may also be dullness to percussion and increased tactile fremitus.",
+      "primary_sound_category": "Crackles",
+      "patient_age": 35,
+      "patient_sex": "Male",
+      "confidence": 0.8,
+      "reasoning": "Staphylococcus aureus commonly causes a form of bacterial pneumonia that results in consolidation and alveolar filling, leading to crackles on auscultation. Although the patient's sex and age are not specified, young to middle-aged adults are a typical group affected. Other auscultatory findings may be present, but crackles are the most classic and reliable finding."
+    },
+    "matching_files": [
+      {
+        "filename": "patient101_1b1_Al_sc_Meditron.wav",
+        "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+        "file_size": 1024,
+        "match_score": 0.5,
+        "category": "Crackles",
+        "analysis": {
+          "respiratory_findings": "If the staphylococcus aureus infection has led to pneumonia, physical examination would likely reveal signs of consolidation such as decreased breath sounds, bronchial breath sounds, and the presence of crackles (rales), particularly if there is alveolar involvement. There may also be dullness to percussion and increased tactile fremitus.",
+          "primary_sound_category": "Crackles",
+          "patient_age": 35,
+          "patient_sex": "Male",
+          "confidence": 0.8,
+          "reasoning": "Staphylococcus aureus commonly causes a form of bacterial pneumonia that results in consolidation and alveolar filling, leading to crackles on auscultation. Although the patient's sex and age are not specified, young to middle-aged adults are a typical group affected. Other auscultatory findings may be present, but crackles are the most classic and reliable finding."
+        }
+      }
+    ],
+    "best_match": {
+      "filename": "patient101_1b1_Al_sc_Meditron.wav",
+      "relative_path": "patient101_1b1_Al_sc_Meditron.wav",
+      "file_size": 1024,
+      "match_score": 0.5,
+      "category": "Crackles",
+      "analysis": {
+        "respiratory_findings": "If the staphylococcus aureus infection has led to pneumonia, physical examination would likely reveal signs of consolidation such as decreased breath sounds, bronchial breath sounds, and the presence of crackles (rales), particularly if there is alveolar involvement. There may also be dullness to percussion and increased tactile fremitus.",
+        "primary_sound_category": "Crackles",
+        "patient_age": 35,
+        "patient_sex": "Male",
+        "confidence": 0.8,
+        "reasoning": "Staphylococcus aureus commonly causes a form of bacterial pneumonia that results in consolidation and alveolar filling, leading to crackles on auscultation. Although the patient's sex and age are not specified, young to middle-aged adults are a typical group affected. Other auscultatory findings may be present, but crackles are the most classic and reliable finding."
+      }
+    },
+    "total_matches": 1,
+    "cache_key": "staphylococcus_aureus_-5197626208724680673"
+  }
+}

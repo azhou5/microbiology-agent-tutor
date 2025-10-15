@@ -221,6 +221,18 @@
                         <div class="stat-trend" id="update-trend">System active</div>
                     </div>
                 </div>
+                <div class="stat-card faiss-status-card">
+                    <div class="stat-icon" id="faiss-icon">🔄</div>
+                    <div class="stat-content">
+                        <div class="stat-label">FAISS Index</div>
+                        <div id="faiss-status" class="stat-value">Ready</div>
+                        <div class="stat-trend" id="faiss-trend">Last update: Never</div>
+                    </div>
+                    <div id="faiss-loading" class="faiss-loading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <span class="loading-text">Re-indexing...</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Feedback Trends Chart -->

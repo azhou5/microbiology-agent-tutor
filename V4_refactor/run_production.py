@@ -113,8 +113,10 @@ def main():
             raise
             
         try:
-            from microtutor.api import app
+            from microtutor.api.app import app
             logger.info("✅ microtutor.api.app imported successfully")
+            logger.info(f"✅ App type: {type(app)}")
+            logger.info(f"✅ App is callable: {callable(app)}")
         except ImportError as e:
             logger.error(f"❌ Failed to import microtutor.api.app: {e}")
             raise
@@ -128,7 +130,7 @@ def main():
         print(f"📚 API docs: http://0.0.0.0:{port}/api/docs")
         
         uvicorn.run(
-            app,
+            "microtutor.api.app:app",
             host="0.0.0.0",
             port=port,
             log_level="info",

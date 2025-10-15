@@ -88,6 +88,17 @@ class BackgroundTaskService:
         self._db_engine = None
         self._db_pool_size = 5
         
+        # FAISS re-indexing status tracking
+        self._faiss_status = {
+            "is_reindexing": False,
+            "last_reindex_start": None,
+            "last_reindex_complete": None,
+            "last_reindex_duration": None,
+            "reindex_count": 0,
+            "last_error": None
+        }
+        self._faiss_status_lock = threading.Lock()
+        
         logger.info(f"BackgroundTaskService initialized with {max_workers} workers")
     
     def start(self) -> None:
@@ -392,6 +403,16 @@ class BackgroundTaskService:
     
     def _process_faiss_index_update(self, data: Dict[str, Any]) -> None:
         """Process FAISS index update."""
+        start_time = datetime.now(pytz.timezone('America/New_York'))
+        
+        # Update status to indicate re-indexing has started
+        with self._faiss_status_lock:
+            self._faiss_status.update({
+                "is_reindexing": True,
+                "last_reindex_start": start_time,
+                "last_error": None
+            })
+        
         try:
             logger.info("Updating FAISS indices from database feedback...")
             
@@ -406,14 +427,42 @@ class BackgroundTaskService:
             
             result = generator.generate_indices(force_update=force_update)
             
-            if result['status'] == 'success':
-                logger.info(f"Successfully updated FAISS indices: {result['metadata']}")
-            elif result['status'] == 'skipped':
-                logger.info(f"FAISS index update skipped: {result['reason']}")
-            else:
-                logger.error(f"FAISS index update failed: {result['reason']}")
+            end_time = datetime.now(pytz.timezone('America/New_York'))
+            duration = (end_time - start_time).total_seconds()
+            
+            # Update status based on result
+            with self._faiss_status_lock:
+                if result['status'] == 'success':
+                    self._faiss_status.update({
+                        "is_reindexing": False,
+                        "last_reindex_complete": end_time,
+                        "last_reindex_duration": duration,
+                        "reindex_count": self._faiss_status["reindex_count"] + 1,
+                        "last_error": None
+                    })
+                    logger.info(f"Successfully updated FAISS indices: {result['metadata']}")
+                elif result['status'] == 'skipped':
+                    self._faiss_status.update({
+                        "is_reindexing": False,
+                        "last_reindex_complete": end_time,
+                        "last_reindex_duration": duration,
+                        "last_error": None
+                    })
+                    logger.info(f"FAISS index update skipped: {result['reason']}")
+                else:
+                    self._faiss_status.update({
+                        "is_reindexing": False,
+                        "last_error": result['reason']
+                    })
+                    logger.error(f"FAISS index update failed: {result['reason']}")
                 
         except Exception as e:
+            end_time = datetime.now(pytz.timezone('America/New_York'))
+            with self._faiss_status_lock:
+                self._faiss_status.update({
+                    "is_reindexing": False,
+                    "last_error": str(e)
+                })
             logger.error(f"FAISS index update failed: {e}")
     
     def _init_database_pool(self) -> None:
@@ -568,6 +617,31 @@ class BackgroundTaskService:
             priority=1
         )
         return self.submit_task(task)
+    
+    def get_faiss_status(self) -> Dict[str, Any]:
+        """Get current FAISS re-indexing status.
+        
+        Returns:
+            Dictionary containing FAISS status information
+        """
+        with self._faiss_status_lock:
+            status = self._faiss_status.copy()
+            
+            # Format timestamps for frontend
+            if status["last_reindex_start"]:
+                status["last_reindex_start"] = status["last_reindex_start"].isoformat()
+            if status["last_reindex_complete"]:
+                status["last_reindex_complete"] = status["last_reindex_complete"].isoformat()
+            
+            # Calculate duration if currently re-indexing
+            if status["is_reindexing"] and status["last_reindex_start"]:
+                start_time = datetime.fromisoformat(status["last_reindex_start"].replace('Z', '+00:00'))
+                current_time = datetime.now(pytz.timezone('America/New_York'))
+                status["current_duration"] = (current_time - start_time).total_seconds()
+            else:
+                status["current_duration"] = None
+                
+            return status
 
 
 # Global background service instance

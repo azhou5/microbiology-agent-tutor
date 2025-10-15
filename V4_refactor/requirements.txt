@@ -48,6 +48,9 @@ requests==2.31.0
 beautifulsoup4==4.12.3
 # lxml==5.1.0
 
+# Audio Dataset Management
+kagglehub[pandas-datasets]>=0.2.0,<1.0.0
+
 # Production Dependencies
 # These are essential for Render deployment
 python-dotenv==1.0.0

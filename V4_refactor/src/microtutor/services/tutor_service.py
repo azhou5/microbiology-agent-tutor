@@ -44,7 +44,8 @@ class TutorService:
         reward_model_sampling: bool = False,
         model_name: Optional[str] = None,
         enable_feedback: bool = True,
-        feedback_dir: Optional[str] = None
+        feedback_dir: Optional[str] = None,
+        automatic_socratic_routing: bool = True
     ):
         """Initialize tutor service."""
         self.output_tool_directly = output_tool_directly
@@ -52,6 +53,7 @@ class TutorService:
         self.reward_model_sampling = reward_model_sampling
         self.model_name = model_name or config.API_MODEL_NAME
         self.enable_feedback = enable_feedback and FEEDBACK_AVAILABLE
+        self.automatic_socratic_routing = automatic_socratic_routing
         
         # Initialize tool engine (ToolUniverse-style with native function calling)
         self.tool_engine = get_tool_engine()
@@ -224,13 +226,15 @@ class TutorService:
         logger.info(f"Processing message for case_id={context.case_id}")
         
         # Check if we're in socratic mode and should route directly to socratic agent
-        if self.socratic_mode:
-            logger.info("In socratic mode, routing directly to socratic agent")
+        if self.socratic_mode and self.automatic_socratic_routing:
+            logger.info("In socratic mode with automatic routing enabled, routing directly to socratic agent")
             # Ensure phase is set to differential diagnosis when in socratic mode
             if context.current_state != TutorState.DIFFERENTIAL_DIAGNOSIS:
                 context.current_state = TutorState.DIFFERENTIAL_DIAGNOSIS
                 logger.info("Setting phase to differential_diagnosis for socratic mode")
             return await self._handle_socratic_direct_route(message, context)
+        elif self.socratic_mode and not self.automatic_socratic_routing:
+            logger.info("In socratic mode but automatic routing disabled, proceeding with normal flow")
         
         # Check for phase transition messages and update context
         if "Let's move onto phase:" in message:
@@ -411,22 +415,11 @@ class TutorService:
         # Add assistant response
         context.conversation_history.append({"role": "assistant", "content": response_text})
         
-        # Update phase state - either from tool call or automatic detection
-        if phase_data:
-            # Phase data from LLM tool call
-            new_state = TutorState(phase_data['current_phase'])
-            self.current_phase = new_state
-            self.phase_locked = phase_data.get('phase_locked', False)
-            context.current_state = new_state
-            logger.info(f"[PHASE] Updated via LLM tool: {phase_data['current_phase']}, locked: {self.phase_locked}")
-        else:
-            # Automatic phase detection as fallback
-            new_state = self._determine_state(response_text, context.current_state)
-            context.current_state = new_state
-            logger.info(f"[PHASE] Auto-detected: {new_state}")
-            
-            # Force phase update tool call for consistency
-            self._force_phase_update(context, response_text, message)
+        # Update phase state based on tools used
+        new_state = self._determine_phase_from_tools(tools_used, context.current_state)
+        context.current_state = new_state
+        self.current_phase = new_state
+        logger.info(f"[PHASE] Determined from tools {tools_used}: {new_state}")
         
         processing_time = (datetime.now() - start_time).total_seconds() * 1000
         logger.info(f"Message processed in {processing_time:.2f}ms, state: {new_state}")
@@ -578,12 +571,13 @@ class TutorService:
                         context.current_state = next_phase
                         logger.info(f"Phase transition: {current_phase} -> {next_phase}")
                 
-                # Create metadata
+                # Create metadata - phase is determined by the tool used
                 metadata = {
                     "phase_agent": agent_name,
                     "current_phase": current_phase.value,
                     "phase_complete": is_complete,
-                    "agent": agent_name
+                    "agent": agent_name,
+                    "tools_used": [agent_name]
                 }
                 
                 return TutorResponse(
@@ -694,24 +688,18 @@ class TutorService:
                 tool_result = self.tool_engine.execute_tool(tool_name, tool_args)
                 
                 if tool_result['success']:
-                        # Check if this is a phase update tool
-                        if tool_name == 'update_phase':
-                            try:
-                                phase_data = json.loads(tool_result['result'])
-                                logger.info(f"[PHASE] Phase update tool called: {phase_data['current_phase']}")
-                            except json.JSONDecodeError:
-                                logger.warning("Failed to parse phase data from update_phase tool")
-                        elif tool_name == 'socratic':
-                            # Set socratic mode to True when socratic tool is called
-                            self.socratic_mode = True
-                            self.socratic_conversation_count = 1
-                            # Set phase to differential diagnosis for socratic mode
-                            self.current_phase = TutorState.DIFFERENTIAL_DIAGNOSIS
+                    # Handle special tool behaviors
+                    if tool_name == 'socratic':
+                        # Set socratic mode to True when socratic tool is called
+                        self.socratic_mode = True
+                        self.socratic_conversation_count = 1
+                        if self.automatic_socratic_routing:
                             logger.info("Entering socratic mode - future messages will route directly to socratic agent")
-                            logger.info("Setting phase to differential_diagnosis for socratic mode")
                         else:
-                            # Regular tool - return its result
-                            return tool_result['result'], phase_data, tools_used
+                            logger.info("Entering socratic mode - future messages will use normal routing")
+                    
+                    # Return tool result - phase will be determined from tools_used
+                    return tool_result['result'], phase_data, tools_used
                 else:
                     error = tool_result.get('error', {})
                     logger.error(f"Tool failed: {error.get('message', 'Unknown error')}")
@@ -1064,6 +1052,46 @@ class TutorService:
             logger.warning(f"[PHASE] Unknown phase: {current_phase}")
             return TutorState.INFORMATION_GATHERING
     
+    def _determine_phase_from_tools(self, tools_used: List[str], current_state: TutorState) -> TutorState:
+        """Determine phase based on which tools were used."""
+        if not tools_used:
+            return current_state  # No tools used, keep current state
+        
+        # Map tools to phases
+        tool_to_phase = {
+            'patient': TutorState.INFORMATION_GATHERING,
+            'problem_representation': TutorState.PROBLEM_REPRESENTATION,
+            'socratic': TutorState.DIFFERENTIAL_DIAGNOSIS,
+            'tests_management': TutorState.TESTS,  # Could be TESTS or MANAGEMENT
+            'feedback': TutorState.FEEDBACK
+        }
+        
+        # Use the first tool to determine phase
+        first_tool = tools_used[0]
+        new_phase = tool_to_phase.get(first_tool)
+        
+        if new_phase:
+            logger.info(f"[PHASE] Tool '{first_tool}' maps to phase: {new_phase}")
+            return new_phase
+        else:
+            logger.info(f"[PHASE] Unknown tool '{first_tool}', keeping current phase: {current_state}")
+            return current_state
+
+    def set_socratic_mode(self, enabled: bool) -> None:
+        """Manually enable or disable socratic mode."""
+        self.socratic_mode = enabled
+        if enabled:
+            self.socratic_conversation_count = 1
+            logger.info("Socratic mode manually enabled")
+        else:
+            self.socratic_conversation_count = 0
+            logger.info("Socratic mode manually disabled")
+
+    def set_automatic_socratic_routing(self, enabled: bool) -> None:
+        """Enable or disable automatic socratic routing."""
+        self.automatic_socratic_routing = enabled
+        logger.info(f"Automatic socratic routing {'enabled' if enabled else 'disabled'}")
+
     def _determine_state(self, response: str, current_state: TutorState) -> TutorState:
         """Determine new state based on response content (fallback method)."""
         resp = response.lower()

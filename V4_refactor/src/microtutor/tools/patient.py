@@ -3,13 +3,22 @@ PatientTool - Patient agent following ToolUniverse AgenticTool pattern.
 """
 
 import logging
-from typing import Dict, Any
+import re
+from typing import Dict, Any, Optional
 
 from microtutor.models.tool_models import AgenticTool
 from microtutor.models.tool_errors import ToolLLMError
 from microtutor.core.llm_router import chat_complete
 from microtutor.tools.prompts import get_patient_system_prompt, get_patient_user_prompt
 from microtutor.core.logging_config import log_agent_context
+
+# Import audio matcher for respiratory sounds
+try:
+    from microtutor.audio.sound_matcher import RespiratoryAudioMatcher
+    AUDIO_AVAILABLE = True
+except ImportError:
+    AUDIO_AVAILABLE = False
+    RespiratoryAudioMatcher = None
 
 # Import feedback integration
 try:
@@ -31,7 +40,9 @@ class PatientTool(AgenticTool):
         """Initialize patient tool with optional feedback integration."""
         super().__init__(config)
         self.enable_feedback = config.get('enable_feedback', True) and FEEDBACK_AVAILABLE
+        self.enable_audio = config.get('enable_audio', True) and AUDIO_AVAILABLE
         self.feedback_retriever = None
+        self.audio_matcher = None
         self.interaction_counter = 0  # Track interaction count per tool instance
         
         if self.enable_feedback:
@@ -42,6 +53,83 @@ class PatientTool(AgenticTool):
             except Exception as e:
                 logger.warning(f"Failed to initialize patient feedback retriever: {e}")
                 self.enable_feedback = False
+        
+        if self.enable_audio:
+            try:
+                self.audio_matcher = RespiratoryAudioMatcher()
+                logger.info("Patient tool audio integration enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize audio matcher: {e}")
+                self.enable_audio = False
+    
+    def _is_respiratory_exam_request(self, input_text: str) -> bool:
+        """Check if the input is requesting a respiratory examination."""
+        respiratory_keywords = [
+            'listen', 'auscultate', 'lung sounds', 'breath sounds', 'chest exam',
+            'respiratory exam', 'lungs', 'breathing', 'stethoscope', 'chest',
+            'respiratory', 'pulmonary', 'auscultation', 'listen to', 'examine lungs',
+            'check lungs', 'lung examination', 'breathing sounds'
+        ]
+        
+        input_lower = input_text.lower()
+        return any(keyword in input_lower for keyword in respiratory_keywords)
+    
+    def _get_organism_from_case(self, case: str) -> Optional[str]:
+        """Extract organism name from case text."""
+        # Common organism patterns in case text
+        organism_patterns = [
+            r'staphylococcus aureus',
+            r'streptococcus pneumoniae', 
+            r'escherichia coli',
+            r'borrelia burgdorferi',
+            r'nocardia species',
+            r'hsv-1',
+            r'influenza a',
+            r'hiv',
+            r'ebv',
+            r'candida albicans',
+            r'aspergillus fumigatus',
+            r'plasmodium falciparum',
+            r'taenia solium'
+        ]
+        
+        case_lower = case.lower()
+        for pattern in organism_patterns:
+            if re.search(pattern, case_lower):
+                return pattern.replace(' ', '_')
+        
+        return None
+    
+    def _get_audio_data(self, input_text: str, case: str) -> Optional[Dict[str, Any]]:
+        """Get audio data for respiratory examination if applicable."""
+        if not self.enable_audio or not self.audio_matcher:
+            return None
+        
+        if not self._is_respiratory_exam_request(input_text):
+            return None
+        
+        organism = self._get_organism_from_case(case)
+        if not organism:
+            logger.warning("Could not extract organism from case for audio matching")
+            return None
+        
+        try:
+            # Get HPI from case (first paragraph or section)
+            hpi = case.split('\n')[0] if '\n' in case else case
+            if len(hpi) > 500:  # Truncate very long cases
+                hpi = hpi[:500] + "..."
+            
+            audio_data = self.audio_matcher.get_audio_for_respiratory_exam(organism, hpi)
+            if audio_data:
+                logger.info(f"Found audio match for {organism}: {audio_data['finding_type']}")
+                return audio_data
+            else:
+                logger.info(f"No audio match found for {organism}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting audio data: {e}")
+            return None
     
     def _call_llm(self, prompt: str, **kwargs) -> str:
         """Call LLM to generate patient response."""
@@ -116,13 +204,32 @@ class PatientTool(AgenticTool):
     
     def _execute(self, arguments: Dict[str, Any]) -> str:
         """Execute patient tool."""
-        return self._call_llm(
+        input_text = arguments.get('input_text', '')
+        case = arguments.get('case', '')
+        
+        # Get text response
+        text_response = self._call_llm(
             "",
-            case=arguments.get('case', ''),
-            input_text=arguments.get('input_text', ''),
+            case=case,
+            input_text=input_text,
             conversation_history=arguments.get('conversation_history', []),
             model=arguments.get('model', 'gpt-4')
         )
+        
+        # Check for audio data
+        audio_data = self._get_audio_data(input_text, case)
+        
+        if audio_data:
+            # Return structured response with audio data
+            import json
+            return json.dumps({
+                "response": text_response,
+                "audio_data": audio_data,
+                "has_audio": True
+            })
+        else:
+            # Return simple text response
+            return text_response
 
 
 # Legacy wrapper for backward compatibility

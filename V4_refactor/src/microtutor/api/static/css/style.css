@@ -1981,3 +1981,71 @@ footer {
         max-width: 200px;
     }
 }
+
+/* Audio Player Styles */
+.audio-player-container {
+    margin-top: 10px;
+    padding: 15px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.audio-description {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.respiratory-audio {
+    width: 100%;
+    margin-bottom: 10px;
+    border-radius: 4px;
+}
+
+.audio-play-button {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.audio-play-button:hover {
+    background: var(--primary-hover);
+}
+
+.audio-loading {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.audio-error {
+    color: var(--danger-color);
+    font-size: 14px;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+}
+
+/* Audio player in assistant messages */
+.assistant-message .audio-player-container {
+    background: #e8f4f8;
+    border-left-color: #17a2b8;
+}
+
+/* Audio player in user messages (if needed) */
+.user-message .audio-player-container {
+    background: #d1e7fd;
+    border-left-color: var(--primary-color);
+}
