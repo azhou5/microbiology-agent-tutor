@@ -38,11 +38,18 @@ class TutorContext(BaseModel):
     case_description: Optional[str] = None
     conversation_history: List[Dict[str, str]] = Field(default_factory=list)
     current_state: TutorState = TutorState.INITIALIZING
-    model_name: str = "o3-mini"
+    model_name: str = None
     session_metadata: Dict[str, Any] = Field(default_factory=dict)
     
     class Config:
         use_enum_values = True
+    
+    def get_model_name(self) -> str:
+        """Get the model name, using config default if None."""
+        if self.model_name is None:
+            from microtutor.core.config_helper import config
+            return config.API_MODEL_NAME
+        return self.model_name
 
 
 class TutorResponse(BaseModel):

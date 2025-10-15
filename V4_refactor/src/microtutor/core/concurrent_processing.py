@@ -305,7 +305,7 @@ async def process_start_case_concurrent(
     case_id: str,
     background_service,
     tutor_service,
-    model_name: str = "o3-mini",
+    model_name: str = None,
     use_hpi_only: bool = False
 ) -> Dict[str, Any]:
     """Process case start with concurrent operations.
@@ -321,6 +321,12 @@ async def process_start_case_concurrent(
     Returns:
         Dictionary with processing results
     """
+    from microtutor.core.config_helper import config
+    
+    # Use config model if not provided
+    if model_name is None:
+        model_name = config.API_MODEL_NAME
+    
     processor = get_concurrent_processor()
     
     # Concurrent operations that can run in parallel

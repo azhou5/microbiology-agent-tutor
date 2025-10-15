@@ -64,8 +64,8 @@ class StartCaseRequest(BaseModel):
         example="case_2024_abc123"
     )
     model_name: Optional[str] = Field(
-        default="o3-mini",
-        description="LLM model to use for this case"
+        default=None,
+        description="LLM model to use for this case (defaults to config)"
     )
     use_hpi_only: Optional[bool] = Field(
         default=False,
@@ -85,7 +85,7 @@ class StartCaseRequest(BaseModel):
             "example": {
                 "organism": "staphylococcus aureus",
                 "case_id": "case_2024_abc123",
-                "model_name": "o3-mini",
+                "model_name": None,
                 "use_hpi_only": False
             }
         }
@@ -158,7 +158,7 @@ class ChatRequest(BaseModel):
                 ],
                 "organism_key": "staphylococcus aureus",
                 "case_id": "case_2024_abc123",
-                "model_name": "o3-mini"
+                "model_name": None
             }
         }
 

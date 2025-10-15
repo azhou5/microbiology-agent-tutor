@@ -28,7 +28,7 @@ class DDXCaseGenerator:
         self,
         pdf_directory: Optional[str] = None,
         cache_directory: Optional[str] = None,
-        llm_model: str = "gpt-4"
+        llm_model: str = None  # Will use config default
     ):
         """
         Initialize the DDX case generator.
@@ -38,6 +38,11 @@ class DDXCaseGenerator:
             cache_directory: Path to cache directory (defaults to ../../Datasets/vmr_cache)
             llm_model: Model to use for case adaptation
         """
+        # Use config model if not provided
+        if llm_model is None:
+            from microtutor.core.config_helper import config
+            llm_model = config.API_MODEL_NAME
+        
         # Initialize the search tool
         tool_config = {
             "name": "ddx_case_search",

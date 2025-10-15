@@ -26,7 +26,8 @@ def chat_complete(
     user_prompt: str,
     model: Optional[str] = None,
     tools: Optional[List[Dict]] = None,
-    max_retries: int = 3
+    max_retries: int = 3,
+    conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> Union[str, Dict]:
     """
     Generate LLM response with optional tool support.
@@ -37,16 +38,22 @@ def chat_complete(
         model: Model to use (optional, defaults to config)
         tools: Optional tool schemas for native function calling
         max_retries: Number of retry attempts
+        conversation_history: Optional full conversation history
     
     Returns:
         str: Text response (if no tool calls)
         Dict: {'content': str, 'tool_calls': list} (if tool called)
         None: If all retries failed
         """
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt}
-    ]
+    if conversation_history:
+        # Use full conversation history if provided
+        messages = conversation_history
+    else:
+        # Fallback to simple system + user format
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
     
     for attempt in range(max_retries):
         response = llm_client.generate(

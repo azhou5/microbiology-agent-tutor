@@ -224,12 +224,42 @@ class TutorService:
             except Exception as e:
                 logger.warning(f"Could not retrieve feedback examples: {e}")
         
-        # Ensure system message is set only once at case start
-        if not context.conversation_history or context.conversation_history[0]["role"] != "system":
+        # Ensure system message is present and at the beginning
+        # Check if system message exists anywhere in the conversation history
+        has_system_message = any(
+            msg.get("role") == "system" for msg in context.conversation_history
+        )
+        
+        if not has_system_message:
+            # No system message found, add it at the beginning
             system_message = system_message_template.format(
                 case=context.case_description
             )
             context.conversation_history.insert(0, {"role": "system", "content": system_message})
+            logger.info(f"[SYSTEM] Added system message to conversation history")
+        elif context.conversation_history[0]["role"] != "system":
+            # System message exists but not at the beginning, move it to the front
+            system_msg = None
+            for i, msg in enumerate(context.conversation_history):
+                if msg.get("role") == "system":
+                    system_msg = context.conversation_history.pop(i)
+                    break
+            
+            if system_msg:
+                context.conversation_history.insert(0, system_msg)
+                logger.info(f"[SYSTEM] Moved system message to beginning of conversation history")
+            else:
+                # Fallback: create new system message
+                system_message = system_message_template.format(
+                    case=context.case_description
+                )
+                context.conversation_history.insert(0, {"role": "system", "content": system_message})
+                logger.info(f"[SYSTEM] Created new system message as fallback")
+        
+        # Log conversation history state for debugging
+        logger.info(f"[CONVERSATION] History length: {len(context.conversation_history)}")
+        logger.info(f"[CONVERSATION] First message role: {context.conversation_history[0]['role'] if context.conversation_history else 'None'}")
+        logger.info(f"[CONVERSATION] Last message role: {context.conversation_history[-1]['role'] if context.conversation_history else 'None'}")
         
         # Increment interaction counter and log agent context
         self.interaction_counter += 1
@@ -299,12 +329,13 @@ class TutorService:
         system_msg = messages[0]["content"] if messages and messages[0]["role"] == "system" else ""
         user_msg = messages[-1]["content"] if messages and messages[-1]["role"] == "user" else ""
         
-        # Call LLM with tool schemas (native function calling)
+        # Call LLM with tool schemas (native function calling) and full conversation history
         response = chat_complete(
             system_prompt=system_msg,
             user_prompt=user_msg,
             model=model,
-            tools=self.tool_schemas
+            tools=self.tool_schemas,
+            conversation_history=messages  # Pass full conversation history
         )
         
         # Handle tool call (native function calling format)

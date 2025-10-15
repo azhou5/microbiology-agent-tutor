@@ -31,12 +31,18 @@ class StreamingChunk:
 class StreamingLLMClient:
     """Client for streaming LLM responses."""
     
-    def __init__(self, model: str = "o3-mini"):
+    def __init__(self, model: str = None):
         """Initialize streaming LLM client.
         
         Args:
-            model: Model name to use for streaming
+            model: Model name to use for streaming (defaults to config)
         """
+        from microtutor.core.config_helper import config
+        
+        # Use config model if not provided
+        if model is None:
+            model = config.API_MODEL_NAME
+        
         self.model = model
         self.client = None
         self._initialize_client()

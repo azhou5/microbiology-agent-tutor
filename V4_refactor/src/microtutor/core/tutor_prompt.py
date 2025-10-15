@@ -29,7 +29,7 @@ def get_tool_schemas_for_function_calling():
     Example:
         schemas = get_tool_schemas_for_function_calling()
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model=None,  # Will use config default
             messages=messages,
             tools=schemas  # ← Native function calling
         )

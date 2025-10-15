@@ -51,7 +51,6 @@ class CostService:
         # O1 models (approximate pricing)
         "o1-preview": {"input": 15.00, "output": 60.00},
         "o1-mini": {"input": 3.00, "output": 12.00},
-        "o3-mini": {"input": 3.00, "output": 12.00},  # Estimated
         "o4-mini-2025-04-16": {"input": 3.00, "output": 12.00},  # Estimated
         
         # Anthropic models
