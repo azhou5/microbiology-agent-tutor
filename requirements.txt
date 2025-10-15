@@ -1,0 +1,11 @@
+# MicroTutor V4 - Root Requirements (Redirects to V4_refactor)
+# This file redirects to the actual requirements in V4_refactor/
+
+# For local development, use:
+# pip install -r V4_refactor/requirements.txt
+
+# For Render deployment, this ensures the build process finds the requirements
+# The actual requirements are in V4_refactor/requirements.txt
+
+# Copy the requirements from V4_refactor
+-r V4_refactor/requirements.txt

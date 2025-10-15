@@ -66,7 +66,7 @@ validate_environment() {
         [ -z "$DB_HOST" ] && missing_vars+=("DB_HOST")
         [ -z "$DB_NAME" ] && missing_vars+=("DB_NAME")
         [ -z "$DB_USER" ] && missing_vars+=("DB_USER")
-        log_info "Using Local Database: $DB_HOST:$DB_PORT/$DB_NAME"
+        log_info "Using Local Database: ${DB_HOST:-'not set'}:${DB_PORT:-'not set'}/${DB_NAME:-'not set'}"
     fi
     
     if [ ${#missing_vars[@]} -gt 0 ]; then

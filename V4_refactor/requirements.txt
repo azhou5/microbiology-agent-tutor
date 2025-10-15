@@ -35,6 +35,9 @@ python-dotenv>=1.0.0,<2.0.0
 # Logging & Monitoring
 structlog>=23.3.0,<24.0.0
 
+# JSON Schema (required by Pydantic)
+jsonschema>=4.0.0,<5.0.0
+
 # Optional: Guideline Search Tools
 # Uncomment if you want guideline search functionality
 # tooluniverse>=0.1.0
