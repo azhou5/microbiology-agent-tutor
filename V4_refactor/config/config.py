@@ -8,28 +8,32 @@ from .base import BaseConfig
 # Load environment variables
 load_dotenv()
 
-# Construct path to the .env file in the same directory as this script
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'dot_env_microtutor.txt')
-if os.path.exists(dotenv_path):
-    load_dotenv(dotenv_path=dotenv_path)
-    print(f"✅ Environment file loaded from: {dotenv_path}")
-else:
-    print(f"⚠️  Environment file not found: {dotenv_path}")
-    # Try alternative paths for different deployment scenarios
-    alt_paths = [
-        os.path.join(os.path.dirname(__file__), '..', '..', 'dot_env_microtutor.txt'),
-        os.path.join(os.path.dirname(__file__), '..', '..', '..', 'dot_env_microtutor.txt'),
-        '/opt/render/project/src/dot_env_microtutor.txt',
-        '/opt/render/project/src/V4_refactor/dot_env_microtutor.txt'
-    ]
-    
-    for alt_path in alt_paths:
-        if os.path.exists(alt_path):
-            load_dotenv(dotenv_path=alt_path)
-            print(f"✅ Environment file loaded from alternative path: {alt_path}")
-            break
-    else:
-        print("⚠️  No environment file found, using system environment variables only")
+# Try to load environment file from various possible locations
+env_file_loaded = False
+env_file_paths = [
+    # Development paths
+    os.path.join(os.path.dirname(__file__), '..', 'dot_env_microtutor.txt'),
+    os.path.join(os.path.dirname(__file__), '..', '..', 'dot_env_microtutor.txt'),
+    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'dot_env_microtutor.txt'),
+    # Production paths (Render.com)
+    '/opt/render/project/src/dot_env_microtutor.txt',
+    '/opt/render/project/src/V4_refactor/dot_env_microtutor.txt',
+    'src/dot_env_microtutor.txt',
+    'dot_env_microtutor.txt',
+    # Current working directory
+    os.path.join(os.getcwd(), 'dot_env_microtutor.txt'),
+    os.path.join(os.getcwd(), 'src', 'dot_env_microtutor.txt')
+]
+
+for env_path in env_file_paths:
+    if os.path.exists(env_path):
+        load_dotenv(dotenv_path=env_path)
+        print(f"✅ Environment file loaded from: {env_path}")
+        env_file_loaded = True
+        break
+
+if not env_file_loaded:
+    print("⚠️  No environment file found, using system environment variables only")
 
 class Config(BaseConfig):
     """Main configuration class with environment-specific settings."""

@@ -48,6 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // API Configuration
     const API_BASE = '/api/v1';
 
+    // MCQ functionality
+    let currentMCQ = null;
+    let currentSessionId = null;
+
     // State
     let chatHistory = [];
     let currentCaseId = null;
@@ -1201,7 +1205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (sendBtn) {
-        sendBtn.addEventListener('click', handleSendMessage);
+        sendBtn.addEventListener('click', enhancedSendMessage);
     }
 
     if (userInput) {
@@ -2315,5 +2319,240 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize feedback counter
     initializeFeedbackCounter();
+
+    // Initialize MCQ functionality
+    initializeMCQ();
 });
+
+// MCQ Functions
+function initializeMCQ() {
+    console.log('[MCQ] Initializing MCQ functionality');
+
+    // Add event listener for MCQ option clicks
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('mcq-option')) {
+            const selectedAnswer = e.target.dataset.answer;
+            const questionId = e.target.dataset.questionId;
+            handleMCQResponse(selectedAnswer, questionId);
+        }
+    });
+}
+
+async function generateMCQ(topic, caseContext = null) {
+    try {
+        console.log(`[MCQ] Generating MCQ for topic: ${topic}`);
+
+        const response = await fetch(`${API_BASE}/mcq/generate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                topic: topic,
+                case_context: caseContext,
+                difficulty: 'intermediate',
+                session_id: currentSessionId || generateSessionId()
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            currentMCQ = data.mcq_data;
+            currentSessionId = data.session_id;
+
+            // Display the MCQ in the chat
+            displayMCQ(data.mcq_display, data.mcq_data);
+
+            return data;
+        } else {
+            throw new Error(data.error || 'Failed to generate MCQ');
+        }
+
+    } catch (error) {
+        console.error('[MCQ] Error generating MCQ:', error);
+        addMessage('assistant', `I apologize, but I couldn't generate a question right now. Error: ${error.message}`);
+        return null;
+    }
+}
+
+function displayMCQ(mcqDisplay, mcqData) {
+    // Create MCQ container
+    const mcqContainer = document.createElement('div');
+    mcqContainer.className = 'mcq-container';
+    mcqContainer.innerHTML = `
+        <div class="mcq-header">
+            <h4>📝 Multiple Choice Question</h4>
+            <p class="mcq-topic">Topic: ${mcqData.topic}</p>
+        </div>
+        <div class="mcq-question">
+            <p><strong>${mcqData.question_text}</strong></p>
+        </div>
+        <div class="mcq-options">
+            ${mcqData.options.map(option => `
+                <button class="mcq-option" 
+                        data-answer="${option.letter}" 
+                        data-question-id="${mcqData.question_id}">
+                    <span class="option-letter">${option.letter.toUpperCase()}</span>
+                    <span class="option-text">${option.text}</span>
+                </button>
+            `).join('')}
+        </div>
+        <div class="mcq-instructions">
+            <p><em>Click on your answer choice to submit your response.</em></p>
+        </div>
+    `;
+
+    // Add to chat
+    addMessage('assistant', '', mcqContainer);
+}
+
+async function handleMCQResponse(selectedAnswer, questionId) {
+    try {
+        console.log(`[MCQ] Processing response: ${selectedAnswer} for question ${questionId}`);
+
+        const startTime = Date.now();
+
+        // Disable all options to prevent multiple submissions
+        const options = document.querySelectorAll('.mcq-option');
+        options.forEach(option => {
+            option.disabled = true;
+            if (option.dataset.answer === selectedAnswer) {
+                option.classList.add('selected');
+            }
+        });
+
+        const response = await fetch(`${API_BASE}/mcq/respond`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                session_id: currentSessionId,
+                selected_answer: selectedAnswer,
+                response_time_ms: Date.now() - startTime
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Display feedback
+            displayMCQFeedback(data.feedback_display, data.is_correct);
+
+            // Clear current MCQ
+            currentMCQ = null;
+
+            return data;
+        } else {
+            throw new Error(data.error || 'Failed to process MCQ response');
+        }
+
+    } catch (error) {
+        console.error('[MCQ] Error processing response:', error);
+        addMessage('assistant', `I apologize, but I couldn't process your response. Error: ${error.message}`);
+        return null;
+    }
+}
+
+function displayMCQFeedback(feedbackDisplay, isCorrect) {
+    // Create feedback container
+    const feedbackContainer = document.createElement('div');
+    feedbackContainer.className = `mcq-feedback ${isCorrect ? 'correct' : 'incorrect'}`;
+    feedbackContainer.innerHTML = `
+        <div class="mcq-feedback-header">
+            <h4>${isCorrect ? '✅ Correct!' : '❌ Incorrect'}</h4>
+        </div>
+        <div class="mcq-feedback-content">
+            ${feedbackDisplay.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}
+        </div>
+        <div class="mcq-feedback-actions">
+            <button class="btn btn-primary" onclick="generateNextMCQ()">📝 Next Question</button>
+            <button class="btn btn-secondary" onclick="clearMCQ()">🔄 New Topic</button>
+        </div>
+    `;
+
+    // Add to chat
+    addMessage('assistant', '', feedbackContainer);
+}
+
+function generateNextMCQ() {
+    if (currentMCQ && currentMCQ.topic) {
+        generateMCQ(currentMCQ.topic);
+    } else {
+        addMessage('user', 'Generate a question about treatment guidelines');
+    }
+}
+
+function clearMCQ() {
+    currentMCQ = null;
+    addMessage('user', 'I want to discuss treatment guidelines');
+}
+
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Enhanced message handling to detect MCQ requests
+function enhancedSendMessage() {
+    const message = userInput.value.trim();
+    if (!message) return;
+
+    // Check if this is an MCQ request
+    const mcqKeywords = [
+        'generate a question', 'create a question', 'test me', 'quiz me',
+        'multiple choice', 'mcq', 'question about', 'ask me about',
+        'what would you ask', 'test my knowledge', 'check my understanding'
+    ];
+
+    const isMCQRequest = mcqKeywords.some(keyword =>
+        message.toLowerCase().includes(keyword)
+    );
+
+    if (isMCQRequest) {
+        // Extract topic from message
+        let topic = 'clinical guidelines';
+
+        // Try to extract topic from common patterns
+        const topicPatterns = [
+            /(?:about|on|regarding)\s+([^?]+)/i,
+            /question\s+(?:about|on|regarding)\s+([^?]+)/i,
+            /test\s+(?:my\s+)?(?:knowledge\s+)?(?:about|on|regarding)\s+([^?]+)/i,
+            /ask\s+(?:me\s+)?(?:about|on|regarding)\s+([^?]+)/i,
+        ];
+
+        for (const pattern of topicPatterns) {
+            const match = message.match(pattern);
+            if (match && match[1]) {
+                topic = match[1].trim().replace(/[?.,!]/g, '');
+                break;
+            }
+        }
+
+        // Set default topics based on keywords
+        if (message.toLowerCase().includes('treatment') || message.toLowerCase().includes('therapy')) {
+            topic = 'treatment guidelines';
+        } else if (message.toLowerCase().includes('diagnosis') || message.toLowerCase().includes('diagnostic')) {
+            topic = 'diagnostic approach';
+        } else if (message.toLowerCase().includes('antibiotic') || message.toLowerCase().includes('antimicrobial')) {
+            topic = 'antimicrobial selection';
+        }
+
+        // Generate MCQ
+        generateMCQ(topic, getCurrentCaseContext());
+        userInput.value = '';
+        return;
+    }
+
+    // Regular message handling
+    sendMessage();
+}
 

@@ -9,6 +9,10 @@ import sys
 import logging
 from pathlib import Path
 
+# Suppress warnings from third-party libraries
+from microtutor.core.warning_suppression import setup_warning_suppression
+setup_warning_suppression(verbose=False)
+
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
@@ -90,12 +94,40 @@ def main():
     # Import and run the application
     try:
         import uvicorn
-        from microtutor.api.app import app
+        
+        # Ensure the src directory is in the Python path
+        import sys
+        import os
+        src_path = os.path.join(os.path.dirname(__file__), 'src')
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+        
+        logger.info(f"Python path: {sys.path}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Looking for microtutor module in: {src_path}")
+        
+        # Test import step by step
+        try:
+            import microtutor
+            logger.info("✅ microtutor module imported successfully")
+        except ImportError as e:
+            logger.error(f"❌ Failed to import microtutor: {e}")
+            raise
+            
+        try:
+            from microtutor.api import app
+            logger.info("✅ microtutor.api.app imported successfully")
+        except ImportError as e:
+            logger.error(f"❌ Failed to import microtutor.api.app: {e}")
+            raise
         
         # Get port from environment (Render sets this)
         port = int(os.getenv("PORT", "10000"))
         
         logger.info(f"Starting server on port {port}")
+        print(f"🌐 Server will be available at: http://0.0.0.0:{port}")
+        print(f"📊 Health check: http://0.0.0.0:{port}/health")
+        print(f"📚 API docs: http://0.0.0.0:{port}/api/docs")
         
         uvicorn.run(
             app,

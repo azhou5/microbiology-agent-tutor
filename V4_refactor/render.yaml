@@ -9,7 +9,7 @@ services:
       pip install -r requirements.txt
       # Copy environment file to expected location
       cp dot_env_microtutor.txt src/dot_env_microtutor.txt || echo "Environment file not found, using environment variables"
-    startCommand: cd V4_refactor && ./start.sh
+    startCommand: cd V4_refactor && python run_production.py
     envVars:
       # Application Settings
       - key: DEBUG

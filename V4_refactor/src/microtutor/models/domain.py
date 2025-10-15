@@ -88,6 +88,47 @@ class Feedback(BaseModel):
     extra: Dict[str, Any] = Field(default_factory=dict)
 
 
+class MCQOption(BaseModel):
+    """Single option in a multiple choice question."""
+    letter: str = Field(..., description="Option letter (a, b, c, d)")
+    text: str = Field(..., description="Option text")
+    is_correct: bool = Field(False, description="Whether this option is correct")
+
+
+class MCQ(BaseModel):
+    """Multiple Choice Question based on guidelines."""
+    question_id: str = Field(..., description="Unique identifier for the question")
+    question_text: str = Field(..., description="The question text")
+    options: List[MCQOption] = Field(..., description="List of answer options")
+    correct_answer: str = Field(..., description="Letter of the correct answer")
+    explanation: str = Field(..., description="Explanation of the correct answer")
+    source_guidelines: List[str] = Field(default_factory=list, description="Guidelines this question is based on")
+    difficulty: str = Field(default="intermediate", description="Question difficulty level")
+    topic: str = Field(..., description="Medical topic/domain")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.timezone('America/New_York')))
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MCQResponse(BaseModel):
+    """Student's response to an MCQ."""
+    question_id: str = Field(..., description="ID of the question being answered")
+    selected_answer: str = Field(..., description="Letter of selected answer")
+    is_correct: bool = Field(..., description="Whether the answer is correct")
+    response_time_ms: Optional[int] = Field(None, description="Time taken to respond in milliseconds")
+    session_id: Optional[str] = Field(None, description="Session ID")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.timezone('America/New_York')))
+
+
+class MCQFeedback(BaseModel):
+    """Feedback provided after MCQ response."""
+    question_id: str = Field(..., description="ID of the question")
+    is_correct: bool = Field(..., description="Whether the answer was correct")
+    explanation: str = Field(..., description="Explanation of the correct answer")
+    additional_guidance: Optional[str] = Field(None, description="Additional learning guidance")
+    next_question_suggestion: Optional[str] = Field(None, description="Suggestion for follow-up question")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.timezone('America/New_York')))
+
+
 __all__ = [
     "TutorState",
     "TokenUsage",
@@ -95,5 +136,9 @@ __all__ = [
     "TutorResponse",
     "Message",
     "Case",
-    "Feedback"
+    "Feedback",
+    "MCQOption",
+    "MCQ",
+    "MCQResponse",
+    "MCQFeedback"
 ]

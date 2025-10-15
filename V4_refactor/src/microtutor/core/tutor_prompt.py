@@ -71,14 +71,9 @@ Route questions based on phase and content:
 • Differential diagnosis questions → socratic agent  
 • Test/treatment planning discussions → tests_management agent
 • Performance review questions → feedback agent
-• Vague or general questions → Ask for clarification first
+• Student needs guidance/stuck → hint agent
+• Vague or general questions → hint agent (to provide specific guidance)
 
-Examples:
-• Student: "What are her test results?" → Route to patient agent (gives actual results)
-• Student: "Let's do a physical exam" → Route to patient agent (gives exam findings)
-• Student: "What's her temperature?" → Route to patient agent (gives vital signs)
-• Student: "What tests should I order?" → Route to tests_management agent (discusses guidelines)
-• Student: "What treatment should I consider?" → Route to tests_management agent (discusses options)
 
 === CASE PHASES ===
 

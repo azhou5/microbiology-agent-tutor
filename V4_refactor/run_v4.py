@@ -7,14 +7,11 @@ For production deployment, use run_production.py instead.
 import uvicorn
 import sys
 import os
-import warnings
 from pathlib import Path
 
-# Suppress deprecation warnings from third-party libraries
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="pkg_resources")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="admet_ai")
-warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*boost::shared_ptr.*")
-warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*path is deprecated.*")
+# Suppress warnings from third-party libraries
+from microtutor.core.warning_suppression import setup_warning_suppression
+setup_warning_suppression(verbose=False)
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))

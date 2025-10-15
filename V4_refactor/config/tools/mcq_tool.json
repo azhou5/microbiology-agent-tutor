@@ -1,0 +1,105 @@
+{
+    "name": "mcq_tool",
+    "description": "Generates personalized multiple choice questions based on clinical guidelines, case context, and student learning needs. Analyzes conversation history to create targeted questions that address specific knowledge gaps and learning objectives.",
+    "type": "AgenticTool",
+    "parameter": {
+        "type": "object",
+        "properties": {
+            "topic": {
+                "type": "string",
+                "description": "Medical topic for the question (e.g., 'MRSA treatment', 'diagnostic approach', 'antimicrobial selection')"
+            },
+            "case": {
+                "type": "string",
+                "description": "Patient case context to make questions clinically relevant and specific"
+            },
+            "difficulty": {
+                "type": "string",
+                "description": "Question difficulty level based on student's current understanding",
+                "enum": [
+                    "beginner",
+                    "intermediate",
+                    "advanced"
+                ],
+                "default": "intermediate"
+            },
+            "session_id": {
+                "type": "string",
+                "description": "Session ID for tracking (optional)"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Previous conversation messages to analyze learning patterns and gaps",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "learning_focus": {
+                "type": "object",
+                "description": "Analysis of student's learning needs and focus areas",
+                "properties": {
+                    "focus_areas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Areas the student needs to focus on (clinical_decision_making, pathophysiology, etc.)"
+                    },
+                    "knowledge_gaps": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Specific knowledge gaps identified"
+                    },
+                    "difficulty_level": {
+                        "type": "string",
+                        "description": "Appropriate difficulty level for this student"
+                    },
+                    "recent_questions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Recent questions the student has asked"
+                    },
+                    "struggling_areas": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Areas where the student has shown difficulty"
+                    }
+                }
+            }
+        },
+        "required": [
+            "topic"
+        ]
+    },
+    "cacheable": false,
+    "metadata": {
+        "phase": "tests_management",
+        "agent_type": "personalized_mcq_generator",
+        "completion_signal": "[MCQ_GENERATED]",
+        "features": [
+            "personalized_learning",
+            "conversation_analysis",
+            "guideline_based_questions",
+            "real_time_guidelines",
+            "evidence_based",
+            "interactive_learning",
+            "adaptive_difficulty",
+            "learning_gap_targeting"
+        ],
+        "tooluniverse_integration": true
+    }
+}

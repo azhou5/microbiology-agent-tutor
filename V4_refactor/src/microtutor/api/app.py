@@ -8,13 +8,10 @@ This is the main application file that sets up:
 """
 
 import logging
-import warnings
 
-# Suppress deprecation warnings from third-party libraries
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="pkg_resources")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="admet_ai")
-warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*boost::shared_ptr.*")
-warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*path is deprecated.*")
+# Suppress warnings from third-party libraries
+from microtutor.core.warning_suppression import setup_warning_suppression
+setup_warning_suppression(verbose=False)
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from pathlib import Path
@@ -28,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from microtutor.models.responses import ErrorResponse
-from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database, database_mock, faiss_management, analytics
+from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database, database_mock, faiss_management, analytics, mcq
 from microtutor.core.startup import get_lifespan
 
 # Try to import guidelines router (optional)
@@ -152,6 +149,10 @@ logger.info("✅ FAISS management routes enabled")
 # Include analytics routes
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 logger.info("✅ Analytics routes enabled")
+
+# Include MCQ routes
+app.include_router(mcq.router, prefix="/api/v1", tags=["mcq"])
+logger.info("✅ MCQ routes enabled")
 
 # Include optional guidelines router
 if GUIDELINES_AVAILABLE:

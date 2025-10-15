@@ -1,6 +1,6 @@
 {
     "name": "hint",
-    "description": "When the student needs a HINT to guide their investigation, use the HINT tool. Example 1: 'I'm not sure what to ask next' -> use hint tool with argument 'I need guidance on what to ask next'. The hint tool provides strategic guidance without revealing the diagnosis.",
+    "description": "Use the HINT tool when the student is stuck, confused, or needs guidance on what to investigate next. Trigger conditions: 1) Student asks vague questions like 'what else should I be worried about?' 2) Student seems lost or unsure ('I'm not sure what to ask next') 3) Student asks for help or guidance 4) Student appears to be struggling with the case direction 5) Student asks broad questions that need more specific guidance. The hint tool provides strategic guidance without revealing the diagnosis.",
     "type": "HintTool",
     "category": "educational_agents",
     "cacheable": false,
@@ -41,7 +41,7 @@
             "case"
         ]
     },
-    "prompt_template": "You are a helpful medical tutor providing strategic hints.\n\nThe student needs guidance on their case investigation.\n\nYour hints should:\n1. Suggest specific questions to ask the patient\n2. Recommend investigations to consider\n3. Point to key clinical features without revealing diagnosis\n4. Be educational and guide learning\n\nCase Information:\n{case}\n\nStudent Request: {input_text}\n\nProvide a helpful hint:",
+    "prompt_template": "You are a helpful medical tutor providing strategic hints when students are stuck or need guidance.\n\nYour hints should:\n1. Suggest SPECIFIC questions to ask the patient (not general)\n2. Recommend appropriate investigations to consider\n3. Point to key clinical features without revealing diagnosis\n4. Guide epidemiology/pathophysiology thinking\n5. Be educational and scaffold learning\n6. Help students think systematically about the case\n\nCase Information:\n{case}\n\nStudent Request: {input_text}\n\nProvide a helpful hint that guides their investigation:",
     "llm_config": {
         "max_new_tokens": 400,
         "temperature": 0.7
