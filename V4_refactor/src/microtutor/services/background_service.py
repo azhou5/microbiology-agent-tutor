@@ -395,7 +395,11 @@ class BackgroundTaskService:
         try:
             logger.info("Updating FAISS indices from database feedback...")
             
-            from microtutor.feedback.auto_faiss_generator import get_auto_faiss_generator
+            try:
+                from microtutor.feedback.auto_faiss_generator import get_auto_faiss_generator
+            except ImportError:
+                def get_auto_faiss_generator(*args, **kwargs):
+                    return None
             
             generator = get_auto_faiss_generator()
             force_update = data.get('force_update', False)

@@ -21,10 +21,11 @@ from microtutor.core.logging_config import log_agent_context
 
 # Import feedback integration
 try:
-    from microtutor.feedback import create_feedback_retriever, get_feedback_examples_for_tool
-    FEEDBACK_AVAILABLE = True
+    from microtutor.feedback import create_feedback_retriever, get_feedback_examples_for_tool, FEEDBACK_AVAILABLE
 except ImportError:
     FEEDBACK_AVAILABLE = False
+    def create_feedback_retriever(*args, **kwargs):
+        return None
     def get_feedback_examples_for_tool(*args, **kwargs):
         return ""
 

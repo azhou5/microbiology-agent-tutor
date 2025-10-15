@@ -9,8 +9,17 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from pydantic import BaseModel
 
-from microtutor.feedback.auto_faiss_generator import get_auto_faiss_generator
-from microtutor.feedback.database_feedback_loader import DatabaseFeedbackConfig
+# Try to import feedback modules (optional)
+try:
+    from microtutor.feedback.auto_faiss_generator import get_auto_faiss_generator
+    from microtutor.feedback.database_feedback_loader import DatabaseFeedbackConfig
+    FEEDBACK_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"Feedback modules not available: {e}")
+    FEEDBACK_AVAILABLE = False
+    get_auto_faiss_generator = None
+    DatabaseFeedbackConfig = None
+
 from microtutor.api.dependencies import get_db
 from microtutor.services.background_service import get_background_service, BackgroundTaskService
 
@@ -50,6 +59,12 @@ class FAISSStatusResponse(BaseModel):
 )
 async def get_faiss_status() -> FAISSStatusResponse:
     """Get current FAISS index status."""
+    if not FEEDBACK_AVAILABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Feedback system not available"
+        )
+    
     try:
         generator = get_auto_faiss_generator()
         status_data = generator.get_status()
@@ -110,6 +125,12 @@ async def generate_faiss_indices(
     db = Depends(get_db)
 ) -> Dict[str, Any]:
     """Generate FAISS indices immediately."""
+    if not FEEDBACK_AVAILABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Feedback system not available"
+        )
+    
     try:
         if db is None:
             raise HTTPException(
@@ -159,7 +180,11 @@ async def get_feedback_stats(db = Depends(get_db)) -> Dict[str, Any]:
                 detail="Database not available"
             )
         
-        from microtutor.feedback.database_feedback_loader import DatabaseFeedbackLoader
+        try:
+            from microtutor.feedback.database_feedback_loader import DatabaseFeedbackLoader
+        except ImportError:
+            class DatabaseFeedbackLoader:
+                pass
         
         loader = DatabaseFeedbackLoader(db)
         stats = loader.get_feedback_stats()
@@ -186,6 +211,12 @@ async def cleanup_old_indices(
     keep_days: int = Query(7, ge=1, le=30, description="Number of days to keep old indices")
 ) -> Dict[str, Any]:
     """Clean up old FAISS index files."""
+    if not FEEDBACK_AVAILABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Feedback system not available"
+        )
+    
     try:
         generator = get_auto_faiss_generator()
         generator.cleanup_old_indices(keep_days=keep_days)

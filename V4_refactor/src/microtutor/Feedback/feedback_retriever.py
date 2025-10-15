@@ -10,10 +10,18 @@ from typing import List, Dict, Any, Optional, Tuple
 import logging
 from dataclasses import dataclass
 
-import numpy as np
-import faiss
-
-from microtutor.utils import get_embedding
+try:
+    import numpy as np
+    import faiss
+    from microtutor.utils import get_embedding
+    FAISS_AVAILABLE = True
+except ImportError as e:
+    import logging
+    logging.warning(f"FAISS dependencies not available: {e}")
+    FAISS_AVAILABLE = False
+    # Provide fallback implementations
+    def get_embedding(text: str) -> List[float]:
+        return [0.0] * 1536  # Default embedding size
 from microtutor.feedback.feedback_processor import FeedbackEntry
 from microtutor.core.config_helper import config
 

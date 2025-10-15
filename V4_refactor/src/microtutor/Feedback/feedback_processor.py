@@ -6,17 +6,36 @@ Processes feedback data and creates embeddings for FAISS retrieval.
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, TYPE_CHECKING
 import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-import numpy as np
-import faiss
-import pickle
-from tqdm import tqdm
+if TYPE_CHECKING:
+    import faiss
 
-from microtutor.utils.embedding_utils import get_embedding
+try:
+    import numpy as np
+    import faiss
+    import pickle
+    from tqdm import tqdm
+    from microtutor.utils.embedding_utils import get_embedding
+    FAISS_AVAILABLE = True
+except ImportError as e:
+    import logging
+    logging.warning(f"FAISS dependencies not available: {e}")
+    FAISS_AVAILABLE = False
+    # Provide fallback implementations
+    import json
+    import os
+    from pathlib import Path
+    from typing import List, Dict, Any, Tuple, Optional
+    from dataclasses import dataclass
+    from datetime import datetime
+    import logging
+    
+    def get_embedding(text: str) -> List[float]:
+        return [0.0] * 1536  # Default embedding size
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +183,12 @@ class FeedbackProcessor:
         batch_size: int = 32,
         filter_by_type: Optional[str] = None,
         min_rating: Optional[int] = None
-    ) -> Tuple[faiss.Index, List[str], List[FeedbackEntry]]:
+    ) -> "Tuple[Any, List[str], List[FeedbackEntry]]":
         """Create FAISS index from feedback entries."""
+        if not FAISS_AVAILABLE:
+            logger.warning("FAISS not available, returning empty index")
+            return None, [], []
+        
         logger.info("Creating FAISS index from feedback entries")
         
         # Filter entries if needed
@@ -249,7 +272,7 @@ def process_feedback_json(
     output_dir: str,
     message_type: Optional[str] = None,
     min_rating: Optional[int] = None
-) -> Tuple[faiss.Index, List[str], List[FeedbackEntry]]:
+) -> "Tuple[faiss.Index, List[str], List[FeedbackEntry]]":
     """Convenience function to process feedback JSON and create FAISS index."""
     processor = FeedbackProcessor()
     processor.load_feedback_from_json(json_file_path)

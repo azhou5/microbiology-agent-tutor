@@ -18,6 +18,6 @@ numpy>=1.24.0
 Flask-SQLAlchemy>=2.5
 psycopg2-binary>=2.9
 # Dependencies for local model usage (only needed if LLM_BACKEND != "azure" in config.py)
-# torch
-# transformers
-# accelerate 
+# torch - REMOVED: PyTorch dependencies
+# transformers - REMOVED: PyTorch dependencies  
+# accelerate - REMOVED: PyTorch dependencies 

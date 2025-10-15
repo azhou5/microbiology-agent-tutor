@@ -259,7 +259,11 @@ class StreamingTutorService:
             enhanced_message = message
             if feedback_enabled and self.base_service.feedback_retriever:
                 try:
-                    from microtutor.feedback import get_feedback_examples_for_tool
+                    try:
+                        from microtutor.feedback import get_feedback_examples_for_tool
+                    except ImportError:
+                        def get_feedback_examples_for_tool(*args, **kwargs):
+                            return ""
                     feedback_examples = get_feedback_examples_for_tool(
                         user_input=message,
                         conversation_history=context.conversation_history,

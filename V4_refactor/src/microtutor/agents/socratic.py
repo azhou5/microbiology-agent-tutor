@@ -9,7 +9,6 @@ Adapted from V3 to work standalone in V4 structure.
 import os
 import dotenv
 import numpy as np
-import faiss
 import pickle
 import sys
 from typing import List, Dict, Any
@@ -17,9 +16,13 @@ from datetime import datetime
 import logging
 
 try:
+    import faiss
     from microtutor.Feedback.feedback_faiss import retrieve_similar_examples, get_embedding, index, texts
+    FAISS_AVAILABLE = True
 except ImportError:
     # FAISS is optional
+    FAISS_AVAILABLE = False
+    faiss = None
     index = None
     texts = []
     from microtutor.utils import get_embedding
