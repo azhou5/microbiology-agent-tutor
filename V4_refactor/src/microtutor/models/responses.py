@@ -84,6 +84,10 @@ class ChatResponse(BaseModel):
         default_factory=dict,
         description="Additional metadata including token usage and timing"
     )
+    feedback_examples: Optional[List[Dict[str, Any]]] = Field(
+        default_factory=list,
+        description="AI feedback examples used to guide the response"
+    )
     
     class Config:
         """Pydantic config with example."""

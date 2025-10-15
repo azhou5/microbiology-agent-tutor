@@ -1,0 +1,439 @@
+"""
+Background task service for async processing of non-critical operations.
+
+This service handles database logging, file logging, analytics, and other
+operations that don't need to block the main LLM response.
+"""
+
+import asyncio
+import logging
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+from dataclasses import dataclass
+from enum import Enum
+import json
+import queue
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, text
+from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
+
+
+class TaskType(Enum):
+    """Types of background tasks."""
+    DATABASE_LOG = "database_log"
+    FILE_LOG = "file_log"
+    FEEDBACK_PROCESSING = "feedback_processing"
+    ANALYTICS = "analytics"
+    COST_CALCULATION = "cost_calculation"
+    METRICS_COLLECTION = "metrics_collection"
+
+
+@dataclass
+class BackgroundTask:
+    """Represents a background task to be processed."""
+    task_type: TaskType
+    data: Dict[str, Any]
+    priority: int = 0  # Higher number = higher priority
+    created_at: datetime = None
+    retry_count: int = 0
+    max_retries: int = 3
+    
+    def __post_init__(self):
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
+    
+    def __lt__(self, other):
+        """Less than comparison for priority queue ordering."""
+        if not isinstance(other, BackgroundTask):
+            return NotImplemented
+        # Higher priority first, then by creation time
+        if self.priority != other.priority:
+            return self.priority > other.priority
+        return self.created_at < other.created_at
+    
+    def __eq__(self, other):
+        """Equality comparison."""
+        if not isinstance(other, BackgroundTask):
+            return NotImplemented
+        return (self.task_type == other.task_type and 
+                self.priority == other.priority and 
+                self.created_at == other.created_at)
+
+
+class BackgroundTaskService:
+    """Service for processing background tasks asynchronously."""
+    
+    def __init__(self, max_workers: int = 4, queue_size: int = 1000):
+        """Initialize the background task service.
+        
+        Args:
+            max_workers: Maximum number of worker threads
+            queue_size: Maximum queue size before dropping tasks
+        """
+        self.max_workers = max_workers
+        self.queue_size = queue_size
+        self.task_queue = queue.PriorityQueue(maxsize=queue_size)
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self.running = False
+        self.workers: List[threading.Thread] = []
+        
+        # Database connection pool for async operations
+        self._db_engine = None
+        self._db_pool_size = 5
+        
+        logger.info(f"BackgroundTaskService initialized with {max_workers} workers")
+    
+    def start(self) -> None:
+        """Start the background task service."""
+        if self.running:
+            logger.warning("BackgroundTaskService is already running")
+            return
+        
+        self.running = True
+        
+        # Start worker threads
+        for i in range(self.max_workers):
+            worker = threading.Thread(
+                target=self._worker_loop,
+                name=f"BackgroundWorker-{i}",
+                daemon=True
+            )
+            worker.start()
+            self.workers.append(worker)
+        
+        logger.info(f"Started {self.max_workers} background workers")
+    
+    def stop(self) -> None:
+        """Stop the background task service."""
+        if not self.running:
+            return
+        
+        self.running = False
+        
+        # Wait for workers to finish
+        for worker in self.workers:
+            worker.join(timeout=5.0)
+        
+        self.executor.shutdown(wait=True)
+        logger.info("BackgroundTaskService stopped")
+    
+    def _worker_loop(self) -> None:
+        """Main worker loop for processing tasks."""
+        while self.running:
+            try:
+                # Get task from queue (blocking with timeout)
+                priority, task = self.task_queue.get(timeout=1.0)
+                
+                try:
+                    self._process_task(task)
+                except Exception as e:
+                    logger.error(f"Error processing task {task.task_type}: {e}")
+                    self._handle_task_failure(task, e)
+                finally:
+                    self.task_queue.task_done()
+                    
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Worker error: {e}")
+    
+    def _process_task(self, task: BackgroundTask) -> None:
+        """Process a single background task."""
+        logger.debug(f"Processing {task.task_type} task")
+        
+        if task.task_type == TaskType.DATABASE_LOG:
+            self._process_database_log(task.data)
+        elif task.task_type == TaskType.FILE_LOG:
+            self._process_file_log(task.data)
+        elif task.task_type == TaskType.FEEDBACK_PROCESSING:
+            self._process_feedback(task.data)
+        elif task.task_type == TaskType.ANALYTICS:
+            self._process_analytics(task.data)
+        elif task.task_type == TaskType.COST_CALCULATION:
+            self._process_cost_calculation(task.data)
+        elif task.task_type == TaskType.METRICS_COLLECTION:
+            self._process_metrics(task.data)
+        else:
+            logger.warning(f"Unknown task type: {task.task_type}")
+    
+    def _handle_task_failure(self, task: BackgroundTask, error: Exception) -> None:
+        """Handle task failure with retry logic."""
+        task.retry_count += 1
+        
+        if task.retry_count <= task.max_retries:
+            logger.warning(f"Retrying task {task.task_type} (attempt {task.retry_count})")
+            # Re-queue with higher priority
+            self.submit_task(task, priority=task.priority + 1)
+        else:
+            logger.error(f"Task {task.task_type} failed after {task.max_retries} retries: {error}")
+    
+    def submit_task(
+        self, 
+        task: BackgroundTask, 
+        priority: Optional[int] = None
+    ) -> bool:
+        """Submit a task for background processing.
+        
+        Args:
+            task: The task to process
+            priority: Optional priority override
+            
+        Returns:
+            True if task was queued, False if queue is full
+        """
+        if not self.running:
+            logger.warning("BackgroundTaskService is not running")
+            return False
+        
+        try:
+            task_priority = priority if priority is not None else task.priority
+            self.task_queue.put((task_priority, task), block=False)
+            logger.debug(f"Queued {task.task_type} task with priority {task_priority}")
+            return True
+        except queue.Full:
+            logger.warning(f"Task queue is full, dropping {task.task_type} task")
+            return False
+    
+    def _process_database_log(self, data: Dict[str, Any]) -> None:
+        """Process database logging task."""
+        try:
+            if self._db_engine is None:
+                self._init_database_pool()
+            
+            if self._db_engine is None:
+                logger.warning("Database not available, falling back to file logging")
+                self._process_file_log(data)
+                return
+            
+            with self._db_engine.connect() as conn:
+                # Use raw SQL for better performance
+                conn.execute(text("""
+                    INSERT INTO conversation_logs (case_id, timestamp, role, content)
+                    VALUES (:case_id, :timestamp, :role, :content)
+                """), data)
+                conn.commit()
+                
+        except Exception as e:
+            logger.error(f"Database logging failed: {e}")
+            # Fall back to file logging
+            self._process_file_log(data)
+    
+    def _process_file_log(self, data: Dict[str, Any]) -> None:
+        """Process file logging task."""
+        try:
+            # This would integrate with your existing file logging system
+            from microtutor.core.logging_config import get_logger
+            mt_logger = get_logger()
+            
+            # Log based on role
+            if data.get('role') == 'user':
+                mt_logger.log_conversation_turn(
+                    data['case_id'],
+                    'user',
+                    data['content'],
+                    metadata=data.get('metadata', {})
+                )
+            elif data.get('role') == 'assistant':
+                mt_logger.log_conversation_turn(
+                    data['case_id'],
+                    'assistant',
+                    data['content'],
+                    metadata=data.get('metadata', {})
+                )
+            elif data.get('role') == 'feedback':
+                mt_logger.log_feedback(
+                    case_id=data['case_id'],
+                    rating=data.get('rating', 0),
+                    message=data.get('message', ''),
+                    feedback_text=data.get('feedback_text', ''),
+                    replacement_text=data.get('replacement_text', ''),
+                    organism=data.get('organism', '')
+                )
+                
+        except Exception as e:
+            logger.error(f"File logging failed: {e}")
+    
+    def _process_feedback(self, data: Dict[str, Any]) -> None:
+        """Process feedback analysis and storage."""
+        try:
+            # This would integrate with your feedback system
+            logger.info(f"Processing feedback for case {data.get('case_id')}")
+            # Add your feedback processing logic here
+            
+        except Exception as e:
+            logger.error(f"Feedback processing failed: {e}")
+    
+    def _process_analytics(self, data: Dict[str, Any]) -> None:
+        """Process analytics and metrics collection."""
+        try:
+            logger.info(f"Processing analytics: {data.get('event_type')}")
+            # Add your analytics processing logic here
+            
+        except Exception as e:
+            logger.error(f"Analytics processing failed: {e}")
+    
+    def _process_cost_calculation(self, data: Dict[str, Any]) -> None:
+        """Process cost calculation for LLM usage."""
+        try:
+            from microtutor.services.cost_service import calculate_cost_async
+            
+            cost_info = calculate_cost_async(
+                model=data.get('model', 'unknown'),
+                prompt_tokens=data.get('prompt_tokens', 0),
+                completion_tokens=data.get('completion_tokens', 0),
+                case_id=data.get('case_id'),
+                request_type=data.get('request_type')
+            )
+            
+            logger.info(f"Cost calculated: {cost_info.model} - ${cost_info.cost_usd:.6f}")
+            
+        except Exception as e:
+            logger.error(f"Cost calculation failed: {e}")
+    
+    def _process_metrics(self, data: Dict[str, Any]) -> None:
+        """Process metrics collection."""
+        try:
+            logger.info(f"Collecting metrics: {data.get('metric_type')}")
+            # Add your metrics collection logic here
+            
+        except Exception as e:
+            logger.error(f"Metrics collection failed: {e}")
+    
+    def _init_database_pool(self) -> None:
+        """Initialize database connection pool."""
+        try:
+            from microtutor.core.config_helper import config
+            database_url = getattr(config, 'database_url', None)
+            
+            if database_url:
+                self._db_engine = create_engine(
+                    database_url,
+                    pool_size=self._db_pool_size,
+                    max_overflow=10,
+                    pool_pre_ping=True,
+                    pool_recycle=3600,
+                )
+                logger.info("Database pool initialized")
+            else:
+                logger.warning("No database URL configured")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize database pool: {e}")
+    
+    # Convenience methods for common tasks
+    def log_conversation_async(
+        self, 
+        case_id: str, 
+        role: str, 
+        content: str, 
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Log conversation asynchronously."""
+        task = BackgroundTask(
+            task_type=TaskType.DATABASE_LOG,
+            data={
+                'case_id': case_id,
+                'role': role,
+                'content': content,
+                'timestamp': datetime.utcnow(),
+                'metadata': metadata or {}
+            },
+            priority=1
+        )
+        return self.submit_task(task)
+    
+    def log_feedback_async(
+        self,
+        case_id: str,
+        rating: int,
+        message: str,
+        feedback_text: str = "",
+        replacement_text: str = "",
+        organism: str = ""
+    ) -> bool:
+        """Log feedback asynchronously."""
+        task = BackgroundTask(
+            task_type=TaskType.FEEDBACK_PROCESSING,
+            data={
+                'case_id': case_id,
+                'rating': rating,
+                'message': message,
+                'feedback_text': feedback_text,
+                'replacement_text': replacement_text,
+                'organism': organism,
+                'timestamp': datetime.utcnow()
+            },
+            priority=2
+        )
+        return self.submit_task(task)
+    
+    def collect_metrics_async(
+        self,
+        event_type: str,
+        case_id: str,
+        processing_time_ms: float,
+        model: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Collect metrics asynchronously."""
+        task = BackgroundTask(
+            task_type=TaskType.METRICS_COLLECTION,
+            data={
+                'event_type': event_type,
+                'case_id': case_id,
+                'processing_time_ms': processing_time_ms,
+                'model': model,
+                'timestamp': datetime.utcnow(),
+                'metadata': metadata or {}
+            },
+            priority=0
+        )
+        return self.submit_task(task)
+    
+    def calculate_cost_async(
+        self,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        case_id: Optional[str] = None,
+        request_type: Optional[str] = None
+    ) -> bool:
+        """Calculate cost asynchronously."""
+        task = BackgroundTask(
+            task_type=TaskType.COST_CALCULATION,
+            data={
+                'model': model,
+                'prompt_tokens': prompt_tokens,
+                'completion_tokens': completion_tokens,
+                'case_id': case_id,
+                'request_type': request_type,
+                'timestamp': datetime.utcnow()
+            },
+            priority=1
+        )
+        return self.submit_task(task)
+
+
+# Global background service instance
+_background_service: Optional[BackgroundTaskService] = None
+
+
+def get_background_service() -> BackgroundTaskService:
+    """Get the global background service instance."""
+    global _background_service
+    if _background_service is None:
+        _background_service = BackgroundTaskService()
+        _background_service.start()
+    return _background_service
+
+
+def shutdown_background_service() -> None:
+    """Shutdown the global background service."""
+    global _background_service
+    if _background_service is not None:
+        _background_service.stop()
+        _background_service = None

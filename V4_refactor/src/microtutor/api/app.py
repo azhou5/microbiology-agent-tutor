@@ -21,7 +21,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from microtutor.models.responses import ErrorResponse
-from microtutor.api.routes import chat, voice
+from microtutor.api.routes import chat, voice, monitoring, concurrent_chat
+from microtutor.core.startup import get_lifespan
 
 # Try to import guidelines router (optional)
 try:
@@ -46,23 +47,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 static_dir = BASE_DIR / "static"
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator:
-    """Lifespan context manager for startup and shutdown events.
-    
-    This replaces the old @app.on_event decorators with modern async context manager.
-    """
-    # Startup
-    logger.info("🚀 Starting MicroTutor API v4.0.0...")
-    logger.info("✅ MicroTutor API is ready!")
-    
-    yield
-    
-    # Shutdown
-    logger.info("👋 Shutting down MicroTutor API...")
-
-
-# Create FastAPI app
+# Create FastAPI app with background service lifespan management
 app = FastAPI(
     title="MicroTutor API",
     description="AI-powered microbiology tutoring system with interactive cases",
@@ -70,7 +55,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
-    lifespan=lifespan
+    lifespan=get_lifespan()
 )
 
 # Add middleware
@@ -135,6 +120,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(voice.router, prefix="/api/v1", tags=["voice"])
+app.include_router(monitoring.router, prefix="/api/v1", tags=["monitoring"])
+app.include_router(concurrent_chat.router, prefix="/api/v1", tags=["concurrent"])
 
 # Include optional guidelines router
 if GUIDELINES_AVAILABLE:

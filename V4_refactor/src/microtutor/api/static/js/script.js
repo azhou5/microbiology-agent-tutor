@@ -22,6 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceStatus = document.getElementById('voice-status');
     const responseAudio = document.getElementById('response-audio');
 
+    // Feedback control elements
+    const feedbackToggle = document.getElementById('feedback-toggle');
+    const thresholdSlider = document.getElementById('threshold-slider');
+    const thresholdValue = document.getElementById('threshold-value');
+
     // API Configuration
     const API_BASE = '/api/v1';
 
@@ -29,6 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
     let currentCaseId = null;
     let currentOrganismKey = null;
+
+    // Feedback state
+    let feedbackEnabled = true;
+    let feedbackThreshold = 0.7;
 
     // Voice state
     let mediaRecorder = null;
@@ -127,7 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessage(sender, messageContent, addFeedbackUI = false) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'assistant-message');
-        messageDiv.id = 'msg-' + Date.now();
+        const messageId = 'msg-' + Date.now();
+        messageDiv.id = messageId;
 
         const messageTextSpan = document.createElement('span');
         messageTextSpan.textContent = messageContent;
@@ -135,12 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Add feedback UI for assistant messages
         if (sender === 'assistant' && addFeedbackUI) {
-            const feedbackContainer = createFeedbackUI(messageDiv.id, messageContent);
+            const feedbackContainer = createFeedbackUI(messageId, messageContent);
             messageDiv.appendChild(feedbackContainer);
         }
 
         chatbox.appendChild(messageDiv);
         chatbox.scrollTop = chatbox.scrollHeight;
+
+        return messageId;
     }
 
     /**
@@ -407,7 +419,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     message: messageText,
                     history: chatHistory,
                     organism_key: currentOrganismKey,
-                    case_id: currentCaseId
+                    case_id: currentCaseId,
+                    feedback_enabled: feedbackEnabled,
+                    feedback_threshold: feedbackThreshold
                 }),
             });
 
@@ -428,9 +442,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             console.log('[CHAT] Response:', data);
 
-            addMessage('assistant', data.response, true);
+            const messageId = addMessage('assistant', data.response, true);
             chatHistory = data.history || chatHistory;
             chatHistory.push({ role: 'assistant', content: data.response });
+
+            // Display feedback examples if available
+            if (data.feedback_examples && data.feedback_examples.length > 0) {
+                console.log('[FEEDBACK] Displaying feedback examples:', data.feedback_examples);
+                displayFeedbackExamples(data.feedback_examples, messageId);
+            }
 
             disableInput(false);
             setStatus('');
@@ -1024,6 +1044,173 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ============================================================
     // END VOICE FUNCTIONALITY
+    // ============================================================
+
+    // ============================================================
+    // FEEDBACK CONTROL FUNCTIONALITY
+    // ============================================================
+
+    /**
+     * Initialize feedback controls
+     */
+    function initializeFeedbackControls() {
+        if (feedbackToggle) {
+            feedbackToggle.addEventListener('change', (e) => {
+                feedbackEnabled = e.target.checked;
+                console.log('[FEEDBACK] Feedback enabled:', feedbackEnabled);
+                updateFeedbackControlsUI();
+                saveFeedbackSettings();
+            });
+        }
+
+        if (thresholdSlider) {
+            thresholdSlider.addEventListener('input', (e) => {
+                feedbackThreshold = parseFloat(e.target.value);
+                thresholdValue.textContent = feedbackThreshold.toFixed(1);
+                console.log('[FEEDBACK] Threshold updated:', feedbackThreshold);
+                saveFeedbackSettings();
+            });
+        }
+
+        // Load saved settings
+        loadFeedbackSettings();
+        updateFeedbackControlsUI();
+    }
+
+    /**
+     * Load feedback settings from localStorage
+     */
+    function loadFeedbackSettings() {
+        try {
+            const savedEnabled = localStorage.getItem('microtutor_feedback_enabled');
+            const savedThreshold = localStorage.getItem('microtutor_feedback_threshold');
+
+            if (savedEnabled !== null) {
+                feedbackEnabled = savedEnabled === 'true';
+                if (feedbackToggle) {
+                    feedbackToggle.checked = feedbackEnabled;
+                }
+            }
+
+            if (savedThreshold !== null) {
+                feedbackThreshold = parseFloat(savedThreshold);
+                if (thresholdSlider) {
+                    thresholdSlider.value = feedbackThreshold;
+                }
+                if (thresholdValue) {
+                    thresholdValue.textContent = feedbackThreshold.toFixed(1);
+                }
+            }
+        } catch (e) {
+            console.error('[FEEDBACK] Error loading settings:', e);
+        }
+    }
+
+    /**
+     * Save feedback settings to localStorage
+     */
+    function saveFeedbackSettings() {
+        try {
+            localStorage.setItem('microtutor_feedback_enabled', feedbackEnabled.toString());
+            localStorage.setItem('microtutor_feedback_threshold', feedbackThreshold.toString());
+        } catch (e) {
+            console.error('[FEEDBACK] Error saving settings:', e);
+        }
+    }
+
+    /**
+     * Update feedback controls UI state
+     */
+    function updateFeedbackControlsUI() {
+        if (thresholdSlider) {
+            thresholdSlider.disabled = !feedbackEnabled;
+        }
+        if (thresholdValue) {
+            thresholdValue.style.opacity = feedbackEnabled ? '1' : '0.5';
+        }
+    }
+
+    /**
+     * Display feedback examples in the chat
+     */
+    function displayFeedbackExamples(examples, messageId) {
+        if (!examples || examples.length === 0) return;
+
+        const messageDiv = document.getElementById(messageId);
+        if (!messageDiv) return;
+
+        const feedbackContainer = document.createElement('div');
+        feedbackContainer.className = 'feedback-examples';
+
+        const header = document.createElement('h4');
+        header.textContent = `🎯 AI Feedback Examples Used (${examples.length} found)`;
+        feedbackContainer.appendChild(header);
+
+        examples.forEach((example, index) => {
+            const exampleDiv = document.createElement('div');
+            exampleDiv.className = 'feedback-example';
+
+            // Extract the last user input from chat history
+            let matchingInput = 'N/A';
+            if (example.entry.chat_history && Array.isArray(example.entry.chat_history)) {
+                for (let i = example.entry.chat_history.length - 1; i >= 0; i--) {
+                    const msg = example.entry.chat_history[i];
+                    if (msg.role === 'user' && msg.content) {
+                        matchingInput = msg.content;
+                        break;
+                    }
+                }
+            }
+
+            // Create the feedback display in the correct format
+            const feedbackContent = document.createElement('div');
+            feedbackContent.className = 'feedback-content';
+
+            // 1) Matching input that led to this feedback being picked
+            const inputDiv = document.createElement('div');
+            inputDiv.className = 'feedback-input';
+            inputDiv.innerHTML = `<strong>1) Matching Input:</strong> "${matchingInput}"`;
+
+            // 2) Similarity score
+            const similarityDiv = document.createElement('div');
+            similarityDiv.className = 'feedback-similarity';
+            similarityDiv.innerHTML = `<strong>2) Similarity:</strong> ${(example.similarity_score * 100).toFixed(1)}%`;
+
+            // 3) Quality score
+            const qualityDiv = document.createElement('div');
+            qualityDiv.className = 'feedback-quality-score';
+            const qualityText = example.is_positive_example ? '✓ GOOD' : example.is_negative_example ? '✗ AVOID' : '~ OK';
+            const qualityClass = example.is_positive_example ? 'good' : example.is_negative_example ? 'bad' : 'neutral';
+            qualityDiv.innerHTML = `<strong>3) Quality:</strong> <span class="${qualityClass}">${qualityText} (${example.entry.rating}/5)</span>`;
+
+            // 4) Answer that was given
+            const givenAnswerDiv = document.createElement('div');
+            givenAnswerDiv.className = 'feedback-given-answer';
+            givenAnswerDiv.innerHTML = `<strong>4) Answer Given:</strong> ${example.entry.rated_message}`;
+
+            // 5) Answer that was suggested (replacement text)
+            const suggestedAnswerDiv = document.createElement('div');
+            suggestedAnswerDiv.className = 'feedback-suggested-answer';
+            suggestedAnswerDiv.innerHTML = `<strong>5) Suggested Answer:</strong> ${example.entry.replacement_text}`;
+
+            feedbackContent.appendChild(inputDiv);
+            feedbackContent.appendChild(similarityDiv);
+            feedbackContent.appendChild(qualityDiv);
+            feedbackContent.appendChild(givenAnswerDiv);
+            feedbackContent.appendChild(suggestedAnswerDiv);
+
+            exampleDiv.appendChild(feedbackContent);
+            feedbackContainer.appendChild(exampleDiv);
+        });
+
+        messageDiv.appendChild(feedbackContainer);
+    }
+
+    // Initialize feedback controls
+    initializeFeedbackControls();
+
+    // ============================================================
+    // END FEEDBACK CONTROL FUNCTIONALITY
     // ============================================================
 
     // Initialize

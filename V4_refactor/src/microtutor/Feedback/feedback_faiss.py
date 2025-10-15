@@ -1,14 +1,11 @@
 
-from openai import AzureOpenAI, OpenAI
 import os
-import dotenv
 import numpy as np
 import faiss
 import pickle
 import sys
 
-
-dotenv.load_dotenv()
+from microtutor.utils import get_embedding
 
 
 # Load FAISS index and texts for example retrieval
@@ -40,30 +37,3 @@ def retrieve_similar_examples(input_text: str, history: list, k: int = 3) -> lis
     return [texts[idx] for idx in indices[0]]
 
 
-
-def get_embedding(text):
-    """Get embedding for a text using OpenAI."""
-    # Determine which client to use based on the toggle
-    use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
-    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    
-    if use_azure_env and azure_endpoint and azure_api_key:
-        # Use Azure OpenAI
-        client = AzureOpenAI(
-            azure_endpoint=azure_endpoint,
-            api_key=azure_api_key,
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
-        )
-    elif openai_api_key:
-        # Use personal OpenAI
-        client = OpenAI(api_key=openai_api_key)
-    else:
-        raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
-    
-    response = client.embeddings.create(
-        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-        input=text
-    )
-    return response.data[0].embedding

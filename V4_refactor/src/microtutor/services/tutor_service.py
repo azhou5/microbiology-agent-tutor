@@ -14,14 +14,18 @@ from microtutor.agents.case import get_case
 from microtutor.core.llm_router import chat_complete, get_llm_client
 from microtutor.core.tutor_prompt import get_system_message_template
 
-try:
-    from microtutor.Feedback.feedback_faiss import retrieve_similar_examples
-except ImportError:
-    def retrieve_similar_examples(*args, **kwargs):
-        return []
-
 from microtutor.models.domain import TutorContext, TutorResponse, TokenUsage, TutorState
 from microtutor.core.config_helper import config
+from microtutor.core.logging_config import log_agent_context
+
+# Import feedback integration
+try:
+    from microtutor.feedback import create_feedback_retriever, get_feedback_examples_for_tool
+    FEEDBACK_AVAILABLE = True
+except ImportError:
+    FEEDBACK_AVAILABLE = False
+    def get_feedback_examples_for_tool(*args, **kwargs):
+        return ""
 
 logger = logging.getLogger(__name__)
 
@@ -36,17 +40,32 @@ class TutorService:
         output_tool_directly: bool = True,
         run_with_faiss: bool = False,
         reward_model_sampling: bool = False,
-        model_name: Optional[str] = None
+        model_name: Optional[str] = None,
+        enable_feedback: bool = True,
+        feedback_dir: Optional[str] = None
     ):
         """Initialize tutor service."""
         self.output_tool_directly = output_tool_directly
         self.run_with_faiss = run_with_faiss
         self.reward_model_sampling = reward_model_sampling
         self.model_name = model_name or config.API_MODEL_NAME
+        self.enable_feedback = enable_feedback and FEEDBACK_AVAILABLE
         
         # Initialize tool engine (ToolUniverse-style with native function calling)
         self.tool_engine = get_tool_engine()
         self.tool_schemas = self.tool_engine.get_tool_schemas()
+        
+        # Initialize feedback retriever if available
+        self.feedback_retriever = None
+        self.interaction_counter = 0  # Track interaction count per service instance
+        if self.enable_feedback:
+            try:
+                feedback_path = feedback_dir or config.get('FEEDBACK_DIR', 'data/feedback')
+                self.feedback_retriever = create_feedback_retriever(feedback_path)
+                logger.info("Feedback integration enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize feedback retriever: {e}")
+                self.enable_feedback = False
         
         logger.info(
             f"TutorService initialized: tools={self.tool_engine.list_tools()}, "
@@ -79,8 +98,10 @@ class TutorService:
             raise ValueError(f"Could not load case for organism: {organism}")
         
         # Build system message (native function calling - no tool rules needed)
+        # No feedback needed for initial case introduction
         system_message = system_message_template.format(
-            case=case_description
+            case=case_description,
+            Examples_of_Good_and_Bad_Responses=""
         )
         
         # Generate initial message
@@ -122,7 +143,9 @@ class TutorService:
     async def process_message(
         self,
         message: str,
-        context: TutorContext
+        context: TutorContext,
+        feedback_enabled: Optional[bool] = None,
+        feedback_threshold: Optional[float] = None
     ) -> TutorResponse:
         """Process user message and return tutor response."""
         start_time = datetime.now()
@@ -134,19 +157,100 @@ class TutorService:
             if not context.case_description:
                 raise ValueError(f"Could not load case for organism: {context.organism}")
         
-        # Build system message (native function calling - no tool rules needed)
-        system_message = system_message_template.format(
-            case=context.case_description
-        )
+        # Get feedback examples for tutor and append to user message
+        enhanced_message = message
+        feedback_examples = ""
+        retrieved_feedback_examples = []
         
-        # Update system message in history
-        if context.conversation_history and context.conversation_history[0]["role"] == "system":
-            context.conversation_history[0]["content"] = system_message
-        else:
+        # Use provided feedback settings or fall back to service defaults
+        use_feedback = feedback_enabled if feedback_enabled is not None else self.enable_feedback
+        logger.info(f"[FEEDBACK] use_feedback={use_feedback}, feedback_retriever={self.feedback_retriever is not None}")
+        
+        if use_feedback and self.feedback_retriever:
+            try:
+                # Temporarily update threshold if provided
+                if feedback_threshold is not None:
+                    from microtutor.core.config_helper import config
+                    original_threshold = config.FEEDBACK_SIMILARITY_THRESHOLD
+                    config.FEEDBACK_SIMILARITY_THRESHOLD = feedback_threshold
+                    logger.info(f"[FEEDBACK] Updated threshold from {original_threshold} to {feedback_threshold}")
+                
+                feedback_examples = get_feedback_examples_for_tool(
+                    user_input=message,
+                    conversation_history=context.conversation_history,
+                    tool_name="tutor",
+                    feedback_retriever=self.feedback_retriever,
+                    include_feedback=True
+                )
+                
+                # Get the actual feedback examples for the response
+                current_threshold = config.FEEDBACK_SIMILARITY_THRESHOLD
+                logger.info(f"[FEEDBACK] Using threshold: {current_threshold}")
+                retrieved_feedback_examples = self.feedback_retriever.retrieve_feedback_examples(
+                    current_message=message,
+                    conversation_history=context.conversation_history,
+                    message_type="tutor",
+                    k=3
+                )
+                logger.info(f"[FEEDBACK] Retrieved {len(retrieved_feedback_examples)} feedback examples")
+                
+                # Convert to serializable format
+                retrieved_feedback_examples = [
+                    {
+                        "similarity_score": float(example.similarity_score),
+                        "is_positive_example": example.is_positive_example,
+                        "is_negative_example": example.is_negative_example,
+                        "entry": {
+                            "rating": example.entry.rating,
+                            "organism": example.entry.organism,
+                            "case_id": example.entry.case_id,
+                            "rated_message": example.entry.rated_message,
+                            "feedback_text": example.entry.feedback_text,
+                            "replacement_text": example.entry.replacement_text,
+                            "chat_history": example.entry.chat_history
+                        },
+                        "text": example.text
+                    }
+                    for example in retrieved_feedback_examples
+                ]
+                
+                if feedback_examples:
+                    enhanced_message = f"{message}\n\n{feedback_examples}"
+                
+                # Restore original threshold
+                if feedback_threshold is not None:
+                    config.FEEDBACK_SIMILARITY_THRESHOLD = original_threshold
+                    
+            except Exception as e:
+                logger.warning(f"Could not retrieve feedback examples: {e}")
+        
+        # Ensure system message is set only once at case start
+        if not context.conversation_history or context.conversation_history[0]["role"] != "system":
+            system_message = system_message_template.format(
+                case=context.case_description
+            )
             context.conversation_history.insert(0, {"role": "system", "content": system_message})
         
-        # Add user message
-        context.conversation_history.append({"role": "user", "content": message})
+        # Increment interaction counter and log agent context
+        self.interaction_counter += 1
+        system_message = context.conversation_history[0]["content"]
+        log_agent_context(
+            case_id=context.case_id,
+            agent_name="tutor",
+            interaction_id=self.interaction_counter,
+            system_prompt=system_message,
+            user_prompt=message,
+            feedback_examples=feedback_examples,
+            full_context=enhanced_message,
+            metadata={
+                "model": context.model_name,
+                "feedback_enabled": self.enable_feedback,
+                "organism": context.organism
+            }
+        )
+        
+        # Add enhanced user message
+        context.conversation_history.append({"role": "user", "content": enhanced_message})
         
         # Call LLM with native function calling
         try:
@@ -181,7 +285,8 @@ class TutorService:
                 "case_id": context.case_id,
                 "state": new_state.value,
                 "organism": context.organism
-            }
+            },
+            feedback_examples=retrieved_feedback_examples
         )
     
     def _call_tutor_with_tools(

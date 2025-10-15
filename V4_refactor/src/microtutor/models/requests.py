@@ -123,6 +123,16 @@ class ChatRequest(BaseModel):
         None,
         description="LLM model to use for this chat"
     )
+    feedback_enabled: Optional[bool] = Field(
+        True,
+        description="Whether to enable AI feedback for this request"
+    )
+    feedback_threshold: Optional[float] = Field(
+        0.7,
+        ge=0.1,
+        le=1.0,
+        description="Similarity threshold for feedback retrieval (0.1-1.0)"
+    )
     
     @validator('message')
     def message_not_empty(cls, v: str) -> str:

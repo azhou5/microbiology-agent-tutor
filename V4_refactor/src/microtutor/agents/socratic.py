@@ -22,7 +22,7 @@ except ImportError:
     # FAISS is optional
     index = None
     texts = []
-    def get_embedding(text): return None
+    from microtutor.utils import get_embedding
     def retrieve_similar_examples(*args, **kwargs): return []
 
 from microtutor.core.llm_router import chat_complete

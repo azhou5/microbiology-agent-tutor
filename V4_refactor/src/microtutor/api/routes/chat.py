@@ -2,7 +2,9 @@
 
 import logging
 from datetime import datetime
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from microtutor.models.requests import StartCaseRequest, ChatRequest, FeedbackRequest, CaseFeedbackRequest
@@ -10,7 +12,9 @@ from microtutor.models.responses import StartCaseResponse, ChatResponse, ErrorRe
 from microtutor.models.domain import TutorContext
 from microtutor.models.database import ConversationLog
 from microtutor.services.tutor_service import TutorService
-from microtutor.api.dependencies import get_tutor_service, get_db
+from microtutor.services.background_service import BackgroundTaskService
+from microtutor.core.streaming_llm import get_streaming_tutor_service, StreamingChunk
+from microtutor.api.dependencies import get_tutor_service, get_db, get_background_service_dependency
 from microtutor.core.logging_config import get_logger, log_conversation_turn
 from microtutor.core.config_helper import config
 
@@ -21,31 +25,28 @@ router = APIRouter()
 mt_logger = get_logger()
 
 
-def log_conversation(db: Session, case_id: str, role: str, content: str) -> None:
-    """Log a conversation message to the database.
+def log_conversation_async(
+    background_service: BackgroundTaskService, 
+    case_id: str, 
+    role: str, 
+    content: str,
+    metadata: Optional[Dict[str, Any]] = None
+) -> None:
+    """Log a conversation message asynchronously.
     
     Args:
-        db: Database session
+        background_service: Background task service
         case_id: Unique case identifier
         role: Message role ('user', 'assistant', 'system')
         content: Message content
+        metadata: Optional metadata to include
     """
-    if db is None:
-        return  # Database not configured
-    
-    try:
-        log_entry = ConversationLog(
-            case_id=case_id,
-            timestamp=datetime.utcnow(),
-            role=role,
-            content=content
-        )
-        db.add(log_entry)
-        db.commit()
-        logger.debug(f"Logged {role} message for case {case_id}")
-    except Exception as e:
-        logger.error(f"Failed to log conversation: {e}")
-        db.rollback()
+    background_service.log_conversation_async(
+        case_id=case_id,
+        role=role,
+        content=content,
+        metadata=metadata
+    )
 
 
 @router.post(
@@ -61,7 +62,7 @@ def log_conversation(db: Session, case_id: str, role: str, content: str) -> None
 async def start_case(
     request: StartCaseRequest,
     tutor_service: TutorService = Depends(get_tutor_service),
-    db=Depends(get_db)
+    background_service: BackgroundTaskService = Depends(get_background_service_dependency)
 ) -> StartCaseResponse:
     """Start a new case with the selected organism.
     
@@ -80,30 +81,39 @@ async def start_case(
             use_hpi_only=request.use_hpi_only
         )
         
-        # Log to database if available
-        log_conversation(db, request.case_id, "system", f"Case started: {request.organism}")
-        log_conversation(db, request.case_id, "assistant", response.content)
-        
-        # Log to structured files
-        mt_logger.log_conversation_turn(
-            request.case_id,
-            "system",
+        # Log asynchronously to avoid blocking the response
+        log_conversation_async(
+            background_service, 
+            request.case_id, 
+            "system", 
             f"Case started: {request.organism}",
             metadata={"organism": request.organism, "model": request.model_name}
         )
-        mt_logger.log_conversation_turn(
-            request.case_id,
-            "assistant",
+        log_conversation_async(
+            background_service, 
+            request.case_id, 
+            "assistant", 
             response.content,
             metadata={"tools_used": response.tools_used}
         )
         
         logger.info(f"[START_CASE] Success for case_id={request.case_id}")
         
+        # Get the actual system prompt that was used
+        from microtutor.core.tutor_prompt import get_system_message_template
+        from microtutor.agents.case import get_case
+        
+        case_description = get_case(request.organism, use_hpi_only=request.use_hpi_only)
+        system_message_template = get_system_message_template()
+        system_prompt = system_message_template.format(
+            case=case_description,
+            Examples_of_Good_and_Bad_Responses=""
+        )
+        
         return StartCaseResponse(
             initial_message=response.content,
             history=[
-                {"role": "system", "content": "System initialized"},
+                {"role": "system", "content": system_prompt},
                 {"role": "assistant", "content": response.content}
             ],
             case_id=request.case_id,
@@ -137,7 +147,7 @@ async def start_case(
 async def chat(
     request: ChatRequest,
     tutor_service: TutorService = Depends(get_tutor_service),
-    db=Depends(get_db)
+    background_service: BackgroundTaskService = Depends(get_background_service_dependency)
 ) -> ChatResponse:
     """Process a chat message from the student.
     
@@ -176,28 +186,26 @@ async def chat(
             model_name=request.model_name or default_model
         )
         
-        # Log user message to database
-        log_conversation(db, request.case_id, "user", request.message)
-        
-        # Log user message to structured files
-        mt_logger.log_conversation_turn(
+        # Log user message asynchronously
+        log_conversation_async(
+            background_service,
             request.case_id,
             "user",
             request.message,
             metadata={"organism": request.organism_key}
         )
         
-        # Process message
+        # Process message with feedback settings
         response = await tutor_service.process_message(
             message=request.message,
-            context=context
+            context=context,
+            feedback_enabled=request.feedback_enabled,
+            feedback_threshold=request.feedback_threshold
         )
         
-        # Log assistant response to database
-        log_conversation(db, request.case_id, "assistant", response.content)
-        
-        # Log assistant response to structured files
-        mt_logger.log_conversation_turn(
+        # Log assistant response asynchronously
+        log_conversation_async(
+            background_service,
             request.case_id,
             "assistant",
             response.content,
@@ -210,6 +218,25 @@ async def chat(
         processing_time = (datetime.now() - start_time).total_seconds() * 1000
         logger.info(f"[CHAT] Completed in {processing_time:.2f}ms for case_id={request.case_id}")
         
+        # Collect metrics asynchronously
+        background_service.collect_metrics_async(
+            event_type="chat_completion",
+            case_id=request.case_id,
+            processing_time_ms=processing_time,
+            model=context.model_name,
+            metadata={
+                "organism": request.organism_key,
+                "tools_used": response.tools_used,
+                "feedback_enabled": request.feedback_enabled
+            }
+        )
+        
+        # Debug feedback examples
+        feedback_examples = getattr(response, 'feedback_examples', [])
+        logger.info(f"[CHAT] Feedback examples count: {len(feedback_examples)}")
+        logger.info(f"[CHAT] Response type: {type(response)}")
+        logger.info(f"[CHAT] Response attributes: {dir(response)}")
+        
         return ChatResponse(
             response=response.content,
             history=[
@@ -221,7 +248,8 @@ async def chat(
                 "processing_time_ms": processing_time,
                 "case_id": request.case_id,
                 "organism": request.organism_key
-            }
+            },
+            feedback_examples=feedback_examples
         )
         
     except ValueError as e:
@@ -249,7 +277,7 @@ async def chat(
 )
 async def submit_feedback(
     request: FeedbackRequest,
-    db=Depends(get_db)
+    background_service: BackgroundTaskService = Depends(get_background_service_dependency)
 ) -> dict:
     """Submit feedback for a specific tutor response.
     
@@ -262,19 +290,8 @@ async def submit_feedback(
     logger.info(f"[FEEDBACK] case_id={request.case_id}, rating={request.rating}")
     
     try:
-        # Log feedback to database if available
-        if db is not None:
-            feedback_log = ConversationLog(
-                case_id=request.case_id or "unknown",
-                timestamp=datetime.utcnow(),
-                role="feedback",
-                content=f"Rating: {request.rating}, Feedback: {request.feedback_text}"
-            )
-            db.add(feedback_log)
-            db.commit()
-        
-        # Log to structured files
-        mt_logger.log_feedback(
+        # Log feedback asynchronously
+        background_service.log_feedback_async(
             case_id=request.case_id or "unknown",
             rating=request.rating,
             message=request.message,
@@ -283,7 +300,7 @@ async def submit_feedback(
             organism=getattr(request, 'organism', '')
         )
         
-        logger.info(f"[FEEDBACK] Successfully logged for case_id={request.case_id}")
+        logger.info(f"[FEEDBACK] Successfully queued for case_id={request.case_id}")
         return {"status": "success", "message": "Feedback received"}
         
     except Exception as e:
@@ -305,7 +322,7 @@ async def submit_feedback(
 )
 async def submit_case_feedback(
     request: CaseFeedbackRequest,
-    db=Depends(get_db)
+    background_service: BackgroundTaskService = Depends(get_background_service_dependency)
 ) -> dict:
     """Submit overall feedback for a completed case.
     
@@ -321,31 +338,17 @@ async def submit_case_feedback(
     )
     
     try:
-        # Log case feedback to database if available
-        if db is not None:
-            feedback_log = ConversationLog(
-                case_id=request.case_id,
-                timestamp=datetime.utcnow(),
-                role="case_feedback",
-                content=(
-                    f"Detail: {request.detail}, Helpfulness: {request.helpfulness}, "
-                    f"Accuracy: {request.accuracy}, Comments: {request.comments}"
-                )
-            )
-            db.add(feedback_log)
-            db.commit()
-        
-        # Log to structured files
-        mt_logger.log_case_feedback(
+        # Log case feedback asynchronously
+        background_service.log_feedback_async(
             case_id=request.case_id,
-            detail=request.detail,
-            helpfulness=request.helpfulness,
-            accuracy=request.accuracy,
-            comments=request.comments or "",
+            rating=request.detail,  # Use detail as primary rating
+            message=f"Case feedback: Detail={request.detail}, Helpfulness={request.helpfulness}, Accuracy={request.accuracy}",
+            feedback_text=request.comments or "",
+            replacement_text="",
             organism=getattr(request, 'organism', '')
         )
         
-        logger.info(f"[CASE_FEEDBACK] Successfully logged for case_id={request.case_id}")
+        logger.info(f"[CASE_FEEDBACK] Successfully queued for case_id={request.case_id}")
         return {"status": "success", "message": "Case feedback received"}
         
     except Exception as e:
@@ -392,4 +395,215 @@ async def get_available_organisms() -> dict:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve organisms"
         )
+
+
+@router.post(
+    "/start_case/stream",
+    summary="Start a new case with streaming response",
+    description="Initialize a new case with streaming response for faster perceived performance"
+)
+async def start_case_stream(
+    request: StartCaseRequest,
+    tutor_service: TutorService = Depends(get_tutor_service),
+    background_service: BackgroundTaskService = Depends(get_background_service_dependency)
+) -> StreamingResponse:
+    """Start a new case with streaming response.
+    
+    This endpoint provides the same functionality as /start_case but streams
+    the response as it's generated, providing faster perceived performance.
+    """
+    logger.info(f"[START_CASE_STREAM] organism={request.organism}, case_id={request.case_id}")
+    
+    try:
+        # Get streaming tutor service
+        streaming_service = get_streaming_tutor_service(tutor_service)
+        
+        async def generate_stream():
+            """Generate streaming response."""
+            full_response = ""
+            
+            async for chunk in streaming_service.stream_start_case(
+                organism=request.organism,
+                case_id=request.case_id,
+                model_name=request.model_name,
+                use_hpi_only=request.use_hpi_only
+            ):
+                # Log chunk asynchronously
+                if chunk.content:
+                    log_conversation_async(
+                        background_service,
+                        request.case_id,
+                        "assistant_chunk",
+                        chunk.content,
+                        metadata={
+                            "chunk_index": chunk.metadata.get("chunk_index", 0),
+                            "is_final": chunk.is_final,
+                            "organism": request.organism
+                        }
+                    )
+                
+                # Accumulate full response
+                full_response += chunk.content
+                
+                # Yield chunk as Server-Sent Events
+                yield f"data: {chunk.content}\n\n"
+                
+                if chunk.is_final:
+                    # Log complete response asynchronously
+                    log_conversation_async(
+                        background_service,
+                        request.case_id,
+                        "assistant",
+                        full_response,
+                        metadata={
+                            "tools_used": [],
+                            "organism": request.organism,
+                            "streaming": True
+                        }
+                    )
+                    break
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/plain",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Content-Type": "text/plain; charset=utf-8"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"[START_CASE_STREAM] Error: {e}", exc_info=True)
+        async def error_stream():
+            yield f"data: Error: {str(e)}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/plain")
+
+
+@router.post(
+    "/chat/stream",
+    summary="Send a chat message with streaming response",
+    description="Send a message to the tutor and receive a streaming response"
+)
+async def chat_stream(
+    request: ChatRequest,
+    tutor_service: TutorService = Depends(get_tutor_service),
+    background_service: BackgroundTaskService = Depends(get_background_service_dependency)
+) -> StreamingResponse:
+    """Process a chat message with streaming response.
+    
+    This endpoint provides the same functionality as /chat but streams
+    the response as it's generated, providing faster perceived performance.
+    """
+    start_time = datetime.now()
+    logger.info(f"[CHAT_STREAM] case_id={request.case_id}, message_len={len(request.message)}")
+    
+    # Validate inputs
+    if not request.case_id:
+        async def error_stream():
+            yield "data: Error: No active case ID. Please start a new case.\n\n"
+        return StreamingResponse(error_stream(), media_type="text/plain")
+    
+    if not request.organism_key:
+        async def error_stream():
+            yield "data: Error: No active organism. Please start a new case.\n\n"
+        return StreamingResponse(error_stream(), media_type="text/plain")
+    
+    try:
+        # Create context
+        default_model = getattr(config, 'API_MODEL_NAME', 'o4-mini-2025-04-16')
+        context = TutorContext(
+            case_id=request.case_id,
+            organism=request.organism_key,
+            conversation_history=[msg.dict() for msg in request.history],
+            model_name=request.model_name or default_model
+        )
+        
+        # Log user message asynchronously
+        log_conversation_async(
+            background_service,
+            request.case_id,
+            "user",
+            request.message,
+            metadata={"organism": request.organism_key}
+        )
+        
+        # Get streaming tutor service
+        streaming_service = get_streaming_tutor_service(tutor_service)
+        
+        async def generate_stream():
+            """Generate streaming response."""
+            full_response = ""
+            
+            async for chunk in streaming_service.stream_process_message(
+                message=request.message,
+                context=context,
+                feedback_enabled=request.feedback_enabled,
+                feedback_threshold=request.feedback_threshold
+            ):
+                # Log chunk asynchronously
+                if chunk.content:
+                    log_conversation_async(
+                        background_service,
+                        request.case_id,
+                        "assistant_chunk",
+                        chunk.content,
+                        metadata={
+                            "chunk_index": chunk.metadata.get("chunk_index", 0),
+                            "is_final": chunk.is_final,
+                            "organism": request.organism_key
+                        }
+                    )
+                
+                # Accumulate full response
+                full_response += chunk.content
+                
+                # Yield chunk as Server-Sent Events
+                yield f"data: {chunk.content}\n\n"
+                
+                if chunk.is_final:
+                    # Log complete response asynchronously
+                    processing_time = (datetime.now() - start_time).total_seconds() * 1000
+                    
+                    log_conversation_async(
+                        background_service,
+                        request.case_id,
+                        "assistant",
+                        full_response,
+                        metadata={
+                            "tools_used": [],
+                            "organism": request.organism_key,
+                            "streaming": True,
+                            "processing_time_ms": processing_time
+                        }
+                    )
+                    
+                    # Collect metrics asynchronously
+                    background_service.collect_metrics_async(
+                        event_type="chat_completion_stream",
+                        case_id=request.case_id,
+                        processing_time_ms=processing_time,
+                        model=context.model_name,
+                        metadata={
+                            "organism": request.organism_key,
+                            "streaming": True
+                        }
+                    )
+                    break
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/plain",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Content-Type": "text/plain; charset=utf-8"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"[CHAT_STREAM] Error: {e}", exc_info=True)
+        async def error_stream():
+            yield f"data: Error: {str(e)}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/plain")
 

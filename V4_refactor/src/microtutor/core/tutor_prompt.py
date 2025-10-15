@@ -119,4 +119,6 @@ Begin by welcoming the student and presenting the initial chief complaint.
 
 
 # Alias for backward compatibility
-get_system_message_template = get_system_message_template_native_function_calling
+def get_system_message_template():
+    """Alias for backward compatibility."""
+    return get_system_message_template_native_function_calling()

@@ -1,6 +1,7 @@
 import os
-from openai import AzureOpenAI, OpenAI
-def get_embeddings_batch(texts):
+from microtutor.utils import get_embedding, get_embeddings_batch
+
+def get_embeddings_batch_legacy(texts):
     """
     Get embeddings for a batch of text strings using OpenAI's embedding model.
     
@@ -130,67 +131,8 @@ def prepare_text_from_log_entry(log_entry):
     return (" ".join(text_parts), rating_text, rated_message, replacement) 
 
 # -------------------------------------------------------------------
-# Azure/OpenAI Embedding Utility
+# Note: Embedding functions are now imported from microtutor.utils
 # -------------------------------------------------------------------
-
-def get_embedding(text):
-    """
-    Get a single embedding from Azure OpenAI.
-    """
-    # Determine which client to use based on the toggle
-    use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
-    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    
-    if use_azure_env and azure_endpoint and azure_api_key:
-        # Use Azure OpenAI
-        client = AzureOpenAI(
-            azure_endpoint=azure_endpoint,
-            api_key=azure_api_key,
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
-        )
-    elif openai_api_key:
-        # Use personal OpenAI
-        client = OpenAI(api_key=openai_api_key)
-    else:
-        raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
-
-    response = client.embeddings.create(
-        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-        input=text
-    )
-    return response.data[0].embedding
-
-def get_embeddings_batch(text_list):
-    """
-    Get embeddings for a batch of texts.
-    """
-    # Determine which client to use based on the toggle
-    use_azure_env = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
-    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    
-    if use_azure_env and azure_endpoint and azure_api_key:
-        # Use Azure OpenAI
-        client = AzureOpenAI(
-            azure_endpoint=azure_endpoint,
-            api_key=azure_api_key,
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-04-16")
-        )
-    elif openai_api_key:
-        # Use personal OpenAI
-        client = OpenAI(api_key=openai_api_key)
-    else:
-        raise ValueError("Missing required OpenAI environment variables. Check USE_AZURE_OPENAI setting and credentials.")
-
-    response = client.embeddings.create(
-        model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-        input=text_list
-    )
-
-    return [item.embedding for item in response.data]
 
 # -------------------------------------------------------------------
 # Main Function: Logs to FAISS Index

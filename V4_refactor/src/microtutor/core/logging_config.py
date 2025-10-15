@@ -255,6 +255,46 @@ class MicroTutorLogger:
             f"accuracy={accuracy} | comments_len={len(comments)}"
         )
     
+    def log_agent_context(self, case_id: str, agent_name: str, interaction_id: int,
+                         system_prompt: str, user_prompt: str, feedback_examples: str = "",
+                         full_context: str = "", metadata: dict = None):
+        """
+        Log complete agent context for debugging.
+        
+        Args:
+            case_id: Unique case identifier
+            agent_name: Name of the agent (tutor, patient, socratic, hint)
+            interaction_id: Sequential interaction number for this case
+            system_prompt: System prompt sent to the agent
+            user_prompt: User prompt sent to the agent
+            feedback_examples: Feedback examples appended (if any)
+            full_context: Complete context the agent sees
+            metadata: Additional metadata
+        """
+        self.agent_logger.info(
+            f"AGENT_CONTEXT | case_id={case_id} | agent={agent_name} | "
+            f"interaction={interaction_id} | context_len={len(full_context)}"
+        )
+        
+        # Save detailed agent context
+        agent_file = self.logs_dir / "agents" / f"{agent_name}_context.jsonl"
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "case_id": case_id,
+            "agent_name": agent_name,
+            "interaction_id": interaction_id,
+            "system_prompt": system_prompt,
+            "conversation_context": {
+                "user_prompt": user_prompt,
+                "feedback_examples": feedback_examples,
+                "full_context": full_context
+            },
+            "metadata": metadata or {}
+        }
+        
+        with open(agent_file, 'a') as f:
+            f.write(json.dumps(entry, default=str) + '\n')
+    
     def get_conversation_history(self, case_id: str) -> list:
         """
         Read conversation history for a case.
@@ -301,9 +341,12 @@ def log_tool_call(case_id: str, tool_name: str, arguments: dict, result: str, me
     get_logger().log_tool_call(case_id, tool_name, arguments, result, metadata)
 
 
-def log_agent_context(case_id: str, agent_name: str, context: dict):
+def log_agent_context(case_id: str, agent_name: str, interaction_id: int,
+                     system_prompt: str, user_prompt: str, feedback_examples: str = "",
+                     full_context: str = "", metadata: dict = None):
     """Convenience function to log agent context."""
-    get_logger().log_agent_context(case_id, agent_name, context)
+    get_logger().log_agent_context(case_id, agent_name, interaction_id, system_prompt, 
+                                  user_prompt, feedback_examples, full_context, metadata)
 
 
 def log_llm_interaction(case_id: str, model: str, messages: list, response: str, 

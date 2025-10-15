@@ -56,6 +56,26 @@
             <button id="start-case-btn" class="btn btn-primary">🚀 Start New Case</button>
         </div>
 
+        <!-- Feedback Controls -->
+        <div class="feedback-controls">
+            <h3>🎯 Feedback System Controls</h3>
+            <div class="control-group">
+                <label class="toggle-container">
+                    <input type="checkbox" id="feedback-toggle" checked>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">Enable AI Feedback</span>
+                </label>
+            </div>
+            <div class="control-group">
+                <label for="threshold-slider">Similarity Threshold: <span id="threshold-value">0.7</span></label>
+                <input type="range" id="threshold-slider" min="0.1" max="1.0" step="0.1" value="0.7" class="slider">
+                <div class="threshold-labels">
+                    <span>0.1 (More Examples)</span>
+                    <span>1.0 (Exact Matches Only)</span>
+                </div>
+            </div>
+        </div>
+
         <div id="chatbox" class="chatbox">
             <div class="welcome-message">
                 <p>👋 Welcome to MicroTutor V4!</p>

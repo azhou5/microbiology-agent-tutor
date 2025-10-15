@@ -49,6 +49,11 @@ except ImportError:
         USE_FAISS = os.getenv("USE_FAISS", "False").lower() == "true"
         OUTPUT_TOOL_DIRECTLY = os.getenv("OUTPUT_TOOL_DIRECTLY", "True").lower() == "true"
         REWARD_MODEL_SAMPLING = os.getenv("REWARD_MODEL_SAMPLING", "False").lower() == "true"
+        
+        # Feedback integration settings
+        FEEDBACK_DIR = os.getenv("FEEDBACK_DIR", "data/feedback")
+        FEEDBACK_SIMILARITY_THRESHOLD = float(os.getenv("FEEDBACK_SIMILARITY_THRESHOLD", "0.7"))
+        FEEDBACK_MAX_EXAMPLES = int(os.getenv("FEEDBACK_MAX_EXAMPLES", "4"))
     
     config = Config()
 

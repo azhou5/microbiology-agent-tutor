@@ -52,6 +52,7 @@ class TutorResponse(BaseModel):
     token_usage: Optional[TokenUsage] = None
     processing_time_ms: Optional[float] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    feedback_examples: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 
 class Message(BaseModel):

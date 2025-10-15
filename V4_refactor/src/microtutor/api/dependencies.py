@@ -26,6 +26,7 @@ from microtutor.services.tutor_service import TutorService
 from microtutor.services.case_service import CaseService
 from microtutor.services.feedback_service import FeedbackService
 from microtutor.services.voice_service import VoiceService
+from microtutor.services.background_service import get_background_service, BackgroundTaskService
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,9 @@ def get_tutor_service() -> TutorService:
             output_tool_directly=getattr(config, 'OUTPUT_TOOL_DIRECTLY', True),
             run_with_faiss=getattr(config, 'USE_FAISS', False),
             reward_model_sampling=getattr(config, 'REWARD_MODEL_SAMPLING', False),
-            model_name=getattr(config, 'API_MODEL_NAME', 'o3-mini')
+            model_name=getattr(config, 'API_MODEL_NAME', 'o3-mini'),
+            enable_feedback=True,
+            feedback_dir='data/feedback'
         )
         logger.info("TutorService singleton created")
     return _tutor_service
@@ -111,6 +114,11 @@ def get_voice_service() -> VoiceService:
         )
         logger.info(f"VoiceService singleton created - Tutor: {tutor_voice}, Patient: {patient_voice}")
     return _voice_service
+
+
+def get_background_service_dependency() -> BackgroundTaskService:
+    """Get background service for dependency injection."""
+    return get_background_service()
 
 
 # Database setup
