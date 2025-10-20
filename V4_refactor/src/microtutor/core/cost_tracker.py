@@ -22,11 +22,12 @@ class TokenUsage:
 class CostTracker:
     """Tracks token usage and costs for OpenAI/Azure API calls."""
     
-    # Cost per 1K tokens (as of 2024)
+    # Cost per 1K tokens (as of 2024-2025)
     COST_PER_1K_TOKENS = {
         "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
         "gpt-4": {"input": 0.03, "output": 0.06},
-        "o4-mini-2025-04-16": {"input": 0.003, "output": 0.012},  # Estimated
+        "gpt-4.1": {"input": 0.0275, "output": 0.11},  # GPT-4.1 (2025-04-14)
+        "o4-mini-2025-04-16": {"input": 0.003, "output": 0.012},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
         "o4-mini-0416": {"input": 0.0011, "output": 0.0044},
         "o4-mini-2025-04-16": {"input": 0.0011, "output": 0.0044},

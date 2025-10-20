@@ -53,10 +53,18 @@ class LLMClient:
             
             # Load deployment mapping
             self.deployment_map = {}
+            
+            # Map deployment names to actual Azure deployment names
+            # The deployment_map keys are what the frontend sends, values are the actual Azure deployment names
+            self.deployment_map['o4-mini-0416'] = 'o4-mini-0416'
+            self.deployment_map['gpt-4.1'] = 'gpt-4.1'
+            self.deployment_map['gpt-4'] = 'gpt-4.1'  # Map gpt-4 to gpt-4.1 deployment
+            self.deployment_map['gpt-4o-1120'] = 'gpt-4o-1120'
+            self.deployment_map['o3-mini-0131'] = 'o3-mini-0131'
+            
+            # Load default deployment from env
             deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
             if deployment_name:
-                # Map both the old name and the actual deployment name
-                self.deployment_map['o4-mini-0416'] = deployment_name
                 self.deployment_map[deployment_name] = deployment_name
             
             print(f"Azure OpenAI client initialized (API version: {api_version})")
@@ -85,7 +93,7 @@ class LLMClient:
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
         tools: Optional[List[Dict]] = None,
-        retries: int = 10,
+        retries: int = 4,
         fallback_model: Optional[str] = None
     ) -> Union[str, Dict]:
         """
@@ -132,6 +140,9 @@ class LLMClient:
                 deployment = model
                 if self.use_azure and model in self.deployment_map:
                     deployment = self.deployment_map[model]
+                    print(f"[DEBUG] Using Azure deployment: {deployment} for model: {model}")
+                else:
+                    print(f"[DEBUG] Using model directly: {deployment}")
                 
                 # Build API call
                 api_params = {

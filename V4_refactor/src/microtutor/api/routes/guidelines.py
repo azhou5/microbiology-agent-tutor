@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 from microtutor.services.guideline_service import GuidelineService
+from microtutor.services.guidelines_cache import get_guidelines_cache
 import logging
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,29 @@ class HealthCheckResponse(BaseModel):
     guideline_search_available: bool
     available_sources: List[str]
     backend: str
+
+
+class GuidelineFetchRequest(BaseModel):
+    """Request to fetch guidelines for an organism."""
+    
+    organism: str = Field(
+        ...,
+        description="Organism name",
+        json_schema_extra={"example": "staphylococcus aureus"}
+    )
+
+
+class GuidelineFetchResponse(BaseModel):
+    """Response from guideline fetch."""
+    
+    organism: str = Field(..., description="Organism name")
+    clinical_guidelines: Optional[str] = Field(None, description="Clinical guidelines")
+    diagnostic_approach: Optional[str] = Field(None, description="Diagnostic approach")
+    treatment_protocols: Optional[str] = Field(None, description="Treatment protocols")
+    recent_evidence: List[Dict[str, Any]] = Field(default_factory=list, description="Recent evidence")
+    fetched_at: str = Field(..., description="When guidelines were fetched")
+    sources: List[str] = Field(default_factory=list, description="Sources used")
+    query_strategy: str = Field(default="intelligent_multi_source", description="Query strategy used")
 
 
 # Routes
@@ -333,4 +357,70 @@ async def get_available_sources(
         "sources": sources_info,
         "total_available": available_count
     }
+
+
+@router.post("/fetch", response_model=GuidelineFetchResponse)
+async def fetch_guidelines(
+    request: GuidelineFetchRequest
+):
+    """
+    Fetch guidelines for a specific organism using the guidelines cache.
+    
+    This endpoint uses the intelligent guidelines cache service to fetch
+    evidence-based clinical guidelines for the specified organism.
+    
+    **Example Request:**
+    ```json
+    {
+        "organism": "staphylococcus aureus"
+    }
+    ```
+    
+    **Example Response:**
+    ```json
+    {
+        "organism": "staphylococcus aureus",
+        "clinical_guidelines": "Evidence-based guidelines for...",
+        "diagnostic_approach": "Diagnostic approach includes...",
+        "treatment_protocols": "Treatment protocols recommend...",
+        "recent_evidence": [...],
+        "fetched_at": "2024-01-15T10:30:00Z",
+        "sources": ["EuropePMC", "PubMed", "NICE", "WHO"],
+        "query_strategy": "intelligent_multi_source"
+    }
+    ```
+    
+    Args:
+        request: GuidelineFetchRequest with organism name
+        
+    Returns:
+        GuidelineFetchResponse with fetched guidelines
+        
+    Raises:
+        HTTPException: If fetch fails
+    """
+    try:
+        # Get guidelines cache service
+        guidelines_cache = get_guidelines_cache(use_tooluniverse=False)
+        
+        # Fetch guidelines for the organism
+        guidelines = await guidelines_cache.prefetch_guidelines_for_organism(
+            organism=request.organism,
+            case_description=None
+        )
+        
+        # Convert datetime to string for JSON serialization
+        if guidelines.get('fetched_at'):
+            guidelines['fetched_at'] = guidelines['fetched_at'].isoformat()
+        
+        logger.info(f"Guidelines fetched for organism: {request.organism}")
+        
+        return GuidelineFetchResponse(**guidelines)
+        
+    except Exception as e:
+        logger.error(f"Guideline fetch failed for {request.organism}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch guidelines for {request.organism}: {str(e)}"
+        )
 

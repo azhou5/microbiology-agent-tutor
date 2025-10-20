@@ -45,7 +45,7 @@ class RespiratoryAudioMatcher:
             with open(self.metadata_file, 'r') as f:
                 return json.load(f)
         except FileNotFoundError:
-            logger.warning(f"Metadata file not found: {self.metadata_file}")
+            logger.debug(f"Metadata file not found: {self.metadata_file}")
             return {"metadata": {"audio_files": []}, "matching_schema": {}}
         except Exception as e:
             logger.error(f"Error loading metadata: {e}")

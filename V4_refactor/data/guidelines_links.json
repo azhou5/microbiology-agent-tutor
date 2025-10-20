@@ -1,0 +1,13 @@
+{"Borellia":{
+    "CID Guidelines Lyme 2020": "https://academic.oup.com/cid/article/72/1/e1/6010652",
+    "ACR Guidelines Lyme 2020": "https://acrjournals.onlinelibrary.wiley.com/doi/10.1002/art.41562", 
+    "AAFP Guidelines Lyme 2021": "https://www.aafp.org/pubs/afp/issues/2021/1200/p652.html", 
+    "CID Guidelines 2024": "https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciae104/7619499"
+}, 
+"Staphylococcus": {
+    "JAMA": "https://jamanetwork.com/journals/jama/article-abstract/2832601?utm_source=openevidence&utm_medium=referral",
+    "CID 2014": "https://academic.oup.com/cid/article/59/2/e10/2895845", 
+    "JAMA endocarditis": "https://jamanetwork.com/journals/jama/article-abstract/2686799?utm_source=openevidence&utm_medium=referral",
+    "PubMed": "https://pubmed.ncbi.nlm.nih.gov/32148777/"
+}
+}

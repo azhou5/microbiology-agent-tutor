@@ -367,6 +367,9 @@ class AutoFAISSGenerator:
             
             new_embeddings_array = np.array(new_embeddings).astype('float32')
             
+            # Normalize new embeddings for cosine similarity
+            faiss.normalize_L2(new_embeddings_array)
+            
             # Update each index type
             results = {}
             for index_type in ["all", "patient", "tutor"]:

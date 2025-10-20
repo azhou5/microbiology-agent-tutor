@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from microtutor.models.requests import StartCaseRequest, ChatRequest
 from microtutor.models.responses import StartCaseResponse, ChatResponse, ErrorResponse
 from microtutor.models.domain import TutorContext
-from microtutor.services.tutor_service import TutorService
+from microtutor.services.tutor_service_v2 import TutorService
 from microtutor.services.background_service import BackgroundTaskService
 from microtutor.core.fast_classifier import get_fast_classifier, classify_input_fast
 # Using simple config flag instead of complex classification config

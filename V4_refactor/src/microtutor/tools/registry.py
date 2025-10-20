@@ -80,9 +80,31 @@ class ToolRegistry:
         tool_type = config.get("type", "BaseTool")
         tool_class = self.get_tool_class(tool_type)
         
+        # If type not found, try to infer from tool name
         if not tool_class:
-            logger.error(f"No class registered for type: {tool_type}")
-            return None
+            # Convert tool_name to class name: "mcq_tool" -> "MCQTool"
+            # Handle special cases where tool name already ends with "_tool"
+            if tool_name.endswith('_tool'):
+                # Remove _tool suffix first
+                base_name = tool_name[:-5]  # Remove "_tool"
+            else:
+                base_name = tool_name
+            
+            # Special case for common acronyms
+            acronyms = {'mcq': 'MCQ', 'ddx': 'DDX', 'api': 'API'}
+            if base_name.lower() in acronyms:
+                tool_name_type = f"{acronyms[base_name.lower()]}Tool"
+            else:
+                # Convert to class name format (capitalize each word)
+                tool_name_type = f"{base_name.replace('_', ' ').title().replace(' ', '')}Tool"
+            
+            tool_class = self.get_tool_class(tool_name_type)
+            
+            if tool_class:
+                logger.debug(f"Using inferred tool class {tool_name_type} for {tool_name}")
+            else:
+                logger.warning(f"No class registered for type: {tool_type}, skipping {tool_name}")
+                return None
         
         try:
             instance = tool_class(config)

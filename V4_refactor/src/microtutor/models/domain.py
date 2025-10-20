@@ -16,10 +16,8 @@ class TutorState(str, Enum):
     """Current state of the tutoring session."""
     INITIALIZING = "initializing"
     INFORMATION_GATHERING = "information_gathering"
-    PROBLEM_REPRESENTATION = "problem_representation"
     DIFFERENTIAL_DIAGNOSIS = "differential_diagnosis"
-    TESTS = "tests"
-    MANAGEMENT = "management"
+    TESTS_MANAGEMENT = "tests_management"
     SOCRATIC_MODE = "socratic_mode"
     FEEDBACK = "feedback"
 
@@ -42,6 +40,10 @@ class TutorContext(BaseModel):
     model_name: str = None
     use_azure: Optional[bool] = None
     session_metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Pre-fetched guidelines for context enrichment
+    guidelines: Optional[Dict[str, Any]] = Field(default=None, description="Pre-fetched clinical guidelines")
+    guidelines_fetched_at: Optional[datetime] = Field(default=None, description="When guidelines were fetched")
     
     model_config = ConfigDict(use_enum_values=True)
     

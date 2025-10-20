@@ -43,7 +43,7 @@ class BackgroundTask:
     priority: int = 0  # Higher number = higher priority
     created_at: datetime = None
     retry_count: int = 0
-    max_retries: int = 10
+    max_retries: int = 4
     
     def __post_init__(self):
         if self.created_at is None:
@@ -432,6 +432,7 @@ class BackgroundTaskService:
             
             # Update status based on result
             with self._faiss_status_lock:
+                logger.info(f"FAISS update result: {result}")
                 if result['status'] == 'success':
                     self._faiss_status.update({
                         "is_reindexing": False,
@@ -441,6 +442,7 @@ class BackgroundTaskService:
                         "last_error": None
                     })
                     logger.info(f"Successfully updated FAISS indices: {result['metadata']}")
+                    logger.info(f"Updated status: {self._faiss_status}")
                 elif result['status'] == 'skipped':
                     self._faiss_status.update({
                         "is_reindexing": False,
@@ -449,12 +451,14 @@ class BackgroundTaskService:
                         "last_error": None
                     })
                     logger.info(f"FAISS index update skipped: {result['reason']}")
+                    logger.info(f"Updated status: {self._faiss_status}")
                 else:
                     self._faiss_status.update({
                         "is_reindexing": False,
                         "last_error": result['reason']
                     })
                     logger.error(f"FAISS index update failed: {result['reason']}")
+                    logger.info(f"Updated status: {self._faiss_status}")
                 
         except Exception as e:
             end_time = datetime.now(pytz.timezone('America/New_York'))
@@ -468,7 +472,7 @@ class BackgroundTaskService:
     def _init_database_pool(self) -> None:
         """Initialize database connection pool."""
         try:
-            from config.config import config
+            from microtutor.core.config_helper import config
             database_url = getattr(config, 'database_url', None)
             
             if database_url:

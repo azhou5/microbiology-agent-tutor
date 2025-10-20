@@ -119,7 +119,8 @@ class FeedbackRetriever:
         current_message: str,
         conversation_history: List[Dict[str, str]],
         message_type: str = "all",
-        k: int = None
+        k: int = None,
+        similarity_threshold: Optional[float] = None
     ) -> List[FeedbackExample]:
         """
         Retrieve relevant feedback examples for current context.
@@ -131,8 +132,8 @@ class FeedbackRetriever:
         4. If threshold not met, return empty list
         """
         
-        # Get configuration
-        similarity_threshold = config.FEEDBACK_SIMILARITY_THRESHOLD
+        # Get configuration - use passed threshold or fall back to config
+        similarity_threshold = similarity_threshold or config.FEEDBACK_SIMILARITY_THRESHOLD
         max_examples = k or config.FEEDBACK_MAX_EXAMPLES
         
         # Extract last user input
@@ -156,22 +157,25 @@ class FeedbackRetriever:
         texts = self.texts[index_name]
         entries = self.entries[index_name]
         
+        # Normalize query embedding for cosine similarity
+        faiss.normalize_L2(query_embedding)
+        
         # Search for more examples than needed to find good matches
         search_k = min(max_examples * 5, index.ntotal)
-        distances, indices = index.search(query_embedding, search_k)
+        similarities, indices = index.search(query_embedding, search_k)
         
         # Convert to feedback examples with similarity scores
         all_examples = []
-        for i, (distance, idx) in enumerate(zip(distances[0], indices[0])):
+        for i, (similarity, idx) in enumerate(zip(similarities[0], indices[0])):
             if idx >= len(entries):
                 continue
                 
             entry = entries[idx]
             text = texts[idx]
             
-            # Calculate similarity score (lower distance = higher similarity)
-            # Convert L2 distance to cosine similarity approximation
-            similarity_score = 1.0 / (1.0 + distance)
+            # For cosine similarity, higher values = more similar
+            # Clamp to [0, 1] range for consistency
+            similarity_score = max(0.0, min(1.0, similarity))
             
             example = FeedbackExample(
                 text=text,

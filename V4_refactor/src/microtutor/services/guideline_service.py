@@ -10,6 +10,14 @@ from typing import Any, Dict, List, Optional
 import logging
 import asyncio
 
+# Import ToolUniverse at module level
+try:
+    from tooluniverse import ToolUniverse
+    TOOLUNIVERSE_AVAILABLE = True
+except ImportError:
+    ToolUniverse = None
+    TOOLUNIVERSE_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,9 +42,12 @@ class GuidelineService:
     
     def _init_tooluniverse(self) -> None:
         """Initialize ToolUniverse if available."""
-        try:
-            from tooluniverse import ToolUniverse
+        if not TOOLUNIVERSE_AVAILABLE:
+            logger.warning("ToolUniverse not available - using custom implementations")
+            self._init_custom_tools()
+            return
             
+        try:
             self.tu = ToolUniverse()
             # Load only guideline tools to keep it lightweight
             # Using include_tools parameter (correct ToolUniverse API)

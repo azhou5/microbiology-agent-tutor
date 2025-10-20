@@ -26,7 +26,7 @@ def chat_complete(
     user_prompt: str,
     model: Optional[str] = None,
     tools: Optional[List[Dict]] = None,
-    max_retries: int = 10,
+    max_retries: int = 4,
     conversation_history: Optional[List[Dict[str, str]]] = None,
     fallback_model: Optional[str] = None,
     use_azure: Optional[bool] = None

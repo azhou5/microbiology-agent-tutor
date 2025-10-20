@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from microtutor.models.requests import StartCaseRequest, ChatRequest
 from microtutor.models.responses import StartCaseResponse, ChatResponse, ErrorResponse
 from microtutor.models.domain import TutorContext
-from microtutor.services.tutor_service import TutorService
+from microtutor.services.tutor_service_v2 import TutorService
 from microtutor.services.background_service import BackgroundTaskService
 from microtutor.core.concurrent_processing import process_chat_concurrent, process_start_case_concurrent
 from microtutor.api.dependencies import get_tutor_service, get_background_service_dependency

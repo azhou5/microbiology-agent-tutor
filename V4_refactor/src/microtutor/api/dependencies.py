@@ -22,7 +22,8 @@ except ImportError:
     import config as v3_config
     config = v3_config
 
-from microtutor.services.tutor_service import TutorService
+from microtutor.services.tutor_service_v2 import TutorService
+from microtutor.services.factory import create_tutor_service
 from microtutor.services.case_service import CaseService
 from microtutor.services.feedback_service import FeedbackService
 from microtutor.services.voice_service import VoiceService
@@ -38,22 +39,20 @@ _voice_service: Optional[VoiceService] = None
 
 
 def get_tutor_service() -> TutorService:
-    """Get or create TutorService singleton.
+    """Get or create TutorService singleton (now using v2 with clean architecture).
     
     Returns:
-        TutorService instance configured from config
+        TutorService v2 instance with dependency injection
     """
     global _tutor_service
     if _tutor_service is None:
-        _tutor_service = TutorService(
-            output_tool_directly=getattr(config, 'OUTPUT_TOOL_DIRECTLY', True),
-            run_with_faiss=getattr(config, 'USE_FAISS', False),
-            reward_model_sampling=getattr(config, 'REWARD_MODEL_SAMPLING', False),
+        _tutor_service = create_tutor_service(
             model_name=getattr(config, 'API_MODEL_NAME', 'o3-mini'),
             enable_feedback=True,
-            feedback_dir='data/feedback'
+            feedback_dir='data/feedback',
+            direct_routing_agents=["socratic", "patient"],  # Enable direct routing for these agents
         )
-        logger.info("TutorService singleton created")
+        logger.info("TutorService v2 singleton created with clean architecture")
     return _tutor_service
 
 

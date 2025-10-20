@@ -18,11 +18,11 @@
         <div class="instructions">
             <h2>📋 Case Flow</h2>
             <ol>
-                <li><strong>History:</strong> Gather key history and examination findings from the patient</li>
-                <li><strong>Problem Representation:</strong> Present illness script</li>
-                <li><strong>Differential Diagnosis:</strong> List differential diagnoses and their reasoning</li>
-                <li><strong>Tests:</strong> Order relevant investigations to narrow down differentials</li>
-                <li><strong>Management:</strong> Propose treatments and follow-up plan</li>
+                <li><strong>Information Gathering:</strong> Gather key history and examination findings from the patient
+                </li>
+                <li><strong>Differential Diagnosis & Clinical Reasoning:</strong> Organize clinical information and
+                    develop differential diagnoses</li>
+                <li><strong>Tests & Management:</strong> Order relevant investigations and propose treatments</li>
                 <li><strong>Feedback:</strong> Receive feedback on the case</li>
             </ol>
         </div>
@@ -57,6 +57,13 @@
                             <option value="taenia solium">Taenia solium</option>
                         </optgroup>
                     </select>
+
+                    <!-- Guidelines Toggle (inline with organism selection) -->
+                    <label class="guidelines-toggle-inline">
+                        <input type="checkbox" id="guidelines-toggle" disabled>
+                        <span class="toggle-slider-mini"></span>
+                        <span class="toggle-label-mini">📚 Fetch Guidelines</span>
+                    </label>
                 </div>
 
                 <div class="setup-group">
@@ -79,6 +86,20 @@
 
             <div class="setup-actions">
                 <button id="start-case-btn" class="btn btn-primary">🚀 Start New Case</button>
+            </div>
+        </div>
+
+        <!-- Guidelines Results Display (only shown when toggle is on and guidelines are fetched) -->
+        <div id="guidelines-results" class="guidelines-results" style="display: none;">
+            <div class="guidelines-header">
+                <h4>📋 Clinical Guidelines</h4>
+                <div class="guidelines-status">
+                    <span id="guidelines-status" class="status-indicator">⏳ Loading...</span>
+                    <span id="guidelines-count" class="count-badge">0 results</span>
+                </div>
+            </div>
+            <div id="guidelines-content" class="guidelines-content">
+                <!-- Guidelines will be populated here -->
             </div>
         </div>
 
@@ -144,21 +165,13 @@
                         <span class="phase-icon">📋</span>
                         <span class="phase-text">Information Gathering</span>
                     </button>
-                    <button class="phase-btn" data-phase="problem_representation">
-                        <span class="phase-icon">🧠</span>
-                        <span class="phase-text">Problem Representation</span>
-                    </button>
                     <button class="phase-btn" data-phase="differential_diagnosis">
                         <span class="phase-icon">🔍</span>
-                        <span class="phase-text">Differential Diagnosis</span>
+                        <span class="phase-text">Differential Diagnosis & Clinical Reasoning</span>
                     </button>
-                    <button class="phase-btn" data-phase="tests">
+                    <button class="phase-btn" data-phase="tests_management">
                         <span class="phase-icon">🧪</span>
-                        <span class="phase-text">Tests</span>
-                    </button>
-                    <button class="phase-btn" data-phase="management">
-                        <span class="phase-icon">💊</span>
-                        <span class="phase-text">Management</span>
+                        <span class="phase-text">Tests & Management</span>
                     </button>
                     <button class="phase-btn" data-phase="feedback">
                         <span class="phase-icon">✅</span>
@@ -275,7 +288,8 @@
                         <label><input type="radio" name="detail" value="1"> 1 (Not detailed)</label>
                         <label><input type="radio" name="detail" value="2"> 2</label>
                         <label><input type="radio" name="detail" value="3"> 3</label>
-                        <label><input type="radio" name="detail" value="4"> 4 (Very detailed)</label>
+                        <label><input type="radio" name="detail" value="4"> 4</label>
+                        <label><input type="radio" name="detail" value="5"> 5 (Very detailed)</label>
                     </div>
                     <button class="skip-btn" data-question="detail">Skip</button>
                 </div>
@@ -286,7 +300,8 @@
                         <label><input type="radio" name="helpfulness" value="1"> 1 (Not helpful)</label>
                         <label><input type="radio" name="helpfulness" value="2"> 2</label>
                         <label><input type="radio" name="helpfulness" value="3"> 3</label>
-                        <label><input type="radio" name="helpfulness" value="4"> 4 (Very helpful)</label>
+                        <label><input type="radio" name="helpfulness" value="4"> 4</label>
+                        <label><input type="radio" name="helpfulness" value="5"> 5 (Very helpful)</label>
                     </div>
                     <button class="skip-btn" data-question="helpfulness">Skip</button>
                 </div>
@@ -297,7 +312,8 @@
                         <label><input type="radio" name="accuracy" value="1"> 1 (Not accurate)</label>
                         <label><input type="radio" name="accuracy" value="2"> 2</label>
                         <label><input type="radio" name="accuracy" value="3"> 3</label>
-                        <label><input type="radio" name="accuracy" value="4"> 4 (Very accurate)</label>
+                        <label><input type="radio" name="accuracy" value="4"> 4</label>
+                        <label><input type="radio" name="accuracy" value="5"> 5 (Very accurate)</label>
                     </div>
                     <button class="skip-btn" data-question="accuracy">Skip</button>
                 </div>

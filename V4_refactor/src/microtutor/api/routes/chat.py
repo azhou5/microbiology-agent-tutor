@@ -11,7 +11,7 @@ from microtutor.models.requests import StartCaseRequest, ChatRequest, FeedbackRe
 from microtutor.models.responses import StartCaseResponse, ChatResponse, ErrorResponse
 from microtutor.models.domain import TutorContext
 from microtutor.models.database import ConversationLog
-from microtutor.services.tutor_service import TutorService
+from microtutor.services.tutor_service_v2 import TutorService
 from microtutor.services.background_service import BackgroundTaskService
 from microtutor.core.streaming_llm import get_streaming_tutor_service, StreamingChunk
 from microtutor.api.dependencies import get_tutor_service, get_db, get_background_service_dependency

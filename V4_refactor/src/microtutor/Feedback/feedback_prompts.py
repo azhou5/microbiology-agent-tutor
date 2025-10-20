@@ -66,7 +66,8 @@ def get_feedback_examples_for_tool(
     conversation_history: List[Dict[str, str]],
     tool_name: str,
     feedback_retriever: Optional[FeedbackRetriever] = None,
-    include_feedback: bool = True
+    include_feedback: bool = True,
+    similarity_threshold: Optional[float] = None
 ) -> str:
     """
     Get formatted feedback examples for a specific tool.
@@ -99,7 +100,8 @@ def get_feedback_examples_for_tool(
         current_message=user_input,
         conversation_history=conversation_history,
         message_type=message_type,
-        k=2
+        k=2,
+        similarity_threshold=similarity_threshold
     )
     
     return format_feedback_examples(examples, message_type)

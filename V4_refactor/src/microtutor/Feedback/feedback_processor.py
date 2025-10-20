@@ -239,9 +239,14 @@ class FeedbackProcessor:
                 # Use zero embeddings as fallback
                 embeddings.extend([np.zeros(embedding_dim) for _ in batch])
         
-        # Create FAISS index
+        # Create FAISS index with cosine similarity
         embeddings_array = np.array(embeddings).astype('float32')
-        index = faiss.IndexFlatL2(embedding_dim)
+        
+        # Normalize embeddings for cosine similarity
+        faiss.normalize_L2(embeddings_array)
+        
+        # Use Inner Product (IP) for cosine similarity
+        index = faiss.IndexFlatIP(embedding_dim)
         index.add(embeddings_array)
         
         # Save index and metadata

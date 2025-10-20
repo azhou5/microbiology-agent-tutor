@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from microtutor.api.dependencies import get_tutor_service, get_voice_service
 from microtutor.models.requests import ChatRequest
 from microtutor.models.responses import VoiceTranscriptionResponse, VoiceChatResponse
-from microtutor.services.tutor_service import TutorService
+from microtutor.services.tutor_service_v2 import TutorService
 from microtutor.services.voice_service import VoiceService
 
 logger = logging.getLogger(__name__)

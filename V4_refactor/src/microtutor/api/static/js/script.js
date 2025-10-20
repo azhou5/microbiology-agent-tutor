@@ -22,6 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceStatus = document.getElementById('voice-status');
     const responseAudio = document.getElementById('response-audio');
 
+    // Guidelines control elements
+    const guidelinesToggle = document.getElementById('guidelines-toggle');
+    const guidelinesResults = document.getElementById('guidelines-results');
+    const guidelinesStatus = document.getElementById('guidelines-status');
+    const guidelinesCount = document.getElementById('guidelines-count');
+    const guidelinesContent = document.getElementById('guidelines-content');
+
     // Feedback control elements
     const feedbackToggle = document.getElementById('feedback-toggle');
     const thresholdSlider = document.getElementById('threshold-slider');
@@ -64,7 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentOrganismKey = null;
     let currentPhase = 'information_gathering';
     let currentModelProvider = 'azure';
-    let currentModel = 'gpt-4.1';
+    let currentModel = 'gpt-4.1';  // Default to gpt-4.1
+    let guidelinesEnabled = true;
+    let currentGuidelines = null;
 
     /**
      * Validate and filter chat history messages
@@ -140,30 +149,18 @@ document.addEventListener('DOMContentLoaded', () => {
             name: 'Information Gathering',
             icon: '📋',
             guidance: 'Gather key history and examination findings from the patient. Ask about symptoms, duration, and physical exam.',
-            nextPhase: 'problem_representation'
-        },
-        problem_representation: {
-            name: 'Problem Representation',
-            icon: '🧠',
-            guidance: 'Present illness script. Summarize the key findings and your initial clinical reasoning.',
             nextPhase: 'differential_diagnosis'
         },
         differential_diagnosis: {
-            name: 'Differential Diagnosis',
+            name: 'Differential Diagnosis & Clinical Reasoning',
             icon: '🔍',
-            guidance: 'List differential diagnoses and their reasoning. Consider the most likely causes based on your findings.',
-            nextPhase: 'tests'
+            guidance: 'Organize clinical information and develop differential diagnoses. Consider the most likely causes based on your findings.',
+            nextPhase: 'tests_management'
         },
-        tests: {
-            name: 'Tests',
+        tests_management: {
+            name: 'Tests & Management',
             icon: '🧪',
-            guidance: 'Order relevant investigations to narrow down your differentials. Consider what would confirm or rule out each diagnosis.',
-            nextPhase: 'management'
-        },
-        management: {
-            name: 'Management',
-            icon: '💊',
-            guidance: 'Propose treatments and follow-up plan. Consider both immediate and long-term management.',
+            guidance: 'Order relevant investigations and propose treatments. Consider what would confirm or rule out each diagnosis and develop a management plan.',
             nextPhase: 'feedback'
         },
         feedback: {
@@ -284,6 +281,255 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Guidelines functionality
+     */
+    function updateGuidelinesStatus(status, count = 0) {
+        guidelinesStatus.textContent = status;
+        guidelinesCount.textContent = `${count} results`;
+
+        if (status.includes('Loading') || status.includes('⏳')) {
+            guidelinesStatus.className = 'status-indicator loading';
+        } else if (status.includes('Error') || status.includes('❌')) {
+            guidelinesStatus.className = 'status-indicator error';
+        } else if (status.includes('Success') || status.includes('✅')) {
+            guidelinesStatus.className = 'status-indicator success';
+        } else {
+            guidelinesStatus.className = 'status-indicator';
+        }
+    }
+
+    function displayGuidelines(guidelines) {
+        if (!guidelines || !guidelines.organism) {
+            guidelinesContent.innerHTML = '<div class="guidelines-loading">No guidelines available</div>';
+            return;
+        }
+
+        let html = '';
+
+        // Clinical Guidelines
+        if (guidelines.clinical_guidelines) {
+            const fullText = guidelines.clinical_guidelines;
+            const truncated = truncateText(fullText, 300);
+            const displayText = markdownToHtml(truncated.isTruncated ? truncated.text : fullText);
+
+            html += `
+                <div class="guideline-section">
+                    <h5>🏥 Clinical Guidelines</h5>
+                    <div class="guideline-item">
+                        <div class="guideline-abstract">
+                            <div class="guideline-text" data-full="${escapeHtml(fullText)}">${displayText}</div>
+                            ${truncated.isTruncated ? `
+                                <button class="expand-btn" onclick="toggleGuidelineText(this)">+ Show More</button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Diagnostic Approach
+        if (guidelines.diagnostic_approach) {
+            const fullText = guidelines.diagnostic_approach;
+            const truncated = truncateText(fullText, 300);
+            const displayText = markdownToHtml(truncated.isTruncated ? truncated.text : fullText);
+
+            html += `
+                <div class="guideline-section">
+                    <h5>🔍 Diagnostic Approach</h5>
+                    <div class="guideline-item">
+                        <div class="guideline-abstract">
+                            <div class="guideline-text" data-full="${escapeHtml(fullText)}">${displayText}</div>
+                            ${truncated.isTruncated ? `
+                                <button class="expand-btn" onclick="toggleGuidelineText(this)">+ Show More</button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Treatment Protocols
+        if (guidelines.treatment_protocols) {
+            const fullText = guidelines.treatment_protocols;
+            const truncated = truncateText(fullText, 300);
+            const displayText = markdownToHtml(truncated.isTruncated ? truncated.text : fullText);
+
+            html += `
+                <div class="guideline-section">
+                    <h5>💊 Treatment Protocols</h5>
+                    <div class="guideline-item">
+                        <div class="guideline-abstract">
+                            <div class="guideline-text" data-full="${escapeHtml(fullText)}">${displayText}</div>
+                            ${truncated.isTruncated ? `
+                                <button class="expand-btn" onclick="toggleGuidelineText(this)">+ Show More</button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Recent Evidence
+        if (guidelines.recent_evidence && guidelines.recent_evidence.length > 0) {
+            html += `
+                <div class="guideline-section">
+                    <h5>📚 Recent Evidence</h5>
+            `;
+
+            guidelines.recent_evidence.forEach((evidence, index) => {
+                const title = evidence.title || 'Research Evidence';
+                const fullText = evidence.abstract || evidence.content || 'No abstract available';
+                const truncated = truncateText(fullText, 150);
+                const displayText = truncated.isTruncated ? truncated.text : fullText;
+                const doi = evidence.doi || evidence.url;
+                const journal = evidence.journal || evidence.source || 'Research';
+                const year = evidence.year || new Date().getFullYear();
+
+                html += `
+                    <div class="guideline-item">
+                        <div class="guideline-title">${title}</div>
+                        <div class="guideline-abstract">
+                            <div class="guideline-text" data-full="${escapeHtml(fullText)}">${displayText}</div>
+                            ${truncated.isTruncated ? `
+                                <button class="expand-btn" onclick="toggleGuidelineText(this)">+ Show More</button>
+                            ` : ''}
+                        </div>
+                        <div class="guideline-meta">
+                            <span class="guideline-source">${journal}</span>
+                            <span class="guideline-year">${year}</span>
+                            <a href="${doi || 'https://pubmed.ncbi.nlm.nih.gov/'}" target="_blank" class="guideline-link">🔗 View Source</a>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+        }
+
+        if (!html) {
+            html = '<div class="guidelines-loading">No guidelines found for this organism</div>';
+        }
+
+        guidelinesContent.innerHTML = html;
+    }
+
+    function truncateText(text, maxLength) {
+        if (!text || text.length <= maxLength) {
+            return { text: text || '', isTruncated: false };
+        }
+
+        const truncated = text.substring(0, maxLength);
+        const lastSpace = truncated.lastIndexOf(' ');
+        const finalText = lastSpace > maxLength * 0.8 ? truncated.substring(0, lastSpace) : truncated;
+
+        return {
+            text: finalText + '...',
+            isTruncated: true
+        };
+    }
+
+    // Helper function to escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Helper function to convert markdown links and formatting to HTML
+    function markdownToHtml(text) {
+        if (!text) return '';
+
+        // Convert markdown links [text](url) to HTML links
+        text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="guideline-inline-link">$1</a>');
+
+        // Convert bold **text** to <strong>
+        text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        // Convert italic *text* to <em>
+        text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+        // Convert line breaks to <br>
+        text = text.replace(/\n/g, '<br>');
+
+        // Convert --- separators to <hr>
+        text = text.replace(/---/g, '<hr class="guideline-separator">');
+
+        return text;
+    }
+
+    // Global function for expand/collapse inline text (accessible from onclick)
+    window.toggleGuidelineText = function (button) {
+        const textDiv = button.previousElementSibling; // The .guideline-text div
+        const fullText = textDiv.getAttribute('data-full');
+        const isExpanded = button.classList.contains('expanded');
+
+        if (isExpanded) {
+            // Collapse - show truncated version
+            const truncated = truncateText(fullText, 300);
+            textDiv.innerHTML = markdownToHtml(truncated.text);
+            button.textContent = '+ Show More';
+            button.classList.remove('expanded');
+        } else {
+            // Expand - show full text with markdown formatting
+            textDiv.innerHTML = markdownToHtml(fullText);
+            button.textContent = '− Show Less';
+            button.classList.add('expanded');
+        }
+    };
+
+    function showGuidelinesResults() {
+        guidelinesResults.style.display = 'block';
+    }
+
+    function hideGuidelinesResults() {
+        guidelinesResults.style.display = 'none';
+    }
+
+    async function fetchGuidelines(organism) {
+        if (!guidelinesEnabled) {
+            hideGuidelinesResults();
+            return;
+        }
+
+        showGuidelinesResults();
+        updateGuidelinesStatus('⏳ Loading guidelines...', 0);
+
+        try {
+            const response = await fetch(`${API_BASE}/guidelines/fetch`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    organism: organism
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            currentGuidelines = data;
+
+            // Count actual guideline sections found
+            let count = 0;
+            if (data.clinical_guidelines) count++;
+            if (data.diagnostic_approach) count++;
+            if (data.treatment_protocols) count++;
+            if (data.recent_evidence && data.recent_evidence.length > 0) count += data.recent_evidence.length;
+
+            updateGuidelinesStatus('✅ Guidelines loaded', count);
+            displayGuidelines(data);
+
+        } catch (error) {
+            console.error('Error fetching guidelines:', error);
+            updateGuidelinesStatus('❌ Error loading guidelines', 0);
+            guidelinesContent.innerHTML = '<div class="guidelines-loading">Failed to load guidelines. Please try again.</div>';
+        }
+    }
+
+    /**
      * Update model selection based on provider
      */
     function updateModelSelection() {
@@ -302,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (azureProvider.checked) {
             currentModelProvider = 'azure';
 
-            // Add Azure models (using verified model names)
+            // Add Azure models (using actual deployment names)
             const azureOptions = [
                 { value: 'gpt-4.1', text: 'GPT-4.1 (2025-04-14)' },
                 { value: 'gpt-4o-1120', text: 'GPT-4o (2024-11-20)' },
@@ -754,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Rating prompt
         const ratingPrompt = document.createElement('span');
-        ratingPrompt.textContent = "Rate this response (1-4):";
+        ratingPrompt.textContent = "Rate this response (1-5):";
         ratingPrompt.classList.add('feedback-prompt');
         feedbackContainer.appendChild(ratingPrompt);
 
@@ -762,11 +1008,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const ratingButtonsDiv = document.createElement('div');
         ratingButtonsDiv.classList.add('feedback-buttons');
 
-        // Create rating buttons (1-4)
-        for (let i = 1; i <= 4; i++) {
+        // Create rating buttons (1-5)
+        for (let i = 1; i <= 5; i++) {
             const ratingBtn = document.createElement('button');
             ratingBtn.textContent = i;
-            ratingBtn.title = `Rate ${i} out of 4`;
+            ratingBtn.title = `Rate ${i} out of 5`;
             ratingBtn.classList.add('feedback-btn', 'rating-btn');
             ratingBtn.dataset.rating = i;
             ratingButtonsDiv.appendChild(ratingBtn);
@@ -851,7 +1097,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show feedback submitted
             feedbackContainer.innerHTML = `
                 <div class="feedback-submitted">
-                    <div class="feedback-rating">✅ Rating: ${ratingElement.dataset.rating}/4</div>
+                    <div class="feedback-rating">✅ Rating: ${ratingElement.dataset.rating}/5</div>
                     ${feedbackText.trim() ? `<div class="feedback-text">${feedbackText}</div>` : ''}
                 </div>
             `;
@@ -996,6 +1242,11 @@ document.addEventListener('DOMContentLoaded', () => {
             showPhaseProgression();
             updatePhaseUI();
             saveConversationState();
+
+            // Fetch guidelines if enabled
+            if (guidelinesEnabled) {
+                await fetchGuidelines(currentOrganismKey);
+            }
 
             // Update seen organisms list for random selection
             try {
@@ -1271,6 +1522,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (submitFeedbackBtn) {
         submitFeedbackBtn.addEventListener('click', submitCaseFeedback);
+    }
+
+    // Guidelines toggle handler
+    if (guidelinesToggle) {
+        guidelinesToggle.addEventListener('change', (e) => {
+            guidelinesEnabled = e.target.checked;
+            if (!guidelinesEnabled) {
+                // Completely hide guidelines results when disabled
+                hideGuidelinesResults();
+            } else if (currentOrganismKey) {
+                // Re-fetch and show guidelines if organism is selected
+                fetchGuidelines(currentOrganismKey);
+            }
+        });
     }
 
     // Organism select change handler

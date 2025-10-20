@@ -57,7 +57,6 @@ from microtutor.tools.patient import PatientTool, run_patient
 from microtutor.tools.socratic import SocraticTool, run_socratic  
 from microtutor.tools.hint import HintTool, run_hint
 from microtutor.tools.ddx_case_search import DDXCaseSearchTool, search_ddx_cases
-from microtutor.tools.problem_representation import ProblemRepresentationTool, run_problem_representation
 from microtutor.tools.tests_management import TestsManagementTool, run_tests_management
 from microtutor.tools.feedback import FeedbackTool, run_feedback
 
@@ -95,7 +94,6 @@ __all__ = [
     'run_socratic',
     'run_hint',
     'search_ddx_cases',
-    'run_problem_representation',
     'run_tests_management',
     'run_feedback',
     

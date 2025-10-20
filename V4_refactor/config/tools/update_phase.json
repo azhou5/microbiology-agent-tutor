@@ -11,10 +11,8 @@
                 "type": "string",
                 "enum": [
                     "information_gathering",
-                    "problem_representation",
                     "differential_diagnosis",
-                    "tests",
-                    "management",
+                    "tests_management",
                     "feedback"
                 ],
                 "description": "The current phase of the case"

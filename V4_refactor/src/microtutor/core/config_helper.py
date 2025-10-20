@@ -49,6 +49,7 @@ except ImportError:
         # Database
         USE_GLOBAL_DB = os.getenv("USE_GLOBAL_DB", "True").lower() == "true"
         USE_LOCAL_DB = os.getenv("USE_LOCAL_DB", "False").lower() == "true"
+        database_url = os.getenv("GLOBAL_DATABASE_URL", "")
         
         # Feature flags
         USE_FAISS = os.getenv("USE_FAISS", "False").lower() == "true"
