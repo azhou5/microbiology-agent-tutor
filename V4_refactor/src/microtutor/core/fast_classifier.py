@@ -16,13 +16,57 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, accuracy_score
-from sklearn.model_selection import train_test_split
 import pandas as pd
 from microtutor.core.config_helper import config
+
+# Try to import scikit-learn modules (optional due to NumPy compatibility issues)
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import classification_report, accuracy_score
+    from sklearn.model_selection import train_test_split
+    SKLEARN_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"scikit-learn not available: {e}")
+    SKLEARN_AVAILABLE = False
+    # Provide fallback classes
+    class TfidfVectorizer:
+        def __init__(self, *args, **kwargs):
+            pass
+        def fit_transform(self, *args, **kwargs):
+            return np.array([])
+        def transform(self, *args, **kwargs):
+            return np.array([])
+    
+    class LogisticRegression:
+        def __init__(self, *args, **kwargs):
+            pass
+        def fit(self, *args, **kwargs):
+            return self
+        def predict(self, *args, **kwargs):
+            return np.array([])
+        def predict_proba(self, *args, **kwargs):
+            return np.array([])
+    
+    class RandomForestClassifier:
+        def __init__(self, *args, **kwargs):
+            pass
+        def fit(self, *args, **kwargs):
+            return self
+        def predict(self, *args, **kwargs):
+            return np.array([])
+        def predict_proba(self, *args, **kwargs):
+            return np.array([])
+    
+    def classification_report(*args, **kwargs):
+        return ""
+    
+    def accuracy_score(*args, **kwargs):
+        return 0.0
+    
+    def train_test_split(*args, **kwargs):
+        return args[0], args[0], args[1], args[1]
 
 # Try to import sentence transformers for embedding-based classification
 try:

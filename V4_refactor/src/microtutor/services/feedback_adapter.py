@@ -2,7 +2,15 @@
 
 from typing import List, Dict, Any, Optional
 from microtutor.services.tutor_service_v2 import FeedbackClient
-from microtutor.feedback import get_feedback_examples_for_tool
+
+# Try to import feedback functions, provide fallback if not available
+try:
+    from microtutor.feedback import get_feedback_examples_for_tool
+    FEEDBACK_AVAILABLE = True
+except ImportError:
+    FEEDBACK_AVAILABLE = False
+    def get_feedback_examples_for_tool(*args, **kwargs):
+        return ""
 
 
 class FeedbackClientAdapter(FeedbackClient):
@@ -20,6 +28,9 @@ class FeedbackClientAdapter(FeedbackClient):
         similarity_threshold: Optional[float] = None,  # Now properly passed to underlying functions
     ) -> str:
         """Get feedback examples as a string for the LLM."""
+        if not FEEDBACK_AVAILABLE or self.feedback_retriever is None:
+            return ""
+            
         try:
             return get_feedback_examples_for_tool(
                 user_input=user_input,
@@ -44,6 +55,9 @@ class FeedbackClientAdapter(FeedbackClient):
         similarity_threshold: Optional[float] = None,  # Now properly passed to underlying functions
     ) -> List[Dict[str, Any]]:
         """Retrieve structured feedback examples for the frontend."""
+        if not FEEDBACK_AVAILABLE or self.feedback_retriever is None:
+            return []
+            
         try:
             retrieved = self.feedback_retriever.retrieve_feedback_examples(
                 current_message=current_message,

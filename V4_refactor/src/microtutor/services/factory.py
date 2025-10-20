@@ -5,8 +5,16 @@ from typing import Optional, List
 from microtutor.services.tutor_service_v2 import TutorService, ServiceConfig
 from microtutor.services.feedback_adapter import FeedbackClientAdapter
 from microtutor.tools import get_tool_engine
-from microtutor.feedback import create_feedback_retriever
 from microtutor.core.config_helper import config
+
+# Try to import feedback functions, provide fallback if not available
+try:
+    from microtutor.feedback import create_feedback_retriever
+    FEEDBACK_AVAILABLE = True
+except ImportError:
+    FEEDBACK_AVAILABLE = False
+    def create_feedback_retriever(*args, **kwargs):
+        return None
 
 
 def create_tutor_service(
@@ -41,7 +49,7 @@ def create_tutor_service(
     
     # Create feedback client if enabled
     feedback_client = None
-    if enable_feedback:
+    if enable_feedback and FEEDBACK_AVAILABLE:
         try:
             feedback_path = feedback_dir or config.get('FEEDBACK_DIR', 'data/feedback')
             feedback_retriever = create_feedback_retriever(feedback_path)
@@ -51,6 +59,10 @@ def create_tutor_service(
             logger = logging.getLogger(__name__)
             logger.warning(f"Failed to initialize feedback retriever: {e}")
             # Continue without feedback
+    elif enable_feedback and not FEEDBACK_AVAILABLE:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("Feedback requested but feedback module not available (missing dependencies)")
     
     # Set project root to V4_refactor directory if not specified
     if project_root is None:
