@@ -15,29 +15,54 @@ logger = logging.getLogger(__name__)
 FEEDBACK_AVAILABLE = None  # Will be determined lazily
 
 def _lazy_import_feedback():
-    """Lazy import of feedback module to avoid early import issues on Render."""
+    """Lazy import of feedback module to avoid early import issues on Render.
+
+    If the first import attempt fails with a ModuleNotFoundError, we log the
+    current sys.path, attempt to add the expected `src` path, and retry once.
+    """
     global FEEDBACK_AVAILABLE
-    
+
     if FEEDBACK_AVAILABLE is not None:
         return FEEDBACK_AVAILABLE
-    
-    try:
-        from microtutor.feedback import create_feedback_retriever
+
+    import sys
+    import traceback
+    import os as _os
+
+    def _try_import() -> bool:
+        try:
+            from microtutor.feedback import create_feedback_retriever  # noqa: F401
+            return True
+        except ModuleNotFoundError as e:
+            logger.error(f"[FEEDBACK_INIT] ModuleNotFoundError: {e}")
+            logger.error(f"[FEEDBACK_INIT] sys.path: {sys.path}")
+            return False
+        except ImportError as e:  # Other import errors (deps inside feedback)
+            logger.error(f"[FEEDBACK_INIT] ImportError during feedback import: {e}")
+            logger.error(f"[FEEDBACK_INIT] Traceback: {traceback.format_exc()}")
+            # Even if inner deps fail, the feedback package provides fallbacks; treat as available
+            return True
+
+    if _try_import():
         FEEDBACK_AVAILABLE = True
         logger.info("[FEEDBACK_INIT] Feedback module imported successfully (lazy)")
         return True
-    except ImportError as e:
-        FEEDBACK_AVAILABLE = False
-        logger.error(f"[FEEDBACK_INIT] Failed to import feedback module (lazy): {e}")
-        import traceback
-        logger.error(f"[FEEDBACK_INIT] Import traceback: {traceback.format_exc()}")
-        return False
-    except Exception as e:
-        FEEDBACK_AVAILABLE = False
-        logger.error(f"[FEEDBACK_INIT] Unexpected error importing feedback module (lazy): {e}")
-        import traceback
-        logger.error(f"[FEEDBACK_INIT] Traceback: {traceback.format_exc()}")
-        return False
+
+    # Attempt one-time path fix then retry
+    guessed_src = _os.getenv("PYTHONPATH") or _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "..", "..", "..", "src"))
+    if guessed_src and guessed_src not in sys.path:
+        sys.path.insert(0, guessed_src)
+        logger.warning(f"[FEEDBACK_INIT] Added to sys.path and retrying: {guessed_src}")
+
+    if _try_import():
+        FEEDBACK_AVAILABLE = True
+        logger.info("[FEEDBACK_INIT] Feedback module imported successfully after path fix")
+        return True
+
+    FEEDBACK_AVAILABLE = False
+    logger.error("[FEEDBACK_INIT] Feedback module still unavailable after retry")
+    logger.error(f"[FEEDBACK_INIT] Final sys.path: {sys.path}")
+    return False
 
 
 def create_tutor_service(

@@ -13,7 +13,7 @@ services:
       cd V4_refactor && python debug_imports.py || echo "Import debugging failed, continuing without feedback"
       # Generate feedback index from database
       cd V4_refactor && python regenerate_feedback_index.py || echo "Failed to generate feedback index, continuing without feedback"
-    startCommand: cd V4_refactor && python run_production.py
+    startCommand: export PYTHONPATH="/opt/render/project/src/V4_refactor/src" && cd V4_refactor && python run_production.py
     envVars:
       # Application Settings
       - key: DEBUG
