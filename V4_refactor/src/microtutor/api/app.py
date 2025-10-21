@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from microtutor.models.responses import ErrorResponse
-from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database, database_mock, faiss_management, analytics, mcq, audio
+from microtutor.api.routes import chat, voice, monitoring, concurrent_chat, fast_chat, database, database_mock, faiss_management, analytics, mcq, audio, config
 from microtutor.core.startup import get_lifespan
 
 # Try to import guidelines router (optional)
@@ -157,6 +157,10 @@ logger.info("✅ MCQ routes enabled")
 # Include audio routes
 app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
 logger.info("✅ Audio routes enabled")
+
+# Include config routes
+app.include_router(config.router, prefix="/api/v1", tags=["config"])
+logger.info("✅ Config routes enabled")
 
 # Include optional guidelines router
 if GUIDELINES_AVAILABLE:

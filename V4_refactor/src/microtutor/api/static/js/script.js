@@ -546,7 +546,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Update current provider
         if (azureProvider.checked) {
+            const previousProvider = currentModelProvider;
             currentModelProvider = 'azure';
+            if (previousProvider !== 'azure') {
+                console.log(`🔄 [FRONTEND] Provider Changed: ${previousProvider.toUpperCase()} → AZURE`);
+            }
 
             // Add Azure models (using actual deployment names)
             const azureOptions = [
@@ -568,7 +572,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
         } else {
+            const previousProvider = currentModelProvider;
             currentModelProvider = 'personal';
+            if (previousProvider !== 'personal') {
+                console.log(`🔄 [FRONTEND] Provider Changed: ${previousProvider.toUpperCase()} → PERSONAL`);
+            }
 
             // Add Personal models
             const personalOptions = [
@@ -591,6 +599,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log(`[MODEL] Provider: ${currentModelProvider}, Model: ${currentModel}`);
+        console.log(`🔧 [FRONTEND] System: ${currentModelProvider.toUpperCase()}`);
+        console.log(`🤖 [FRONTEND] Model: ${currentModel}`);
     }
 
     /**
@@ -599,8 +609,70 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateCurrentModel() {
         const modelSelect = document.getElementById('model-select');
         if (modelSelect && modelSelect.value) {
+            const previousModel = currentModel;
             currentModel = modelSelect.value;
             console.log(`[MODEL] Selected model: ${currentModel}`);
+            console.log(`🔄 [FRONTEND] Model Changed: ${previousModel} → ${currentModel}`);
+            console.log(`🔧 [FRONTEND] Current System: ${currentModelProvider.toUpperCase()}`);
+            console.log(`🤖 [FRONTEND] Current Model: ${currentModel}`);
+        }
+    }
+
+    /**
+     * Sync frontend configuration with backend
+     */
+    async function syncWithBackendConfig() {
+        try {
+            console.log('[CONFIG] Syncing with backend configuration...');
+
+            const response = await fetch('/api/v1/config', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const config = await response.json();
+            console.log('[CONFIG] Backend configuration:', config);
+
+            // Update provider selection
+            const azureProvider = document.getElementById('azure-provider');
+            const personalProvider = document.getElementById('personal-provider');
+
+            if (config.use_azure) {
+                if (azureProvider) azureProvider.checked = true;
+                if (personalProvider) personalProvider.checked = false;
+                currentModelProvider = 'azure';
+            } else {
+                if (azureProvider) azureProvider.checked = false;
+                if (personalProvider) personalProvider.checked = true;
+                currentModelProvider = 'personal';
+            }
+
+            // Update model selection
+            currentModel = config.current_model;
+
+            // Refresh model selection UI
+            updateModelSelection();
+
+            // Set the correct model in the dropdown
+            const modelSelect = document.getElementById('model-select');
+            if (modelSelect) {
+                modelSelect.value = currentModel;
+            }
+
+            console.log(`[CONFIG] Synced - Provider: ${currentModelProvider}, Model: ${currentModel}`);
+            console.log(`✅ [FRONTEND] Configuration Synced with Backend`);
+            console.log(`🔧 [FRONTEND] System: ${currentModelProvider.toUpperCase()}`);
+            console.log(`🤖 [FRONTEND] Model: ${currentModel}`);
+
+        } catch (error) {
+            console.warn('[CONFIG] Failed to sync with backend, using defaults:', error);
+            // Continue with default configuration
         }
     }
 
@@ -1570,6 +1642,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize model selection on page load
     updateModelSelection();
+
+    // Log initial configuration
+    console.log(`🚀 [FRONTEND] Initializing MicroTutor V4`);
+    console.log(`🔧 [FRONTEND] Initial System: ${currentModelProvider.toUpperCase()}`);
+    console.log(`🤖 [FRONTEND] Initial Model: ${currentModel}`);
+
+    // Sync with backend configuration
+    syncWithBackendConfig();
 
     // Skip buttons
     document.querySelectorAll('.skip-btn').forEach(button => {

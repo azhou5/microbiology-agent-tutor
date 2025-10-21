@@ -72,6 +72,17 @@ async def start_case(
     """
     logger.info(f"[START_CASE] organism={request.organism}, case_id={request.case_id}")
     
+    # Log system and model for start case
+    model_name = request.model_name or getattr(config, 'API_MODEL_NAME', 'o4-mini-2025-04-16')
+    use_azure = getattr(config, 'USE_AZURE_OPENAI', True)
+    system = 'AZURE' if use_azure else 'PERSONAL'
+    
+    print(f"🚀 [BACKEND] Starting New Case")
+    print(f"🔧 [BACKEND] System: {system}")
+    print(f"🤖 [BACKEND] Model: {model_name}")
+    print(f"🦠 [BACKEND] Organism: {request.organism}")
+    print(f"📝 [BACKEND] Case ID: {request.case_id}")
+    
     try:
         # Call tutor service
         response = await tutor_service.start_case(
@@ -185,11 +196,22 @@ async def chat(
         if request.model_provider:
             use_azure = request.model_provider.lower() == 'azure'
         
+        # Determine final system and model
+        final_model = request.model_name or default_model
+        final_system = 'AZURE' if use_azure else 'PERSONAL'
+        
+        # Log system and model being used
+        print(f"🔧 [BACKEND] Processing Chat Request")
+        print(f"🤖 [BACKEND] System: {final_system}")
+        print(f"🧠 [BACKEND] Model: {final_model}")
+        print(f"📝 [BACKEND] Case ID: {request.case_id}")
+        print(f"🦠 [BACKEND] Organism: {request.organism_key}")
+        
         context = TutorContext(
             case_id=request.case_id,
             organism=request.organism_key,
             conversation_history=[msg.model_dump() for msg in request.history],
-            model_name=request.model_name or default_model,
+            model_name=final_model,
             use_azure=use_azure
         )
         
