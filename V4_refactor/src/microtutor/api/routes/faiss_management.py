@@ -9,16 +9,26 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from pydantic import BaseModel
 
-# Try to import feedback modules (optional)
-try:
-    from microtutor.feedback.auto_faiss_generator import get_auto_faiss_generator
-    from microtutor.feedback.database_feedback_loader import DatabaseFeedbackConfig
-    FEEDBACK_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"Feedback modules not available: {e}")
-    FEEDBACK_AVAILABLE = False
-    get_auto_faiss_generator = None
-    DatabaseFeedbackConfig = None
+# Lazy import wrappers to avoid early import errors on Render
+FEEDBACK_AVAILABLE = None
+
+def _lazy_import_feedback_tools():
+    global FEEDBACK_AVAILABLE, get_auto_faiss_generator, DatabaseFeedbackConfig
+    if FEEDBACK_AVAILABLE is not None:
+        return FEEDBACK_AVAILABLE
+    try:
+        from microtutor.feedback.auto_faiss_generator import get_auto_faiss_generator as _g
+        from microtutor.feedback.database_feedback_loader import DatabaseFeedbackConfig as _C
+        get_auto_faiss_generator = _g
+        DatabaseFeedbackConfig = _C
+        FEEDBACK_AVAILABLE = True
+        logging.info("[FAISS_MGMT] Feedback tools imported successfully (lazy)")
+    except Exception as e:
+        logging.warning(f"[FAISS_MGMT] Feedback modules not available: {e}")
+        get_auto_faiss_generator = None
+        DatabaseFeedbackConfig = None
+        FEEDBACK_AVAILABLE = False
+    return FEEDBACK_AVAILABLE
 
 from microtutor.api.dependencies import get_db
 from microtutor.services.background_service import get_background_service, BackgroundTaskService
@@ -77,6 +87,8 @@ async def get_faiss_status() -> FAISSStatusResponse:
         )
     
     try:
+        if not _lazy_import_feedback_tools() or get_auto_faiss_generator is None:
+            raise HTTPException(status_code=503, detail="Feedback tools not available")
         generator = get_auto_faiss_generator()
         status_data = generator.get_status()
         
@@ -171,6 +183,8 @@ async def generate_faiss_indices(
                 detail="Database not available"
             )
         
+        if not _lazy_import_feedback_tools() or get_auto_faiss_generator is None:
+            raise HTTPException(status_code=503, detail="Feedback tools not available")
         generator = get_auto_faiss_generator()
         
         # Create config from request
@@ -251,6 +265,8 @@ async def cleanup_old_indices(
         )
     
     try:
+        if not _lazy_import_feedback_tools() or get_auto_faiss_generator is None:
+            raise HTTPException(status_code=503, detail="Feedback tools not available")
         generator = get_auto_faiss_generator()
         generator.cleanup_old_indices(keep_days=keep_days)
         

@@ -289,7 +289,12 @@ class TutorService:
             # Debug logging for feedback retrieval
             logger.info(f"[FEEDBACK_DEBUG] Retrieved {len(feedback_struct)} feedback examples")
             if feedback_struct:
-                logger.info(f"[FEEDBACK_DEBUG] First example: {feedback_struct[0].text[:50]}...")
+                first = feedback_struct[0]
+                # Support both dict payloads (adapter) and objects (direct retriever)
+                first_text = (
+                    (first.get("text", "") if isinstance(first, dict) else getattr(first, "text", ""))
+                )
+                logger.info(f"[FEEDBACK_DEBUG] First example: {first_text[:50]}...")
             else:
                 logger.warning(f"[FEEDBACK_DEBUG] No feedback examples retrieved")
 
