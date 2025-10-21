@@ -141,7 +141,7 @@ class FeedbackProcessor:
         include_feedback: bool = False,
         include_replacement: bool = False,
         include_quality: bool = True
-    ) -> str:
+    ) -> Optional[str]:
         """Create text for embedding from feedback entry.
         
         Args:
@@ -151,6 +151,9 @@ class FeedbackProcessor:
             include_feedback: Whether to include expert feedback text
             include_replacement: Whether to include replacement text
             include_quality: Whether to include quality rating information
+            
+        Returns:
+            str: The embedding text, or None if no valid user input found
         """
         parts = []
         
@@ -158,16 +161,29 @@ class FeedbackProcessor:
         if include_context and entry.chat_history:
             if context_messages == 0:
                 # Just include the last user input before the rated response
+                user_input_found = False
                 for msg in reversed(entry.chat_history):
                     if 'role' in msg and 'content' in msg and msg['role'] == 'user':
-                        parts.append(f"User input: {msg['content']}")
-                        break
+                        # Only include if the content is not empty
+                        if msg['content'].strip():
+                            parts.append(msg['content'])
+                            user_input_found = True
+                            break
+                
+                # If no valid user input found, return None
+                if not user_input_found:
+                    logger.warning(f"No valid user input found for entry {entry.id}")
+                    return None
             else:
                 # Include last k back-and-forth messages
                 parts.append("Recent conversation context:")
                 for msg in entry.chat_history[-context_messages:]:
                     if 'role' in msg and 'content' in msg:
                         parts.append(f"{msg['role']}: {msg['content']}")
+        else:
+            # No chat history available
+            logger.warning(f"No chat history for entry {entry.id}")
+            return None
         
         # For better similarity matching, we'll keep the embedding text minimal
         # and only include the user input part. The rated message and other context
@@ -210,7 +226,10 @@ class FeedbackProcessor:
             raise ValueError("No entries to index after filtering")
         
         # Create embedding texts - use only last user input for embedding
+        # Filter out entries that don't have valid user input
+        valid_entries = []
         texts = []
+        
         for entry in filtered_entries:
             text = self.create_embedding_text(
                 entry, 
@@ -220,7 +239,18 @@ class FeedbackProcessor:
                 include_replacement=False,  # Don't include replacement in embedding
                 include_quality=True  # Include quality for filtering
             )
-            texts.append(text)
+            
+            # Only include entries with valid embedding text
+            if text is not None and text.strip():
+                valid_entries.append(entry)
+                texts.append(text)
+            else:
+                logger.warning(f"Skipping entry {entry.id} - no valid user input found")
+        
+        logger.info(f"Valid entries for indexing: {len(valid_entries)} (filtered from {len(filtered_entries)})")
+        
+        if not valid_entries:
+            raise ValueError("No valid entries to index after filtering for user input")
         
         # Get embedding dimension
         sample_embedding = get_embedding(texts[0])
@@ -257,19 +287,18 @@ class FeedbackProcessor:
         texts_path = output_path / "feedback_texts.pkl"
         entries_path = output_path / "feedback_entries.pkl"
         
-        with open(index_path, 'wb') as f:
-            pickle.dump(index, f)
+        faiss.write_index(index, str(index_path))
         
         with open(texts_path, 'wb') as f:
             pickle.dump(texts, f)
         
         with open(entries_path, 'wb') as f:
-            pickle.dump(filtered_entries, f)
+            pickle.dump(valid_entries, f)
         
         logger.info(f"Saved FAISS index to {index_path}")
         logger.info(f"Index contains {index.ntotal} vectors")
         
-        return index, texts, filtered_entries
+        return index, texts, valid_entries
 
 
 def process_feedback_json(

@@ -85,22 +85,15 @@ def get_feedback_examples_for_tool(
     if not include_feedback or not feedback_retriever:
         return ""
     
-    # Map tool names to message types
-    tool_to_message_type = {
-        "patient": "patient",
-        "socratic": "socratic", 
-        "hint": "hint",
-        "tutor": "tutor"
-    }
-    
-    message_type = tool_to_message_type.get(tool_name, "tutor")
+    # Use "all" message type to get all feedback types for better examples
+    message_type = "all"
     
     # Get relevant feedback examples
     examples = feedback_retriever.retrieve_feedback_examples(
         current_message=user_input,
         conversation_history=conversation_history,
         message_type=message_type,
-        k=2,
+        k=5,  # Increase to get more examples
         similarity_threshold=similarity_threshold
     )
     

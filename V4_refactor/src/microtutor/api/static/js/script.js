@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     let phaseHistory = [];
 
-    // Feedback state
+    // Feedback state - enabled by default
     let feedbackEnabled = true;
     let feedbackThreshold = 0.7;
 
@@ -1367,6 +1367,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Filter out malformed messages before sending
             const validHistory = validateChatHistory(chatHistory);
 
+            // Log feedback settings being sent
+            console.log(`🎯 [CHAT] Sending Request with Feedback Settings:`);
+            console.log(`🔧 [CHAT] Feedback Enabled: ${feedbackEnabled}`);
+            console.log(`📊 [CHAT] Threshold: ${feedbackThreshold.toFixed(1)}`);
+            console.log(`🤖 [CHAT] Model: ${currentModel} (${currentModelProvider})`);
+
             const response = await fetch(`${API_BASE}/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2135,6 +2141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             feedbackToggle.addEventListener('change', (e) => {
                 feedbackEnabled = e.target.checked;
                 console.log('[FEEDBACK] Feedback enabled:', feedbackEnabled);
+                console.log('🎯 [FEEDBACK] Threshold slider remains adjustable at all times');
                 updateFeedbackControlsUI();
                 saveFeedbackSettings();
             });
@@ -2142,9 +2149,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (thresholdSlider) {
             thresholdSlider.addEventListener('input', (e) => {
+                const previousThreshold = feedbackThreshold;
                 feedbackThreshold = parseFloat(e.target.value);
                 thresholdValue.textContent = feedbackThreshold.toFixed(1);
-                console.log('[FEEDBACK] Threshold updated:', feedbackThreshold);
+
+                // Enhanced logging
+                console.log(`🎯 [FEEDBACK] Threshold Changed: ${previousThreshold.toFixed(1)} → ${feedbackThreshold.toFixed(1)}`);
+                console.log(`🔧 [FEEDBACK] Current Threshold: ${feedbackThreshold.toFixed(1)}`);
+                console.log(`📊 [FEEDBACK] Threshold Mode: ${feedbackThreshold >= 0.8 ? 'Strict (Exact Matches)' : feedbackThreshold >= 0.5 ? 'Balanced' : 'Loose (More Examples)'}`);
+
+                // Visual feedback
+                thresholdValue.style.color = feedbackThreshold >= 0.8 ? '#e74c3c' : feedbackThreshold >= 0.5 ? '#f39c12' : '#27ae60';
+
+                // Show temporary notification
+                showThresholdNotification(feedbackThreshold);
+
                 saveFeedbackSettings();
             });
         }
@@ -2152,6 +2171,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Load saved settings
         loadFeedbackSettings();
         updateFeedbackControlsUI();
+
+        // Confirm slider is enabled
+        console.log('✅ [FEEDBACK] Threshold slider initialized and enabled');
+        console.log(`🎯 [FEEDBACK] Current threshold: ${feedbackThreshold.toFixed(1)}`);
+        console.log(`🔧 [FEEDBACK] Feedback system: ${feedbackEnabled ? 'Enabled (Default)' : 'Disabled'}`);
+        console.log('💡 [FEEDBACK] AI Feedback is enabled by default for optimal learning experience');
     }
 
     /**
@@ -2164,9 +2189,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (savedEnabled !== null) {
                 feedbackEnabled = savedEnabled === 'true';
-                if (feedbackToggle) {
-                    feedbackToggle.checked = feedbackEnabled;
-                }
+            } else {
+                // Default to enabled if no saved setting
+                feedbackEnabled = true;
+            }
+
+            if (feedbackToggle) {
+                feedbackToggle.checked = feedbackEnabled;
             }
 
             if (savedThreshold !== null) {
@@ -2196,14 +2225,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Show threshold change notification
+     */
+    function showThresholdNotification(threshold) {
+        const statusMessage = document.getElementById('status-message');
+        if (statusMessage) {
+            const mode = threshold >= 0.8 ? 'Strict (Exact Matches)' :
+                threshold >= 0.5 ? 'Balanced' : 'Loose (More Examples)';
+            const color = threshold >= 0.8 ? '#e74c3c' :
+                threshold >= 0.5 ? '#f39c12' : '#27ae60';
+
+            statusMessage.innerHTML = `🎯 Threshold: ${threshold.toFixed(1)} - ${mode}`;
+            statusMessage.style.color = color;
+            statusMessage.style.display = 'block';
+
+            // Hide after 3 seconds
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 3000);
+        }
+    }
+
+    /**
      * Update feedback controls UI state
      */
     function updateFeedbackControlsUI() {
+        // Keep threshold slider always enabled so users can adjust it anytime
+        // They might want to set it before enabling feedback
         if (thresholdSlider) {
-            thresholdSlider.disabled = !feedbackEnabled;
+            thresholdSlider.disabled = false;  // Always keep enabled for adjustability
         }
         if (thresholdValue) {
-            thresholdValue.style.opacity = feedbackEnabled ? '1' : '0.5';
+            // Keep full opacity so it's always visible and adjustable
+            thresholdValue.style.opacity = '1';
+            // Set color based on threshold value
+            thresholdValue.style.color = feedbackThreshold >= 0.8 ? '#e74c3c' : feedbackThreshold >= 0.5 ? '#f39c12' : '#27ae60';
         }
     }
 

@@ -61,8 +61,7 @@ class FeedbackRetriever:
             entries_path = index_dir / "feedback_entries.pkl"
             
             if all(p.exists() for p in [index_path, texts_path, entries_path]):
-                with open(index_path, 'rb') as f:
-                    self.indices[name] = pickle.load(f)
+                self.indices[name] = faiss.read_index(str(index_path))
                 with open(texts_path, 'rb') as f:
                     self.texts[name] = pickle.load(f)
                 
@@ -109,8 +108,8 @@ class FeedbackRetriever:
     
     def _create_query_embedding(self, user_input: str, message_type: str = "all") -> np.ndarray:
         """Create embedding for query based on user input only."""
-        # Create query text that matches the indexed format
-        query_text = f"User input: {user_input}"
+        # Create query text that matches the indexed format (just the raw user input)
+        query_text = user_input
         embedding = get_embedding(query_text)
         return np.array([embedding]).astype('float32')
     
@@ -118,7 +117,7 @@ class FeedbackRetriever:
         self,
         current_message: str,
         conversation_history: List[Dict[str, str]],
-        message_type: str = "all",
+        message_type: str = "all",  # Default to "all" to get all feedback types
         k: int = None,
         similarity_threshold: Optional[float] = None
     ) -> List[FeedbackExample]:

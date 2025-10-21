@@ -276,8 +276,8 @@ class TutorService:
             retrieved = self.feedback_client.retrieve_feedback_examples(
                 current_message=message,
                 conversation_history=context.conversation_history,
-                message_type="tutor",
-                k=3,
+                message_type="all",  # Use "all" to get all feedback types
+                k=5,  # Increase to get more examples
                 similarity_threshold=feedback_threshold,
             ) or []
             feedback_struct = retrieved

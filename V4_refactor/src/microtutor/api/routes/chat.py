@@ -206,6 +206,8 @@ async def chat(
         print(f"🧠 [BACKEND] Model: {final_model}")
         print(f"📝 [BACKEND] Case ID: {request.case_id}")
         print(f"🦠 [BACKEND] Organism: {request.organism_key}")
+        print(f"🎯 [BACKEND] Feedback Enabled: {request.feedback_enabled}")
+        print(f"📊 [BACKEND] Threshold: {request.feedback_threshold}")
         
         context = TutorContext(
             case_id=request.case_id,
