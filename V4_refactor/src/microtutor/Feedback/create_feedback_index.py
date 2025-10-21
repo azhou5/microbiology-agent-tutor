@@ -1,5 +1,5 @@
 import os
-from microtutor.utils import get_embedding, get_embeddings_batch
+from microtutor.utils.embedding_utils import get_embedding, get_embeddings_batch
 
 def get_embeddings_batch_legacy(texts):
     """

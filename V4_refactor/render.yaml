@@ -9,6 +9,10 @@ services:
       pip install -r requirements.txt
       # Copy environment file to expected location
       cp dot_env_microtutor.txt src/dot_env_microtutor.txt || echo "Environment file not found, using environment variables"
+      # Test feedback dependencies
+      cd V4_refactor && python test_feedback_deps.py || echo "Feedback dependencies test failed, continuing without feedback"
+      # Generate feedback index from database
+      cd V4_refactor && python regenerate_feedback_index.py || echo "Failed to generate feedback index, continuing without feedback"
     startCommand: cd V4_refactor && python run_production.py
     envVars:
       # Application Settings
@@ -56,6 +60,14 @@ services:
         value: false
       - key: FAST_CLASSIFICATION_ENABLED
         value: false
+
+      # Feedback System Configuration
+      - key: FEEDBACK_DIR
+        value: "data/feedback"
+      - key: FEEDBACK_SIMILARITY_THRESHOLD
+        value: "0.3"
+      - key: FEEDBACK_MAX_EXAMPLES
+        value: "5"
 
       # Default Settings
       - key: DEFAULT_ORGANISM

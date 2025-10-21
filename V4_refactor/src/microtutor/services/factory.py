@@ -11,8 +11,12 @@ from microtutor.core.config_helper import config
 try:
     from microtutor.feedback import create_feedback_retriever
     FEEDBACK_AVAILABLE = True
-except ImportError:
+    logger.info("[FEEDBACK_INIT] Feedback module imported successfully")
+except ImportError as e:
     FEEDBACK_AVAILABLE = False
+    logger.error(f"[FEEDBACK_INIT] Failed to import feedback module: {e}")
+    import traceback
+    logger.error(f"[FEEDBACK_INIT] Import traceback: {traceback.format_exc()}")
     def create_feedback_retriever(*args, **kwargs):
         return None
 
@@ -52,17 +56,46 @@ def create_tutor_service(
     if enable_feedback and FEEDBACK_AVAILABLE:
         try:
             feedback_path = feedback_dir or config.get('FEEDBACK_DIR', 'data/feedback')
+            logger.info(f"[FEEDBACK_INIT] Initializing feedback client with path: {feedback_path}")
+            
+            # Check if feedback files exist
+            import os
+            feedback_index_path = os.path.join(feedback_path, 'feedback_index.faiss')
+            if not os.path.exists(feedback_index_path):
+                logger.warning(f"[FEEDBACK_INIT] Feedback index not found at {feedback_index_path}")
+                logger.warning(f"[FEEDBACK_INIT] Attempting to regenerate feedback index...")
+                try:
+                    # Try to regenerate the feedback index
+                    from microtutor.feedback.feedback_processor import FeedbackProcessor
+                    processor = FeedbackProcessor()
+                    processor.create_faiss_index(feedback_path)
+                    logger.info(f"[FEEDBACK_INIT] Successfully regenerated feedback index")
+                except Exception as regen_error:
+                    logger.error(f"[FEEDBACK_INIT] Failed to regenerate feedback index: {regen_error}")
+                    raise Exception(f"Feedback index not found and could not be regenerated: {regen_error}")
+            
             feedback_retriever = create_feedback_retriever(feedback_path)
             feedback_client = FeedbackClientAdapter(feedback_retriever)
+            logger.info(f"[FEEDBACK_INIT] Feedback client initialized successfully")
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to initialize feedback retriever: {e}")
+            logger.error(f"[FEEDBACK_INIT] Failed to initialize feedback retriever: {e}")
+            import traceback
+            logger.error(f"[FEEDBACK_INIT] Traceback: {traceback.format_exc()}")
             # Continue without feedback
     elif enable_feedback and not FEEDBACK_AVAILABLE:
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning("Feedback requested but feedback module not available (missing dependencies)")
+        logger.warning("[FEEDBACK_INIT] Feedback requested but feedback module not available (missing dependencies)")
+    else:
+        logger.info(f"[FEEDBACK_INIT] Feedback disabled: enable_feedback={enable_feedback}, FEEDBACK_AVAILABLE={FEEDBACK_AVAILABLE}")
+    
+    # Log final feedback status
+    if feedback_client:
+        logger.info(f"[FEEDBACK_INIT] ✅ Feedback system initialized successfully")
+    else:
+        logger.warning(f"[FEEDBACK_INIT] ❌ Feedback system not available - feedback will be disabled")
     
     # Set project root to V4_refactor directory if not specified
     if project_root is None:

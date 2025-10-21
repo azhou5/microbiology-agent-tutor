@@ -265,6 +265,10 @@ class TutorService:
         # 5) Optional feedback (no global mutations)
         use_feedback = (self.feedback_client is not None) if feedback_enabled is None else (feedback_enabled and self.feedback_client is not None)
         feedback_str, feedback_struct = ("", [])
+        
+        # Debug logging for feedback
+        logger.info(f"[FEEDBACK_DEBUG] feedback_enabled={feedback_enabled}, feedback_client={self.feedback_client is not None}, use_feedback={use_feedback}")
+        
         if use_feedback:
             feedback_str = self.feedback_client.get_examples_for_tool(
                 user_input=message,
@@ -281,6 +285,13 @@ class TutorService:
                 similarity_threshold=feedback_threshold,
             ) or []
             feedback_struct = retrieved
+            
+            # Debug logging for feedback retrieval
+            logger.info(f"[FEEDBACK_DEBUG] Retrieved {len(feedback_struct)} feedback examples")
+            if feedback_struct:
+                logger.info(f"[FEEDBACK_DEBUG] First example: {feedback_struct[0].text[:50]}...")
+            else:
+                logger.warning(f"[FEEDBACK_DEBUG] No feedback examples retrieved")
 
         # 6) Log & add user message
         self.interaction_counter += 1

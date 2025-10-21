@@ -13,7 +13,7 @@ from dataclasses import dataclass
 try:
     import numpy as np
     import faiss
-    from microtutor.utils import get_embedding
+    from microtutor.utils.embedding_utils import get_embedding
     FAISS_AVAILABLE = True
 except ImportError as e:
     import logging
