@@ -10,18 +10,34 @@ from microtutor.core.config_helper import config
 
 logger = logging.getLogger(__name__)
 
-# Try to import feedback functions, provide fallback if not available
-try:
-    from microtutor.feedback import create_feedback_retriever
-    FEEDBACK_AVAILABLE = True
-    logger.info("[FEEDBACK_INIT] Feedback module imported successfully")
-except ImportError as e:
-    FEEDBACK_AVAILABLE = False
-    logger.error(f"[FEEDBACK_INIT] Failed to import feedback module: {e}")
-    import traceback
-    logger.error(f"[FEEDBACK_INIT] Import traceback: {traceback.format_exc()}")
-    def create_feedback_retriever(*args, **kwargs):
-        return None
+# Lazy loading: Don't import feedback at module level to avoid early import issues
+# We'll import it inside the function when actually needed
+FEEDBACK_AVAILABLE = None  # Will be determined lazily
+
+def _lazy_import_feedback():
+    """Lazy import of feedback module to avoid early import issues on Render."""
+    global FEEDBACK_AVAILABLE
+    
+    if FEEDBACK_AVAILABLE is not None:
+        return FEEDBACK_AVAILABLE
+    
+    try:
+        from microtutor.feedback import create_feedback_retriever
+        FEEDBACK_AVAILABLE = True
+        logger.info("[FEEDBACK_INIT] Feedback module imported successfully (lazy)")
+        return True
+    except ImportError as e:
+        FEEDBACK_AVAILABLE = False
+        logger.error(f"[FEEDBACK_INIT] Failed to import feedback module (lazy): {e}")
+        import traceback
+        logger.error(f"[FEEDBACK_INIT] Import traceback: {traceback.format_exc()}")
+        return False
+    except Exception as e:
+        FEEDBACK_AVAILABLE = False
+        logger.error(f"[FEEDBACK_INIT] Unexpected error importing feedback module (lazy): {e}")
+        import traceback
+        logger.error(f"[FEEDBACK_INIT] Traceback: {traceback.format_exc()}")
+        return False
 
 
 def create_tutor_service(
@@ -56,9 +72,9 @@ def create_tutor_service(
     # Create tool engine
     tool_engine = get_tool_engine()
     
-    # Create feedback client if enabled
+    # Create feedback client if enabled (lazy import)
     feedback_client = None
-    if enable_feedback and FEEDBACK_AVAILABLE:
+    if enable_feedback and _lazy_import_feedback():
         try:
             feedback_path = feedback_dir or config.get('FEEDBACK_DIR', 'data/feedback')
             func_logger.info(f"[FEEDBACK_INIT] Initializing feedback client with path: {feedback_path}")
@@ -78,6 +94,7 @@ def create_tutor_service(
                     func_logger.error(f"[FEEDBACK_INIT] Failed to regenerate feedback index: {regen_error}")
                     raise Exception(f"Feedback index not found and could not be regenerated: {regen_error}")
             
+            from microtutor.feedback import create_feedback_retriever
             feedback_retriever = create_feedback_retriever(feedback_path)
             feedback_client = FeedbackClientAdapter(feedback_retriever)
             func_logger.info(f"[FEEDBACK_INIT] Feedback client initialized successfully")
@@ -86,7 +103,7 @@ def create_tutor_service(
             import traceback
             func_logger.error(f"[FEEDBACK_INIT] Traceback: {traceback.format_exc()}")
             # Continue without feedback
-    elif enable_feedback and not FEEDBACK_AVAILABLE:
+    elif enable_feedback and not _lazy_import_feedback():
         func_logger.warning("[FEEDBACK_INIT] Feedback requested but feedback module not available (missing dependencies)")
     else:
         func_logger.info(f"[FEEDBACK_INIT] Feedback disabled: enable_feedback={enable_feedback}, FEEDBACK_AVAILABLE={FEEDBACK_AVAILABLE}")
