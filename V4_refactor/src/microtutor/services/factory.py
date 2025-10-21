@@ -44,6 +44,8 @@ def create_tutor_service(
     Returns:
         Configured TutorService instance
     """
+    # Get logger for this function
+    func_logger = logging.getLogger(__name__)
     # Create service configuration
     cfg = ServiceConfig(
         model_name=model_name or config.API_MODEL_NAME,
@@ -59,46 +61,41 @@ def create_tutor_service(
     if enable_feedback and FEEDBACK_AVAILABLE:
         try:
             feedback_path = feedback_dir or config.get('FEEDBACK_DIR', 'data/feedback')
-            logger.info(f"[FEEDBACK_INIT] Initializing feedback client with path: {feedback_path}")
+            func_logger.info(f"[FEEDBACK_INIT] Initializing feedback client with path: {feedback_path}")
             
             # Check if feedback files exist
-            import os
             feedback_index_path = os.path.join(feedback_path, 'feedback_index.faiss')
             if not os.path.exists(feedback_index_path):
-                logger.warning(f"[FEEDBACK_INIT] Feedback index not found at {feedback_index_path}")
-                logger.warning(f"[FEEDBACK_INIT] Attempting to regenerate feedback index...")
+                func_logger.warning(f"[FEEDBACK_INIT] Feedback index not found at {feedback_index_path}")
+                func_logger.warning(f"[FEEDBACK_INIT] Attempting to regenerate feedback index...")
                 try:
                     # Try to regenerate the feedback index
                     from microtutor.feedback.feedback_processor import FeedbackProcessor
                     processor = FeedbackProcessor()
                     processor.create_faiss_index(feedback_path)
-                    logger.info(f"[FEEDBACK_INIT] Successfully regenerated feedback index")
+                    func_logger.info(f"[FEEDBACK_INIT] Successfully regenerated feedback index")
                 except Exception as regen_error:
-                    logger.error(f"[FEEDBACK_INIT] Failed to regenerate feedback index: {regen_error}")
+                    func_logger.error(f"[FEEDBACK_INIT] Failed to regenerate feedback index: {regen_error}")
                     raise Exception(f"Feedback index not found and could not be regenerated: {regen_error}")
             
             feedback_retriever = create_feedback_retriever(feedback_path)
             feedback_client = FeedbackClientAdapter(feedback_retriever)
-            logger.info(f"[FEEDBACK_INIT] Feedback client initialized successfully")
+            func_logger.info(f"[FEEDBACK_INIT] Feedback client initialized successfully")
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"[FEEDBACK_INIT] Failed to initialize feedback retriever: {e}")
+            func_logger.error(f"[FEEDBACK_INIT] Failed to initialize feedback retriever: {e}")
             import traceback
-            logger.error(f"[FEEDBACK_INIT] Traceback: {traceback.format_exc()}")
+            func_logger.error(f"[FEEDBACK_INIT] Traceback: {traceback.format_exc()}")
             # Continue without feedback
     elif enable_feedback and not FEEDBACK_AVAILABLE:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning("[FEEDBACK_INIT] Feedback requested but feedback module not available (missing dependencies)")
+        func_logger.warning("[FEEDBACK_INIT] Feedback requested but feedback module not available (missing dependencies)")
     else:
-        logger.info(f"[FEEDBACK_INIT] Feedback disabled: enable_feedback={enable_feedback}, FEEDBACK_AVAILABLE={FEEDBACK_AVAILABLE}")
+        func_logger.info(f"[FEEDBACK_INIT] Feedback disabled: enable_feedback={enable_feedback}, FEEDBACK_AVAILABLE={FEEDBACK_AVAILABLE}")
     
     # Log final feedback status
     if feedback_client:
-        logger.info(f"[FEEDBACK_INIT] ✅ Feedback system initialized successfully")
+        func_logger.info(f"[FEEDBACK_INIT] ✅ Feedback system initialized successfully")
     else:
-        logger.warning(f"[FEEDBACK_INIT] ❌ Feedback system not available - feedback will be disabled")
+        func_logger.warning(f"[FEEDBACK_INIT] ❌ Feedback system not available - feedback will be disabled")
     
     # Set project root to V4_refactor directory if not specified
     if project_root is None:
