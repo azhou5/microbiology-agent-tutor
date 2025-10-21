@@ -1,11 +1,14 @@
 """Factory for creating TutorService instances with proper dependency injection."""
 
 import os
+import logging
 from typing import Optional, List
 from microtutor.services.tutor_service_v2 import TutorService, ServiceConfig
 from microtutor.services.feedback_adapter import FeedbackClientAdapter
 from microtutor.tools import get_tool_engine
 from microtutor.core.config_helper import config
+
+logger = logging.getLogger(__name__)
 
 # Try to import feedback functions, provide fallback if not available
 try:
