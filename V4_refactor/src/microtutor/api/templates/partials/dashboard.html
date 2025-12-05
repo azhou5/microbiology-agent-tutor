@@ -1,0 +1,76 @@
+<!-- Feedback Dashboard -->
+<!-- Related JS modules: dashboard.js -->
+<div id="feedback-dashboard" class="feedback-dashboard compact">
+    <div class="dashboard-header">
+        <h3>📊 Live Feedback Analytics</h3>
+        <div class="dashboard-controls">
+            <button id="refresh-stats-btn" class="btn btn-secondary">🔄 Refresh</button>
+            <label class="auto-refresh-toggle">
+                <input type="checkbox" id="auto-refresh-toggle" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Auto-refresh (30s)</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Statistics Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">💬</div>
+            <div class="stat-content">
+                <div class="stat-label">Message Feedback</div>
+                <div id="message-feedback-count" class="stat-value">Loading...</div>
+                <div class="stat-trend" id="message-trend">+0 today</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-content">
+                <div class="stat-label">Case Feedback</div>
+                <div id="case-feedback-count" class="stat-value">Loading...</div>
+                <div class="stat-trend" id="case-trend">+0 today</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">⭐</div>
+            <div class="stat-content">
+                <div class="stat-label">Avg Rating</div>
+                <div id="avg-rating" class="stat-value">Loading...</div>
+                <div class="stat-trend" id="rating-trend">+0.0 vs yesterday</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🕒</div>
+            <div class="stat-content">
+                <div class="stat-label">Last Updated</div>
+                <div id="last-updated" class="stat-value">Never</div>
+                <div class="stat-trend" id="update-trend">System active</div>
+            </div>
+        </div>
+        <div class="stat-card faiss-status-card">
+            <div class="stat-icon" id="faiss-icon">🔄</div>
+            <div class="stat-content">
+                <div class="stat-label">FAISS Index</div>
+                <div id="faiss-status" class="stat-value">Ready</div>
+                <div class="stat-trend" id="faiss-trend">Last update: Never</div>
+            </div>
+            <div id="faiss-loading" class="faiss-loading" style="display: none;">
+                <div class="loading-spinner"></div>
+                <span class="loading-text">Re-indexing...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Trends Chart -->
+    <div class="chart-container">
+        <div class="chart-header">
+            <h4>📈 Feedback Trends Over Time</h4>
+            <div class="chart-controls">
+                <button id="toggle-chart-btn" class="btn btn-small">📊 Toggle Chart</button>
+            </div>
+        </div>
+        <div id="feedback-chart" class="chart">
+            <canvas id="trends-canvas" width="800" height="300"></canvas>
+        </div>
+    </div>
+</div>

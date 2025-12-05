@@ -26,7 +26,7 @@ __email__ = "riccardo.conci@harvard.edu"
 __license__ = "MIT"
 
 from microtutor.services import TutorService, CaseService, FeedbackService
-from microtutor.models import (
+from microtutor.schemas import (
     StartCaseRequest,
     ChatRequest,
     StartCaseResponse,

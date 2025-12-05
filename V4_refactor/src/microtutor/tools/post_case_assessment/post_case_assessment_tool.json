@@ -1,0 +1,43 @@
+{
+    "name": "post_case_assessment",
+    "description": "Generates targeted multiple choice questions (MCQs) after case completion. Analyzes the conversation to identify areas where the student struggled and creates MCQs specifically targeting those weaknesses. Each MCQ includes explanations for all options.",
+    "type": "AgenticTool",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "case": {
+                "type": "string",
+                "description": "The case description"
+            },
+            "conversation_history": {
+                "type": "array",
+                "description": "Full conversation history from the case",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {
+                            "type": "string"
+                        },
+                        "content": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "num_questions": {
+                "type": "integer",
+                "description": "Number of MCQs to generate (default: 5)",
+                "default": 5
+            }
+        },
+        "required": [
+            "case",
+            "conversation_history"
+        ]
+    },
+    "when_to_use": "Call this tool AFTER a case is complete to generate personalized assessment questions for the student. This should be triggered when the student finishes the case and wants to test their understanding, or automatically after the feedback phase.",
+    "output_format": {
+        "mcqs": "List of MCQ objects with question, options, correct answer, and explanations",
+        "summary": "Summary of weak areas covered and difficulty distribution"
+    }
+}

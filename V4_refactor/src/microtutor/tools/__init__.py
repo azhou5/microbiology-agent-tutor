@@ -5,12 +5,20 @@ This module provides the complete tool infrastructure following ToolUniverse
 best practices.
 
 Organization:
-- models/tool_models.py: BaseTool, AgenticTool (structural definitions)
-- models/tool_errors.py: ToolError classes
+- schemas/tools/tool_models.py: BaseTool, AgenticTool (structural definitions)
+- schemas/tools/tool_errors.py: ToolError classes
 - tools/registry.py: Tool registry for discovery and loading
 - tools/engine.py: Main execution engine
-- tools/prompts.py: Centralized prompts for all tools
-- tools/patient.py, socratic.py, hint.py: Concrete tool implementations
+- prompts/: Agent prompts (patient, socratic, hint, tests_management, feedback)
+- tools/{tool_name}/: Concrete tool implementations
+
+Tools:
+- patient: Simulates patient responses during case investigation
+- socratic: Socratic questioning to guide student thinking
+- hint: Provides progressive hints without giving answers
+- tests_management: Guides test selection and management planning
+- feedback: Provides comprehensive feedback on student performance
+- post_case_assessment: Generates targeted MCQs after case completion
 
 Usage Examples:
     # Method 1: Use the tool engine (ToolUniverse-style)
@@ -31,6 +39,10 @@ Usage Examples:
     # Method 3: Legacy function wrappers (backward compatibility)
     from microtutor.tools.patient import run_patient
     response = run_patient("How long?", case_description)
+    
+    # Method 4: Post-case assessment (after case completion)
+    from microtutor.tools.post_case_assessment import run_post_case_assessment
+    result = run_post_case_assessment(case, conversation_history, num_questions=5)
 """
 
 # Core exports
@@ -56,12 +68,12 @@ from microtutor.tools.registry import (
 from microtutor.tools.patient import PatientTool, run_patient
 from microtutor.tools.socratic import SocraticTool, run_socratic  
 from microtutor.tools.hint import HintTool, run_hint
-from microtutor.tools.ddx_case_search import DDXCaseSearchTool, search_ddx_cases
 from microtutor.tools.tests_management import TestsManagementTool, run_tests_management
 from microtutor.tools.feedback import FeedbackTool, run_feedback
+from microtutor.tools.post_case_assessment import PostCaseAssessmentTool, run_post_case_assessment
 
-# Prompts (for customization if needed)
-from microtutor.tools import prompts
+# Legacy MCQ tool (kept for backward compatibility, but prefer post_case_assessment)
+from microtutor.tools.mcq import MCQTool
 
 __all__ = [
     # Engine
@@ -84,20 +96,16 @@ __all__ = [
     'PatientTool',
     'SocraticTool',
     'HintTool',
-    'DDXCaseSearchTool',
-    'ProblemRepresentationTool',
     'TestsManagementTool',
     'FeedbackTool',
+    'PostCaseAssessmentTool',
+    'MCQTool',  # Legacy, prefer PostCaseAssessmentTool
     
-    # Legacy functions
+    # Legacy/convenience functions
     'run_patient',
     'run_socratic',
     'run_hint',
-    'search_ddx_cases',
     'run_tests_management',
     'run_feedback',
-    
-    # Prompts module
-    'prompts'
+    'run_post_case_assessment',
 ]
-

@@ -1,0 +1,5 @@
+2025-12-05 01:10:52,735 - agent_context - INFO - AGENT_CONTEXT | case_id=case_1764915041851_e5mhilet3 | agent=tutor | interaction=1 | context_len=20
+2025-12-05 01:10:54,193 - agent_context - INFO - AGENT_CONTEXT | case_id=unknown | agent=patient | interaction=1 | context_len=20
+2025-12-05 01:11:04,735 - agent_context - INFO - AGENT_CONTEXT | case_id=case_1764915041851_e5mhilet3 | agent=tutor | interaction=2 | context_len=19
+2025-12-05 01:11:33,136 - agent_context - INFO - AGENT_CONTEXT | case_id=case_1764915041851_e5mhilet3 | agent=tutor | interaction=3 | context_len=25
+2025-12-05 01:11:35,503 - agent_context - INFO - AGENT_CONTEXT | case_id=unknown | agent=patient | interaction=2 | context_len=25

@@ -22,12 +22,12 @@ except ImportError:
     import config as v3_config
     config = v3_config
 
-from microtutor.services.tutor_service_v2 import TutorService
-from microtutor.services.factory import create_tutor_service
-from microtutor.services.case_service import CaseService
-from microtutor.services.feedback_service import FeedbackService
-from microtutor.services.voice_service import VoiceService
-from microtutor.services.background_service import get_background_service, BackgroundTaskService
+from microtutor.services.tutor.service import TutorService
+from microtutor.services.infrastructure.factory import create_tutor_service
+from microtutor.services.case.service import CaseService
+from microtutor.services.feedback.service import FeedbackService
+from microtutor.services.voice.service import VoiceService
+from microtutor.services.infrastructure.background import get_background_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,6 @@ def get_tutor_service() -> TutorService:
             model_name=getattr(config, 'API_MODEL_NAME', 'o3-mini'),
             enable_feedback=True,
             feedback_dir='data/feedback',
-            direct_routing_agents=["socratic", "patient"],  # Enable direct routing for these agents
         )
         logger.info("TutorService v2 singleton created with clean architecture")
     return _tutor_service
@@ -115,11 +114,6 @@ def get_voice_service() -> VoiceService:
     return _voice_service
 
 
-def get_background_service_dependency() -> BackgroundTaskService:
-    """Get background service for dependency injection."""
-    return get_background_service()
-
-
 # Database setup
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -154,7 +148,7 @@ def init_database():
                     conn.execute(text("SELECT 1"))
                 
                 # Create tables if they don't exist
-                from microtutor.models.database import Base
+                from microtutor.schemas.database.database import Base
                 logger.info("Creating database tables...")
                 Base.metadata.create_all(bind=_engine)
                 
@@ -192,6 +186,39 @@ def get_db() -> Session:
     
     if _SessionLocal is None:
         # Database not configured
+        yield None
+        return
+    
+    db = _SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def test_db_connection():
+    """Context manager to test database connection.
+    
+    Use this to safely test if database is available:
+    
+    Example:
+        try:
+            with test_db_connection() as db:
+                if db is not None:
+                    # Database is available
+                    pass
+        except Exception as e:
+            # Database not available
+            pass
+    
+    Yields:
+        Database session or None if not configured
+    """
+    if _SessionLocal is None:
+        init_database()
+    
+    if _SessionLocal is None:
         yield None
         return
     

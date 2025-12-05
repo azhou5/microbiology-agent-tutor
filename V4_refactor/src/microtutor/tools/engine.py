@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 from microtutor.tools.registry import get_registry, register_tool_class
-from microtutor.models.tool_models import BaseTool
+from microtutor.schemas.tools.tool_models import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -29,22 +29,18 @@ class MicroTutorToolEngine:
             from microtutor.tools.patient import PatientTool
             from microtutor.tools.socratic import SocraticTool
             from microtutor.tools.hint import HintTool
-            from microtutor.tools.ddx_case_search import DDXCaseSearchTool
-            from microtutor.tools.update_phase import UpdatePhaseTool
             from microtutor.tools.tests_management import TestsManagementTool
             from microtutor.tools.feedback import FeedbackTool
-            from microtutor.tools.mcq_tool import MCQTool
+            from microtutor.tools.mcq import MCQTool
             
             register_tool_class("PatientTool", PatientTool)
             register_tool_class("SocraticTool", SocraticTool)
             register_tool_class("HintTool", HintTool)
-            register_tool_class("DDXCaseSearchTool", DDXCaseSearchTool)
-            register_tool_class("UpdatePhaseTool", UpdatePhaseTool)
             register_tool_class("TestsManagementTool", TestsManagementTool)
             register_tool_class("FeedbackTool", FeedbackTool)
             register_tool_class("MCQTool", MCQTool)
             
-            logger.info("Registered 8 tool classes")
+            logger.info("Registered 6 tool classes")
         except ImportError as e:
             logger.warning(f"Could not import tool classes: {e}")
     
@@ -53,9 +49,9 @@ class MicroTutorToolEngine:
         if custom_dir:
             config_dirs = [Path(custom_dir)]
         else:
-            # Default: config/tools/ relative to project root
-            project_root = Path(__file__).parent.parent.parent.parent
-            config_dirs = [project_root / "config" / "tools"]
+            # Default: scan tool subdirectories for JSON configs
+            tools_dir = Path(__file__).parent
+            config_dirs = [tools_dir]
         
         self.registry.load_tool_configs(config_dirs)
     
@@ -70,7 +66,7 @@ class MicroTutorToolEngine:
         tool_name: str,
         arguments: Optional[Dict[str, Any]] = None,
         validate: bool = True,
-        use_cache: bool = True
+        use_cache: bool = False
     ) -> Dict[str, Any]:
         """
         Execute a tool by name.

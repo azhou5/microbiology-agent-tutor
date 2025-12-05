@@ -1,0 +1,22 @@
+/* CSS Variables - Design Tokens */
+/* Related JS modules: config.js */
+:root {
+    --primary-color: #007bff;
+    --primary-hover: #0056b3;
+    --success-color: #28a745;
+    --success-hover: #218838;
+    --warning-color: #ff9800;
+    --warning-hover: #e68a00;
+    --danger-color: #dc3545;
+    --background: #f4f7f9;
+    --card-bg: #ffffff;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --border-color: #ddd;
+    --user-message-bg: #d1e7fd;
+    --user-message-text: #0a58ca;
+    --assistant-message-bg: #e8f4f8;
+    --assistant-message-text: #2c3e50;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.15);
+}

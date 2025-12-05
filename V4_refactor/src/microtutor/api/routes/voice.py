@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from microtutor.api.dependencies import get_tutor_service, get_voice_service
-from microtutor.models.requests import ChatRequest
-from microtutor.models.responses import VoiceTranscriptionResponse, VoiceChatResponse
-from microtutor.services.tutor_service_v2 import TutorService
-from microtutor.services.voice_service import VoiceService
+from microtutor.schemas.api.requests import ChatRequest
+from microtutor.schemas.api.responses import VoiceTranscriptionResponse, VoiceChatResponse
+from microtutor.services.tutor.service import TutorService
+from microtutor.services.voice.service import VoiceService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/voice", tags=["voice"])
@@ -62,7 +62,7 @@ async def transcribe_audio(
             )
         
         # Transcribe with medical terminology prompt
-        from microtutor.services.voice_service import VoiceConfig
+        from microtutor.services.voice.service import VoiceConfig
         
         transcribed_text = await voice_service.transcribe_audio(
             audio_file=audio_bytes,
@@ -215,7 +215,7 @@ async def voice_chat(
         if len(audio_bytes) > 25 * 1024 * 1024:  # 25MB limit
             raise ValueError(f"Audio file too large: {len(audio_bytes)} bytes (max 25MB)")
         
-        from microtutor.services.voice_service import VoiceConfig
+        from microtutor.services.voice.service import VoiceConfig
         user_text = await voice_service.transcribe_audio(
             audio_file=audio_bytes,
             filename=filename,
@@ -230,7 +230,7 @@ async def voice_chat(
         history_list = json.loads(history) if history != "[]" else []
         
         # Create tutor context (use model from tutor_service config)
-        from microtutor.models.domain import TutorContext
+        from microtutor.schemas.domain.domain import TutorContext
         context = TutorContext(
             case_id=case_id,
             organism=organism_key,

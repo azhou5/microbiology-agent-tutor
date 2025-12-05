@@ -9,8 +9,8 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 
-from microtutor.agents.mcp_mcq_agent import MCPMCQAgent, create_mcp_mcq_agent
-from microtutor.models.domain import MCQ, MCQResponse, MCQFeedback
+from microtutor.services.mcq.mcp_service import MCPMCQAgent, create_mcp_mcq_agent
+from microtutor.schemas.domain.domain import MCQ, MCQResponse, MCQFeedback
 
 logger = logging.getLogger(__name__)
 

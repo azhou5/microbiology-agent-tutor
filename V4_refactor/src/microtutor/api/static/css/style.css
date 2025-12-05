@@ -2316,3 +2316,564 @@ footer {
     background: #d1e7fd;
     border-left-color: var(--primary-color);
 }
+
+/* ===== POST-CASE ASSESSMENT SECTION ===== */
+.assessment-section {
+    margin-top: 30px;
+    padding: 25px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+}
+
+.assessment-header {
+    text-align: center;
+    color: white;
+    margin-bottom: 20px;
+}
+
+.assessment-header h3 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.assessment-subtitle {
+    opacity: 0.9;
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+.btn-large {
+    padding: 15px 30px;
+    font-size: 1.1rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Assessment Loading */
+.assessment-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px;
+    color: white;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 15px;
+}
+
+/* MCQ Assessment Container */
+.mcq-assessment-container {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    margin-top: 20px;
+}
+
+/* Score Header */
+.mcq-score-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 25px;
+}
+
+.score-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.score-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.score-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.score-progress {
+    flex: 1;
+    height: 12px;
+    background: #e9ecef;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.score-progress-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease, background-color 0.3s ease;
+}
+
+.score-progress-fill.good {
+    background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.score-progress-fill.okay {
+    background: linear-gradient(90deg, #ffc107, #fd7e14);
+}
+
+.score-progress-fill.poor {
+    background: linear-gradient(90deg, #dc3545, #fd7e14);
+}
+
+/* MCQ Questions List */
+.mcq-questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+/* Individual MCQ Card */
+.mcq-question-card {
+    background: #fff;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.mcq-question-card[data-answered="true"] {
+    border-color: #dee2e6;
+}
+
+.mcq-question-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.mcq-question-number {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 1rem;
+}
+
+.mcq-topic-tag,
+.mcq-difficulty-tag,
+.mcq-weakness-tag {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.mcq-topic-tag {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.mcq-difficulty-tag {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.mcq-difficulty-easy {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.mcq-difficulty-medium {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.mcq-difficulty-hard {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.mcq-weakness-tag {
+    background: #fce4ec;
+    color: #c2185b;
+}
+
+.mcq-question-text {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+    margin-bottom: 20px;
+}
+
+.mcq-question-text p {
+    margin: 0;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+/* MCQ Options */
+.mcq-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mcq-option-btn {
+    display: flex;
+    align-items: center;
+    padding: 14px 18px;
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    font-size: 1rem;
+}
+
+.mcq-option-btn:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    background: #f8f9ff;
+    transform: translateX(4px);
+}
+
+.mcq-option-btn:disabled {
+    cursor: default;
+}
+
+.mcq-option-btn.selected {
+    border-color: var(--primary-color);
+    background: #e3f2fd;
+}
+
+.mcq-option-btn.selected.correct {
+    border-color: var(--success-color);
+    background: #e8f5e9;
+}
+
+.mcq-option-btn.selected.incorrect {
+    border-color: var(--danger-color);
+    background: #ffebee;
+}
+
+.mcq-option-btn.correct-answer {
+    border-color: var(--success-color);
+    background: #e8f5e9;
+}
+
+.mcq-option-btn .option-letter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    margin-right: 14px;
+    flex-shrink: 0;
+    transition: background-color 0.2s ease;
+}
+
+.mcq-option-btn.selected .option-letter {
+    background: var(--success-color);
+}
+
+.mcq-option-btn.selected.incorrect .option-letter {
+    background: var(--danger-color);
+}
+
+.mcq-option-btn.correct-answer .option-letter {
+    background: var(--success-color);
+}
+
+.mcq-option-btn .option-text {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.mcq-option-btn .option-result-icon {
+    margin-left: 10px;
+    font-size: 1.2rem;
+}
+
+.mcq-option-btn.correct-answer .option-result-icon::after {
+    content: "✓";
+    color: var(--success-color);
+    font-weight: bold;
+}
+
+.mcq-option-btn.selected.incorrect .option-result-icon::after {
+    content: "✗";
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+/* Feedback Section */
+.mcq-feedback-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px solid #e9ecef;
+    animation: fadeIn 0.3s ease;
+}
+
+.mcq-result-banner {
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.mcq-result-banner.correct {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.mcq-result-banner.incorrect {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Explanations */
+.mcq-explanations {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.mcq-explanations h5 {
+    margin: 0 0 12px 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.mcq-explanation {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    background: white;
+}
+
+.mcq-explanation:last-child {
+    margin-bottom: 0;
+}
+
+.mcq-explanation.correct {
+    border-left: 3px solid var(--success-color);
+}
+
+.mcq-explanation.incorrect {
+    border-left: 3px solid #e9ecef;
+}
+
+.mcq-explanation .option-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.mcq-explanation.correct .option-indicator {
+    background: var(--success-color);
+    color: white;
+}
+
+.mcq-explanation.incorrect .option-indicator {
+    background: #e9ecef;
+    color: var(--text-secondary);
+}
+
+.mcq-explanation .explanation-text {
+    flex: 1;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+/* Learning Point */
+.mcq-learning-point {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 15px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.mcq-learning-point strong {
+    color: #856404;
+}
+
+/* Results Summary */
+.mcq-results-summary {
+    margin-top: 30px;
+    padding: 25px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    text-align: center;
+}
+
+.mcq-results-summary h4 {
+    color: var(--primary-color);
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+}
+
+.results-stats {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+    margin-bottom: 25px;
+}
+
+.results-stats .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.results-stats .stat-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.results-stats .stat-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.results-message {
+    margin-top: 20px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    font-size: 1.1rem;
+}
+
+.weak-areas-summary {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.weak-areas-summary h5 {
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    font-size: 1rem;
+}
+
+.weak-areas-summary ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.weak-areas-summary li {
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.results-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+/* Assessment Phase Button Styling */
+.phase-btn-assessment {
+    position: relative;
+}
+
+.phase-btn-assessment:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.phase-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--warning-color);
+    color: white;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* Responsive Assessment Styles */
+@media (max-width: 768px) {
+    .assessment-section {
+        padding: 20px 15px;
+    }
+
+    .mcq-assessment-container {
+        padding: 15px;
+    }
+
+    .mcq-score-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .score-progress {
+        width: 100%;
+    }
+
+    .mcq-question-card {
+        padding: 15px;
+    }
+
+    .mcq-question-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .results-stats {
+        gap: 20px;
+    }
+
+    .results-stats .stat-value {
+        font-size: 2rem;
+    }
+
+    .results-actions {
+        flex-direction: column;
+    }
+
+    .results-actions .btn {
+        width: 100%;
+    }
+}

@@ -1,0 +1,131 @@
+/* Case Setup Styles */
+/* Related HTML partial: partials/case-setup.html */
+/* Related JS modules: api.js */
+.case-setup {
+    padding: 20px;
+    background: linear-gradient(to right, #f8f9fa, #e9ecef);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.setup-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 15px;
+}
+
+.setup-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 200px;
+}
+
+.setup-group label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.setup-group select {
+    padding: 10px 15px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    min-width: 200px;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.setup-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.setup-group select option {
+    padding: 10px 12px;
+    background: white;
+    color: var(--text-primary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.setup-group select option:hover {
+    background: #e3f2fd;
+    color: var(--primary-color);
+}
+
+.setup-group select option:checked {
+    background: var(--primary-color);
+    color: white;
+    font-weight: 600;
+}
+
+.setup-group select option:focus {
+    background: var(--primary-color);
+    color: white;
+    outline: none;
+}
+
+.setup-group select optgroup[style*="display: none"] {
+    display: none !important;
+}
+
+.setup-group select optgroup {
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: #f8f9fa;
+    padding: 4px 8px;
+}
+
+.setup-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+/* Model Provider Toggle */
+.model-provider-toggle {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 2px solid var(--border-color);
+}
+
+.model-provider-toggle input[type="radio"] {
+    display: none;
+}
+
+.model-provider-toggle label {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid transparent;
+    margin: 0;
+    min-width: auto;
+}
+
+.model-provider-toggle input[type="radio"]:checked+label {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.model-provider-toggle label:hover {
+    background: #e9ecef;
+}
+
+.model-provider-toggle input[type="radio"]:checked+label:hover {
+    background: var(--primary-hover);
+}

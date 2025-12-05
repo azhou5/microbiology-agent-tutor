@@ -1,11 +1,50 @@
 """Service layer for business logic.
 
-This module contains all business logic services, separated from the API layer.
-Each service handles a specific domain of functionality.
+This module contains all business logic services, organized by domain:
+- tutor/: Main tutoring service
+- case/: Case management and generation
+- mcq/: Multiple choice question services
+- feedback/: Feedback management
+- voice/: Voice synthesis and transcription
+- guideline/: Clinical guideline services
+- infrastructure/: Supporting services (cost, background, factory)
+- adapters/: Adapter pattern implementations
 """
 
-from .tutor_service_v2 import TutorService
-from .case_service import CaseService
-from .feedback_service import FeedbackService
+# Main domain services
+from .tutor import TutorService, ServiceConfig
+from .case import CaseService, get_case, CaseGeneratorRAGAgent
+from .feedback import FeedbackService
+from .voice import VoiceService
+from .mcq import MCQService, MCPMCQAgent, create_mcp_mcq_agent
+from .guideline import GuidelineService, GuidelinesCache, get_guidelines_cache
 
-__all__ = ["TutorService", "CaseService", "FeedbackService"]
+# Infrastructure services
+from .infrastructure import (
+    CostService,
+    BackgroundTaskService,
+    get_background_service,
+    create_tutor_service,
+)
+
+__all__ = [
+    # Domain services
+    "TutorService",
+    "ServiceConfig",
+    "CaseService",
+    "get_case",
+    "CaseGeneratorRAGAgent",
+    "FeedbackService",
+    "VoiceService",
+    "MCQService",
+    "MCPMCQAgent",
+    "create_mcp_mcq_agent",
+    "GuidelineService",
+    "GuidelinesCache",
+    "get_guidelines_cache",
+    # Infrastructure
+    "CostService",
+    "BackgroundTaskService",
+    "get_background_service",
+    "create_tutor_service",
+]

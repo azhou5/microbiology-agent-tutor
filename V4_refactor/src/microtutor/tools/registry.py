@@ -7,8 +7,8 @@ import logging
 from typing import Dict, Any, List, Optional, Type
 from pathlib import Path
 
-from microtutor.models.tool_models import BaseTool
-from microtutor.models.tool_errors import ToolConfigError
+from microtutor.schemas.tools.tool_models import BaseTool
+from microtutor.schemas.tools.tool_errors import ToolConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +38,21 @@ class ToolRegistry:
         logger.debug(f"Registered tool config: {tool_name}")
     
     def load_tool_configs(self, config_dirs: List[Path]) -> int:
-        """Load all JSON tool configs from directories."""
+        """Load all JSON tool configs from directories and subdirectories."""
         loaded = 0
         for config_dir in config_dirs:
             if not config_dir.exists():
                 logger.warning(f"Config directory not found: {config_dir}")
                 continue
             
-            for json_file in config_dir.glob("*.json"):
+            # Scan subdirectories recursively for *_tool.json files
+            for json_file in config_dir.rglob("*_tool.json"):
                 try:
                     with open(json_file, 'r') as f:
                         config = json.load(f)
                         self.register_tool_config(config)
                         loaded += 1
+                        logger.debug(f"Loaded tool config from {json_file}")
                 except Exception as e:
                     logger.error(f"Failed to load {json_file}: {e}")
         

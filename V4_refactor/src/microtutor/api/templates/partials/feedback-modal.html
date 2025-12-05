@@ -1,0 +1,63 @@
+<!-- Feedback Modal -->
+<!-- Related JS modules: feedback.js -->
+<div id="feedback-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>📊 Case Feedback</h2>
+            <button class="modal-close" id="close-feedback-btn" aria-label="Close">×</button>
+        </div>
+
+        <div class="case-summary">
+            <h3>Case Summary</h3>
+            <p>The correct organism for this case was: <strong id="correct-organism"></strong></p>
+        </div>
+
+        <div class="feedback-form">
+            <div class="feedback-question">
+                <p>How detailed was the case?</p>
+                <div class="likert-scale">
+                    <label><input type="radio" name="detail" value="1"> 1 (Not detailed)</label>
+                    <label><input type="radio" name="detail" value="2"> 2</label>
+                    <label><input type="radio" name="detail" value="3"> 3</label>
+                    <label><input type="radio" name="detail" value="4"> 4</label>
+                    <label><input type="radio" name="detail" value="5"> 5 (Very detailed)</label>
+                </div>
+                <button class="skip-btn" data-question="detail">Skip</button>
+            </div>
+
+            <div class="feedback-question">
+                <p>How helpful was this case for your learning?</p>
+                <div class="likert-scale">
+                    <label><input type="radio" name="helpfulness" value="1"> 1 (Not helpful)</label>
+                    <label><input type="radio" name="helpfulness" value="2"> 2</label>
+                    <label><input type="radio" name="helpfulness" value="3"> 3</label>
+                    <label><input type="radio" name="helpfulness" value="4"> 4</label>
+                    <label><input type="radio" name="helpfulness" value="5"> 5 (Very helpful)</label>
+                </div>
+                <button class="skip-btn" data-question="helpfulness">Skip</button>
+            </div>
+
+            <div class="feedback-question">
+                <p>How accurate was the medical information in this case?</p>
+                <div class="likert-scale">
+                    <label><input type="radio" name="accuracy" value="1"> 1 (Not accurate)</label>
+                    <label><input type="radio" name="accuracy" value="2"> 2</label>
+                    <label><input type="radio" name="accuracy" value="3"> 3</label>
+                    <label><input type="radio" name="accuracy" value="4"> 4</label>
+                    <label><input type="radio" name="accuracy" value="5"> 5 (Very accurate)</label>
+                </div>
+                <button class="skip-btn" data-question="accuracy">Skip</button>
+            </div>
+
+            <div class="feedback-question">
+                <p>Additional comments (optional):</p>
+                <textarea id="feedback-comments" rows="4"
+                    placeholder="Share your thoughts about this case..."></textarea>
+            </div>
+
+            <div class="modal-buttons">
+                <button id="submit-feedback-btn" class="btn btn-success">✅ Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -7,13 +7,11 @@ services:
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
-      # Copy environment file to expected location
+      # Copy environment file to expected location (if exists)
       cp dot_env_microtutor.txt src/dot_env_microtutor.txt || echo "Environment file not found, using environment variables"
-      # Debug imports step by step
-      cd V4_refactor && python debug_imports.py || echo "Import debugging failed, continuing without feedback"
-      # Generate feedback index from database
-      cd V4_refactor && python regenerate_feedback_index.py || echo "Failed to generate feedback index, continuing without feedback"
-    startCommand: export PYTHONPATH="/opt/render/project/src/V4_refactor/src" && cd V4_refactor && python run_production.py
+      # Generate feedback index from database (optional)
+      python scripts/regenerate_feedback_index.py || echo "Failed to generate feedback index, continuing"
+    startCommand: export PYTHONPATH="/opt/render/project/src/V4_refactor/src" && ./start.sh
     envVars:
       # Application Settings
       - key: DEBUG
