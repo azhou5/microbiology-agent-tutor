@@ -7,7 +7,7 @@ This service handles:
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 import logging
 import json
@@ -123,7 +123,7 @@ class FeedbackService:
                 from microtutor.core.database import CaseFeedbackEntry
                 
                 entry = CaseFeedbackEntry(
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     organism=organism or "Unknown",
                     detail_rating=str(feedback.detail),
                     helpfulness_rating=str(feedback.helpfulness),

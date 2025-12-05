@@ -72,6 +72,15 @@ function loadConversationState() {
                 if (typeof setStatus === 'function') {
                     setStatus(`Resumed case. Case ID: ${State.currentCaseId}`);
                 }
+
+                // Restore case summary header from first assistant message
+                if (State.chatHistory.length > 0) {
+                    const firstAssistantMsg = State.chatHistory.find(msg => msg.role === 'assistant');
+                    if (firstAssistantMsg && typeof updateCaseSummaryHeader === 'function') {
+                        updateCaseSummaryHeader({ history: State.chatHistory });
+                    }
+                }
+
                 console.log('[LOAD] State loaded successfully');
                 return true;
             }
@@ -93,6 +102,12 @@ function clearConversationState() {
         localStorage.removeItem(STORAGE_KEYS.ORGANISM);
         localStorage.removeItem(STORAGE_KEYS.PHASE);
         localStorage.removeItem(STORAGE_KEYS.PHASE_HISTORY);
+
+        // Hide case summary header
+        if (typeof hideCaseSummaryHeader === 'function') {
+            hideCaseSummaryHeader();
+        }
+
         console.log('[CLEAR] State cleared');
     } catch (e) {
         console.error('[CLEAR] Error clearing state:', e);

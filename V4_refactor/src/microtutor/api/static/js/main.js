@@ -12,6 +12,10 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.startCaseBtn.addEventListener('click', handleStartCase);
     }
 
+    if (DOM.startRandomCaseBtn) {
+        DOM.startRandomCaseBtn.addEventListener('click', handleStartRandomCase);
+    }
+
     if (DOM.sendBtn) {
         DOM.sendBtn.addEventListener('click', enhancedSendMessage);
     }
@@ -56,11 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.organismSelect.addEventListener('change', () => {
             // Reset phase to Information Gathering whenever organism selection changes
             resetPhaseToInformationGathering();
-
-            if (DOM.organismSelect.value === 'random') {
-                // If random is selected, immediately trigger random selection
-                selectRandomOrganism();
-            }
         });
     }
 

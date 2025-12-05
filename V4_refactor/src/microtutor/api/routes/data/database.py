@@ -7,7 +7,7 @@ stored in the MicroTutor database.
 
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from sqlalchemy import text
@@ -225,7 +225,7 @@ async def get_recent_conversations(
     
     try:
         # Calculate time threshold
-        time_threshold = datetime.utcnow() - timedelta(hours=hours)
+        time_threshold = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         query = """
             SELECT 
@@ -319,7 +319,7 @@ async def get_database_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
                     "recent_activity": {
                         "conversations_last_24h": 0
                     },
-                    "generated_at": datetime.utcnow().isoformat(),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
                     "note": "Database tables not yet created"
                 }
             }
@@ -368,7 +368,7 @@ async def get_database_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
                     FROM conversation_logs 
                     WHERE timestamp >= :recent_time
                 """
-                recent_time = datetime.utcnow() - timedelta(hours=24)
+                recent_time = datetime.now(timezone.utc) - timedelta(hours=24)
                 recent_count = db.execute(text(recent_query), {"recent_time": recent_time}).scalar()
             except Exception as e:
                 logger.warning(f"Could not get recent activity: {e}")
@@ -382,7 +382,7 @@ async def get_database_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
                 "recent_activity": {
                     "conversations_last_24h": recent_count
                 },
-                "generated_at": datetime.utcnow().isoformat()
+                "generated_at": datetime.now(timezone.utc).isoformat()
             }
         }
         
@@ -402,7 +402,7 @@ async def get_database_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
                 "recent_activity": {
                     "conversations_last_24h": 0
                 },
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
                 "note": "Database not available"
             }
         }

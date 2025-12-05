@@ -54,11 +54,15 @@ class FeedbackTool(AgenticTool):
             
             # Log agent context
             log_agent_context(
+                case_id="feedback_session",
                 agent_name="feedback",
-                interaction_count=self.interaction_counter,
-                user_input=input_text,
-                case_context=case[:100] + "..." if len(case) > 100 else case,
-                feedback_included=feedback_in_history
+                interaction_id=self.interaction_counter,
+                system_prompt=system_prompt[:200] + "..." if len(system_prompt) > 200 else system_prompt,
+                user_prompt=input_text,
+                metadata={
+                    "case_context": case[:100] + "..." if len(case) > 100 else case,
+                    "feedback_included": feedback_in_history
+                }
             )
             
             # Call LLM with prepared messages (includes system prompt + feedback from conversation_history)

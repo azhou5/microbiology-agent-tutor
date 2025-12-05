@@ -38,21 +38,42 @@ function initializeMCQ() {
         });
     }
 
-    // Assessment phase button in sidebar
+    // Finish case and give feedback button
+    const finishCaseFeedbackBtn = document.getElementById('finish-case-feedback-btn');
+    if (finishCaseFeedbackBtn) {
+        finishCaseFeedbackBtn.addEventListener('click', () => {
+            // Mark case as complete
+            State.caseComplete = true;
+
+            // Disable the finish button in input area if it exists
+            if (DOM.finishBtn) {
+                DOM.finishBtn.disabled = true;
+                DOM.finishBtn.textContent = '✅ Case Complete';
+            }
+
+            // Show the feedback modal
+            if (typeof showCaseFeedbackModal === 'function') {
+                showCaseFeedbackModal();
+            } else if (DOM.feedbackModal) {
+                DOM.feedbackModal.classList.add('is-active');
+            }
+        });
+    }
+
+    // Assessment phase button in sidebar - always available
     const assessmentPhaseBtn = document.querySelector('[data-phase="assessment"]');
     if (assessmentPhaseBtn) {
         assessmentPhaseBtn.addEventListener('click', () => {
-            if (State.caseComplete) {
-                showAssessmentSection();
-            }
+            showAssessmentSection(false); // false = show generate button (not auto-generating)
         });
     }
 }
 
 /**
  * Show the assessment section (called after feedback phase)
+ * @param {boolean} autoGenerate - If true, hide the generate button (auto-generating)
  */
-function showAssessmentSection() {
+function showAssessmentSection(autoGenerate = false) {
     const assessmentSection = document.getElementById('assessment-section');
     if (assessmentSection) {
         assessmentSection.style.display = 'block';
@@ -64,9 +85,32 @@ function showAssessmentSection() {
             assessmentBtn.classList.add('active');
         }
 
+        // Show generate button unless auto-generating (from Finish Case)
+        const generateBtn = document.getElementById('generate-mcqs-btn');
+        if (generateBtn) {
+            if (autoGenerate) {
+                generateBtn.style.display = 'none';
+            } else {
+                generateBtn.style.display = 'inline-flex';
+                generateBtn.disabled = false;
+            }
+        }
+
+        // Show loading state immediately when auto-generating
+        const loadingDiv = document.getElementById('assessment-loading');
+        if (loadingDiv) {
+            if (autoGenerate) {
+                loadingDiv.style.display = 'flex';
+            } else {
+                loadingDiv.style.display = 'none';
+            }
+        }
+
         // Update phase
         State.currentPhase = 'assessment';
-        updatePhaseUI();
+        if (typeof updatePhaseUI === 'function') {
+            updatePhaseUI();
+        }
 
         // Scroll to assessment section
         assessmentSection.scrollIntoView({ behavior: 'smooth' });
@@ -88,6 +132,12 @@ function hideAssessmentSection() {
         mcqContainer.style.display = 'none';
     }
 
+    // Hide finish section
+    const finishSection = document.getElementById('mcq-finish-section');
+    if (finishSection) {
+        finishSection.style.display = 'none';
+    }
+
     // Hide loading
     const loadingDiv = document.getElementById('assessment-loading');
     if (loadingDiv) {
@@ -101,8 +151,9 @@ function hideAssessmentSection() {
 async function handleGenerateAssessment() {
     console.log('[MCQ] Generating post-case assessment');
 
-    if (!State.currentCaseId || !State.chatHistory.length) {
-        setStatus('Please complete a case first', true);
+    // Only require a case to be started, not completed
+    if (!State.currentCaseId || !State.currentOrganismKey) {
+        setStatus('Please start a case first', true);
         return;
     }
 
@@ -151,6 +202,23 @@ async function handleGenerateAssessment() {
             if (mcqContainer) mcqContainer.style.display = 'block';
             if (generateBtn) generateBtn.style.display = 'none';
 
+            // Show finish case and feedback button
+            const finishSection = document.getElementById('mcq-finish-section');
+            if (finishSection) {
+                finishSection.style.display = 'block';
+            }
+
+            // Reset finish button text
+            if (DOM.finishBtn) {
+                DOM.finishBtn.textContent = '✅ Case Complete';
+                DOM.finishBtn.disabled = true;
+            }
+
+            // Add message to chat
+            if (typeof addMessage === 'function') {
+                addMessage('assistant', '📝 **Assessment Time!** Answer the MCQs below to test your understanding. Case feedback will follow after you complete all questions.', 'tutor');
+            }
+
         } else {
             throw new Error(data.error?.message || 'Failed to generate assessment');
         }
@@ -160,6 +228,12 @@ async function handleGenerateAssessment() {
         setStatus(`Failed to generate assessment: ${error.message}`, true);
         if (loadingDiv) loadingDiv.style.display = 'none';
         if (generateBtn) generateBtn.disabled = false;
+
+        // Reset finish button on error
+        if (DOM.finishBtn) {
+            DOM.finishBtn.textContent = '🏁 Finish Case';
+            DOM.finishBtn.disabled = false;
+        }
     }
 }
 
@@ -173,6 +247,7 @@ async function handleRetryAssessment() {
     const generateBtn = document.getElementById('generate-mcqs-btn');
     const mcqContainer = document.getElementById('mcq-container');
     const resultsSummary = document.getElementById('mcq-results-summary');
+    const finishSection = document.getElementById('mcq-finish-section');
 
     if (generateBtn) {
         generateBtn.style.display = 'inline-flex';
@@ -180,6 +255,7 @@ async function handleRetryAssessment() {
     }
     if (mcqContainer) mcqContainer.style.display = 'none';
     if (resultsSummary) resultsSummary.style.display = 'none';
+    if (finishSection) finishSection.style.display = 'none';
 
     // Trigger new generation
     await handleGenerateAssessment();
@@ -423,6 +499,27 @@ function showAssessmentResults() {
             messageDiv.innerHTML = '📚 <strong>Keep learning!</strong> Review the case material and explanations to improve.';
         }
         statsDiv.appendChild(messageDiv);
+    }
+
+    // Add "Give Case Feedback" button to results actions
+    const resultsActions = resultsSummary.querySelector('.results-actions');
+    if (resultsActions) {
+        // Check if feedback button already exists
+        if (!document.getElementById('give-feedback-btn')) {
+            const feedbackBtn = document.createElement('button');
+            feedbackBtn.id = 'give-feedback-btn';
+            feedbackBtn.className = 'btn btn-warning btn-large';
+            feedbackBtn.innerHTML = '<span class="btn-icon">⭐</span> Give Case Feedback';
+            feedbackBtn.addEventListener('click', () => {
+                if (typeof showCaseFeedbackModal === 'function') {
+                    showCaseFeedbackModal();
+                } else if (DOM.feedbackModal) {
+                    DOM.feedbackModal.classList.add('is-active');
+                }
+            });
+            // Insert as first button
+            resultsActions.insertBefore(feedbackBtn, resultsActions.firstChild);
+        }
     }
 }
 

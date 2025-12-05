@@ -301,7 +301,7 @@ function initializeFeedbackControls() {
     console.log('✅ [FEEDBACK] Threshold slider initialized and enabled');
     console.log(`🎯 [FEEDBACK] Current threshold: ${State.feedbackThreshold.toFixed(1)}`);
     console.log(`🔧 [FEEDBACK] Feedback system: ${State.feedbackEnabled ? 'Enabled (Default)' : 'Disabled'}`);
-    console.log('💡 [FEEDBACK] AI Feedback is enabled by default for optimal learning experience');
+    console.log('💡 [FEEDBACK] In Context Feedback is enabled by default for optimal learning experience');
 }
 
 /**
@@ -346,16 +346,46 @@ function updateFeedbackControlsUI() {
 }
 
 /**
- * Finish case and show feedback modal
+ * Finish case and automatically generate MCQs
+ * Case feedback modal will show AFTER MCQs are completed
  */
 function handleFinishCase() {
-    console.log('[FINISH] Finishing case...');
+    console.log('[FINISH] Finishing case - generating MCQs...');
+
+    // Store organism for later use in feedback modal
     if (State.currentOrganismKey && DOM.correctOrganismSpan) {
         DOM.correctOrganismSpan.textContent = State.currentOrganismKey;
     } else if (DOM.correctOrganismSpan) {
         DOM.correctOrganismSpan.textContent = "Unknown";
     }
 
+    // Mark case as complete
+    State.caseComplete = true;
+
+    // Disable the finish button to prevent double-clicks
+    if (DOM.finishBtn) {
+        DOM.finishBtn.disabled = true;
+        DOM.finishBtn.textContent = '📝 Generating MCQs...';
+    }
+
+    // Show assessment section and auto-generate MCQs
+    if (typeof showAssessmentSection === 'function') {
+        showAssessmentSection();
+    }
+
+    // Automatically trigger MCQ generation
+    setTimeout(() => {
+        if (typeof handleGenerateAssessment === 'function') {
+            handleGenerateAssessment();
+        }
+    }, 500); // Small delay to let UI update
+}
+
+/**
+ * Show the case feedback modal (called after MCQs are completed)
+ */
+function showCaseFeedbackModal() {
+    console.log('[FEEDBACK] Showing case feedback modal after MCQs');
     if (DOM.feedbackModal) {
         DOM.feedbackModal.classList.add('is-active');
     }
@@ -406,34 +436,103 @@ async function submitCaseFeedback() {
             throw new Error(err.detail || err.error || `HTTP ${response.status}`);
         }
 
-        setStatus('Case feedback submitted! Ready for assessment.');
+        setStatus('Case feedback submitted! Saving case to history...');
         closeFeedbackModal();
+
+        // Prepare and save case data to history
+        if (typeof prepareCaseData === 'function' && typeof saveCaseToHistory === 'function') {
+            const caseData = prepareCaseData({
+                caseId: State.currentCaseId,
+                organism: State.currentOrganismKey,
+                chatHistory: State.chatHistory || [],
+                mcqs: State.assessmentMCQs || [],
+                assessmentScore: State.assessmentScore || { correct: 0, total: 0 },
+                assessmentAnswers: State.assessmentAnswers || {},
+                feedbackData: feedbackData,
+                weakAreas: State.assessmentWeakAreas || []
+            });
+            saveCaseToHistory(caseData);
+        }
 
         // Refresh dashboard data
         if (typeof loadDashboardData === 'function') {
             loadDashboardData();
         }
 
-        // Disable input but keep finish button disabled
-        disableInput(true);
-        if (DOM.finishBtn) DOM.finishBtn.disabled = true;
-
-        // Reset feedback form
-        document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
-        const commentsField = document.getElementById('feedback-comments');
-        if (commentsField) commentsField.value = '';
-        document.querySelectorAll('.skip-btn').forEach(btn => btn.disabled = false);
-
-        // Enable and show the assessment section
-        // Keep the chat history and case info for MCQ generation
-        if (typeof enableAssessmentPhase === 'function') {
-            enableAssessmentPhase();
-        }
+        // Reset everything after saving
+        resetCaseAfterFeedback();
 
     } catch (error) {
         console.error('[CASE_FEEDBACK] Error:', error);
         setStatus(`Error submitting feedback: ${error.message}`, true);
     }
+}
+
+/**
+ * Reset case after feedback is submitted
+ */
+function resetCaseAfterFeedback() {
+    // Hide assessment section
+    if (typeof hideAssessmentSection === 'function') {
+        hideAssessmentSection();
+    }
+
+    // Reset feedback form
+    document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+    const commentsField = document.getElementById('feedback-comments');
+    if (commentsField) commentsField.value = '';
+    document.querySelectorAll('.skip-btn').forEach(btn => btn.disabled = false);
+
+    // Clear chat
+    if (DOM.chatbox) {
+        DOM.chatbox.innerHTML = '<div class="welcome-message"><p>👋 Case completed and saved!</p><p>Select an organism and start a new case.</p></div>';
+    }
+
+    // Clear input
+    if (DOM.userInput) DOM.userInput.value = '';
+
+    // Disable input
+    disableInput(true);
+    if (DOM.finishBtn) {
+        DOM.finishBtn.disabled = true;
+        DOM.finishBtn.textContent = '🏁 Finish Case';
+    }
+
+    // Clear state
+    clearConversationState();
+    State.reset();
+
+    // Reset assessment state
+    if (State.resetAssessment) {
+        State.resetAssessment();
+    }
+    State.assessmentMCQs = [];
+    State.assessmentAnswers = {};
+    State.assessmentScore = { correct: 0, total: 0 };
+    State.assessmentWeakAreas = [];
+    State.assessmentComplete = false;
+
+    // Reset phase UI
+    if (typeof resetPhaseToInformationGathering === 'function') {
+        resetPhaseToInformationGathering();
+    }
+    if (typeof hidePhaseProgression === 'function') {
+        hidePhaseProgression();
+    }
+
+    // Reset assessment button
+    const assessmentBtn = document.querySelector('[data-phase="assessment"]');
+    if (assessmentBtn) {
+        assessmentBtn.disabled = true;
+        assessmentBtn.classList.remove('active');
+    }
+
+    // Reset case state
+    State.currentCaseId = null;
+    State.currentOrganismKey = null;
+    State.caseComplete = false;
+
+    setStatus('Case saved to history! Ready for a new case. Select an organism and click Start!');
 }
 
 /**
@@ -470,3 +569,8 @@ function resetForNewCase() {
 
     setStatus('Ready for a new case. Select an organism and click Start!');
 }
+
+// Make functions available globally for cross-module access
+window.showCaseFeedbackModal = showCaseFeedbackModal;
+window.handleFinishCase = handleFinishCase;
+window.resetForNewCase = resetForNewCase;

@@ -1,7 +1,7 @@
 {
     "name": "tests_management",
-    "description": "Discusses test selection guidelines and treatment planning approaches through socratic dialogue. Use when students ask 'What tests should I order?' or 'What treatment should I consider?' - this agent discusses guidelines and options, NOT actual test results (those go to patient agent)",
-    "type": "AgenticTool",
+    "description": "Guides test selection, interpretation, and teaches WHY tests work. Use for: (1) 'what tests should I order?', (2) 'what else can I test?', (3) 'I don't know what to order', (4) 'help me with tests', (5) discussing test interpretation, (6) asking about treatment. This is the TEACHING agent for tests - it explains mechanisms. For getting ACTUAL test results after ordering, use patient tool.",
+    "type": "TestsManagementTool",
     "parameter": {
         "type": "object",
         "properties": {
@@ -41,13 +41,12 @@
     "cacheable": false,
     "metadata": {
         "phase": "tests_management",
-        "agent_type": "socratic_guidance",
-        "completion_signal": "[TESTS_MANAGEMENT_COMPLETE]",
+        "agent_type": "test_guidance",
         "features": [
-            "guideline_search",
-            "real_time_guidelines",
-            "evidence_based"
-        ],
-        "tooluniverse_integration": true
+            "test_selection",
+            "result_interpretation",
+            "first_principles_teaching",
+            "treatment_planning"
+        ]
     }
 }

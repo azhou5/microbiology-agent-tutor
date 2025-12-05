@@ -137,7 +137,11 @@ class AutoFAISSGenerator:
         
         # Check if we can do incremental update
         if not force_update and self._can_do_incremental_update():
-            return self._incremental_update(config)
+            result = self._incremental_update(config)
+            # If incremental update needs full rebuild, fall through
+            if result.get("status") != "needs_full_rebuild":
+                return result
+            logger.info("Incremental update requested full rebuild, proceeding...")
         
         # Fall back to full regeneration
         return self._full_regeneration(config)
@@ -367,7 +371,18 @@ class AutoFAISSGenerator:
                     )
                 
                 # Load only new feedback since last update
-                last_update = datetime.fromisoformat(self.index_metadata["last_updated"])
+                last_updated_value = self.index_metadata.get("last_updated")
+                if last_updated_value is None:
+                    # No previous update - need full rebuild
+                    logger.info("No previous update timestamp found, triggering full rebuild")
+                    return {"status": "needs_full_rebuild", "reason": "no_previous_timestamp"}
+                elif isinstance(last_updated_value, datetime):
+                    last_update = last_updated_value
+                elif isinstance(last_updated_value, str):
+                    last_update = datetime.fromisoformat(last_updated_value)
+                else:
+                    logger.warning(f"Invalid last_updated value type: {type(last_updated_value)}, triggering full rebuild")
+                    return {"status": "needs_full_rebuild", "reason": "invalid_timestamp_type"}
                 config.days_back = None  # We'll use timestamp filtering instead
                 
                 # Load all feedback and filter by timestamp
@@ -392,8 +407,8 @@ class AutoFAISSGenerator:
                 entries_path = index_dir / "feedback_entries.pkl"
                 
                 if all(p.exists() for p in [index_path, texts_path, entries_path]):
-                    with open(index_path, 'rb') as f:
-                        existing_indices[index_type] = pickle.load(f)
+                    # Use faiss.read_index() instead of pickle.load() for FAISS indices
+                    existing_indices[index_type] = faiss.read_index(str(index_path))
                     with open(texts_path, 'rb') as f:
                         existing_texts[index_type] = pickle.load(f)
                     with open(entries_path, 'rb') as f:
@@ -469,8 +484,8 @@ class AutoFAISSGenerator:
                 texts_path = index_dir / "feedback_texts.pkl"
                 entries_path = index_dir / "feedback_entries.pkl"
                 
-                with open(index_path, 'wb') as f:
-                    pickle.dump(existing_indices[index_type], f)
+                # Use faiss.write_index() instead of pickle.dump() for FAISS indices
+                faiss.write_index(existing_indices[index_type], str(index_path))
                 with open(texts_path, 'wb') as f:
                     pickle.dump(existing_texts[index_type], f)
                 with open(entries_path, 'wb') as f:

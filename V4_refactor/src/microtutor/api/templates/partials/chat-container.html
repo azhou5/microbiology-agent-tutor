@@ -1,6 +1,15 @@
 <!-- Chat Container -->
 <!-- Related JS modules: chat.js, voice.js, mcq.js -->
 <div class="chat-container">
+    <!-- Sticky Case Summary - shows the initial case presentation -->
+    <div id="case-summary-header" class="case-summary-header" style="display: none;">
+        <div class="case-summary-content">
+            <span class="case-summary-icon">📋</span>
+            <span id="case-one-liner" class="case-one-liner-text">Loading case...</span>
+        </div>
+        <button id="toggle-case-summary" class="toggle-case-summary" title="Collapse/Expand">▼</button>
+    </div>
+
     <div id="chatbox" class="chatbox">
         <div class="welcome-message">
             <p>👋 Welcome to MicroTutor V4!</p>
@@ -28,65 +37,4 @@
         </div>
     </div>
 </div>
-
-<!-- Post-Case Assessment Section -->
-<div id="assessment-section" class="assessment-section" style="display: none;">
-    <div class="assessment-header">
-        <h3>📝 Post-Case Assessment</h3>
-        <p class="assessment-subtitle">Test your understanding with targeted MCQs based on your case performance.</p>
-        <button id="generate-mcqs-btn" class="btn btn-primary btn-large">
-            <span class="btn-icon">🎯</span> Generate Assessment MCQs
-        </button>
-    </div>
-
-    <div id="assessment-loading" class="assessment-loading" style="display: none;">
-        <div class="loading-spinner"></div>
-        <p>Analyzing your conversation and generating targeted MCQs...</p>
-    </div>
-
-    <div id="mcq-container" class="mcq-assessment-container" style="display: none;">
-        <div class="mcq-score-header">
-            <div class="score-display">
-                <span class="score-label">Score:</span>
-                <span id="mcq-score" class="score-value">0 / 0</span>
-            </div>
-            <div class="score-progress">
-                <div id="score-progress-bar" class="score-progress-fill" style="width: 0%"></div>
-            </div>
-        </div>
-
-        <div id="mcq-questions-list" class="mcq-questions-list">
-            <!-- MCQ questions will be dynamically inserted here -->
-        </div>
-
-        <div id="mcq-results-summary" class="mcq-results-summary" style="display: none;">
-            <h4>📊 Assessment Complete!</h4>
-            <div class="results-stats">
-                <div class="stat-item">
-                    <span class="stat-value" id="final-score">0%</span>
-                    <span class="stat-label">Overall Score</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="correct-count">0</span>
-                    <span class="stat-label">Correct</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="incorrect-count">0</span>
-                    <span class="stat-label">Incorrect</span>
-                </div>
-            </div>
-            <div class="weak-areas-summary" id="weak-areas-summary">
-                <h5>Areas to Review:</h5>
-                <ul id="weak-areas-list"></ul>
-            </div>
-            <div class="results-actions">
-                <button id="retry-assessment-btn" class="btn btn-primary">
-                    <span class="btn-icon">🔄</span> Generate New Questions
-                </button>
-                <button id="start-new-case-btn" class="btn btn-success">
-                    <span class="btn-icon">🆕</span> Start New Case
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Assessment section is now in its own partial: assessment-section.html -->

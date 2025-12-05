@@ -466,8 +466,15 @@ class TutorService:
             
             # Augment tool args with context for agentic tools
             # These tools need case, conversation_history, model to function properly
-            if tool_name in ["patient", "socratic", "hint", "tests_management", "feedback"]:
+            if tool_name in ["patient", "socratic", "tests_management", "feedback"]:
                 tool_args["case"] = context.case_description or ""
+                tool_args["conversation_history"] = context.conversation_history or []
+                tool_args["model"] = context.model_name or "gpt-4"
+                tool_args["case_id"] = context.case_id or ""
+            elif tool_name == "hint":
+                # Hint tool does NOT get the full case - only conversation history
+                # This prevents leaking undiscovered case information
+                tool_args["case"] = ""  # No case access
                 tool_args["conversation_history"] = context.conversation_history or []
                 tool_args["model"] = context.model_name or "gpt-4"
                 tool_args["case_id"] = context.case_id or ""

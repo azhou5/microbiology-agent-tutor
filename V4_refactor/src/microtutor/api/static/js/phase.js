@@ -67,12 +67,10 @@ function updatePhaseUI() {
  * @param {string} newPhase - New phase identifier
  */
 function transitionToPhase(newPhase) {
-    // Special handling for assessment phase
+    // Special handling for assessment phase - always available
     if (newPhase === 'assessment') {
-        if (State.caseComplete && typeof showAssessmentSection === 'function') {
-            showAssessmentSection();
-        } else {
-            setStatus('Complete the case first to access assessment', true);
+        if (typeof showAssessmentSection === 'function') {
+            showAssessmentSection(false); // false = show generate button (not auto-generating)
         }
         return;
     }

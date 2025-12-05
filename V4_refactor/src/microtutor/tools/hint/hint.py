@@ -20,26 +20,21 @@ class HintTool(AgenticTool):
         """Call LLM to generate hint."""
         try:
             model = kwargs.get('model', self.llm_config.get('model', 'gpt-4'))
-            case = kwargs.get('case', '')
             conversation_history = kwargs.get('conversation_history', [])
             
-            # Get system prompt template and format with case
-            system_prompt_template = get_hint_system_prompt()
-            system_prompt = system_prompt_template.format(case=case)
+            # Get system prompt - no case info, only uses conversation history
+            system_prompt = get_hint_system_prompt()
             
-            # Use conversation_history which already includes feedback at the end
-            # Feedback was added to the last user message in tutor_service_v2.py
-            # Prepare messages with system prompt (includes case) + conversation history (which includes feedback)
+            # Prepare messages with system prompt + conversation history
             from microtutor.utils.conversation_utils import prepare_llm_messages
             llm_messages = prepare_llm_messages(conversation_history, system_prompt)
             
-            # Call LLM with prepared messages (includes system prompt + feedback from conversation_history)
-            # Note: system_prompt is already in llm_messages, so we don't pass it separately
+            # Call LLM with prepared messages
             response = chat_complete(
                 system_prompt="",  # Not used when conversation_history is provided
                 user_prompt="",  # Not used when conversation_history is provided
                 model=model,
-                conversation_history=llm_messages  # Includes system prompt + history with feedback
+                conversation_history=llm_messages  # Includes system prompt + history
             )
             
             if not response or not response.strip():
@@ -55,9 +50,8 @@ class HintTool(AgenticTool):
         """Execute hint tool."""
         return self._call_llm(
             "",
-            case=arguments.get('case', ''),
+            conversation_history=arguments.get('conversation_history', []),
             input_text=arguments.get('input_text', ''),
-            covered_topics=arguments.get('covered_topics', []),
             model=arguments.get('model', 'gpt-4')
         )
 

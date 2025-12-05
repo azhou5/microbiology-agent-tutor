@@ -42,6 +42,10 @@ function detectSpeakerType(messageContent) {
                 return 'patient';
             case 'socratic':
                 return 'socratic';
+            case 'tests_management':
+                return 'tests_management';
+            case 'feedback':
+                return 'feedback';
             case 'hint':
                 return 'hint';
             case 'update_phase':
@@ -62,10 +66,12 @@ function detectSpeakerType(messageContent) {
  */
 function getSpeakerAvatar(speakerType) {
     const avatars = {
-        'patient': '🏥',      // Hospital emoji for patient
-        'tutor': '👨‍🏫',      // Teacher emoji for tutor
-        'socratic': '🤔',     // Thinking emoji for socratic agent
-        'hint': '💡'          // Lightbulb emoji for hints
+        'patient': '🏥',              // Hospital emoji for patient
+        'tutor': '👨‍🏫',              // Teacher emoji for tutor
+        'socratic': '🤔',             // Thinking emoji for socratic agent
+        'tests_management': '🧪',     // Test tube emoji for tests & management
+        'feedback': '📋',             // Clipboard emoji for feedback
+        'hint': '💡'                  // Lightbulb emoji for hints
     };
     return avatars[speakerType] || '👨‍🏫';
 }
@@ -211,15 +217,63 @@ function setStatus(message, isError = false) {
 }
 
 /**
+ * Show typing indicator in the chatbox
+ */
+function showTypingIndicator() {
+    if (!DOM.chatbox) return;
+
+    // Remove existing typing indicator if present
+    hideTypingIndicator();
+
+    const typingDiv = document.createElement('div');
+    typingDiv.id = 'typing-indicator';
+    typingDiv.classList.add('message', 'assistant-message', 'typing-indicator');
+
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('message-content');
+
+    const avatar = document.createElement('span');
+    avatar.classList.add('message-avatar');
+    avatar.textContent = '🤔';
+    contentDiv.appendChild(avatar);
+
+    const dotsContainer = document.createElement('span');
+    dotsContainer.classList.add('typing-dots');
+    dotsContainer.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    contentDiv.appendChild(dotsContainer);
+
+    typingDiv.appendChild(contentDiv);
+    DOM.chatbox.appendChild(typingDiv);
+    DOM.chatbox.scrollTop = DOM.chatbox.scrollHeight;
+}
+
+/**
+ * Hide typing indicator from the chatbox
+ */
+function hideTypingIndicator() {
+    const typingIndicator = document.getElementById('typing-indicator');
+    if (typingIndicator) {
+        typingIndicator.remove();
+    }
+}
+
+/**
  * Enable/disable input controls
  * @param {boolean} disabled - Whether to disable inputs
  */
 function disableInput(disabled = true) {
     if (DOM.userInput) DOM.userInput.disabled = disabled;
     if (DOM.sendBtn) DOM.sendBtn.disabled = disabled;
-    if (disabled && DOM.statusMessage && !DOM.statusMessage.textContent.includes("Error")) {
-        setStatus('Processing...');
-    } else if (!disabled && DOM.statusMessage && DOM.statusMessage.textContent === 'Processing...') {
-        setStatus('');
+
+    if (disabled) {
+        showTypingIndicator();
+        if (DOM.statusMessage && !DOM.statusMessage.textContent.includes("Error")) {
+            setStatus('Processing...');
+        }
+    } else {
+        hideTypingIndicator();
+        if (DOM.statusMessage && DOM.statusMessage.textContent === 'Processing...') {
+            setStatus('');
+        }
     }
 }

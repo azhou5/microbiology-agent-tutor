@@ -1,0 +1,32 @@
+<!-- Clarification Sidebar - Ask basic questions without interrupting the case -->
+<!-- Related JS: clarify.js -->
+<div id="clarify-sidebar" class="clarify-sidebar">
+    <div class="clarify-header">
+        <span class="clarify-icon">❓</span>
+        <span class="clarify-title">Quick Help</span>
+        <button id="toggle-clarify" class="toggle-clarify" title="Minimize">−</button>
+    </div>
+
+    <div class="clarify-body">
+        <div class="clarify-description">
+            <p>Ask any clarifying questions here without interrupting your case.</p>
+        </div>
+
+        <div id="clarify-messages" class="clarify-messages">
+            <div class="clarify-welcome">
+                <p>💡 <strong>Examples:</strong></p>
+                <ul>
+                    <li>"How do I interpret CRP levels?"</li>
+                    <li>"What's the difference between sensitivity and specificity?"</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="clarify-input-area">
+            <input type="text" id="clarify-input" placeholder="Ask a quick question..." />
+            <button id="clarify-send" class="btn btn-clarify-send" title="Send">
+                <span>→</span>
+            </button>
+        </div>
+    </div>
+</div>

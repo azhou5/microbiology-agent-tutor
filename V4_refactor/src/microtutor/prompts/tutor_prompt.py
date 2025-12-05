@@ -16,6 +16,12 @@ With native function calling:
 """
 
 
+# A/B Testing configuration
+# Set to "A" for detailed prompt, "B" for minimal prompt
+TUTOR_PROMPT_VERSION = "B"
+
+
+
 def get_tool_schemas_for_function_calling():
     """
     Get OpenAI-compatible tool schemas for native function calling.
@@ -51,6 +57,9 @@ def get_system_message_template_native_function_calling():
     
     This prompt focuses on the tutor's role and behavior.
     Tool routing is handled by tool descriptions in the schemas.
+    
+    This is VERSION A (detailed) - for A/B testing.
+    See get_system_message_template_minimal() for VERSION B (minimal).
     """
     system_message_template = """You are an expert microbiology instructor guiding a student through a clinical case.
 
@@ -106,10 +115,18 @@ PHASE 4: FEEDBACK & CONCLUSION
 • COMPLETION SIGNAL: When feedback agent indicates review complete, conclude with [PHASE_COMPLETE: completed]
 
 === PHASE TRANSITION RULES ===
-• When you detect a phase completion signal [PHASE_COMPLETE: phase_name], automatically transition to the next phase
-• If student says "let's move on", "continue", "next phase", "proceed", acknowledge and transition
+CRITICAL: When transitioning phases, you MUST emit the completion signal. Never say "I'll move you to the next phase" without also including the signal.
+
+• When you detect a phase completion signal from an agent (e.g., [SOCRATIC_COMPLETE]), immediately emit your own signal: [PHASE_COMPLETE: phase_name]
+• If student says "let's move on", "continue", "next phase", "proceed":
+  1. Acknowledge their request
+  2. ALWAYS emit the signal: [PHASE_COMPLETE: current_phase_name]
+  3. Example: "Great, let's move to testing! [PHASE_COMPLETE: differential_diagnosis]"
 • Stay focused on current phase until completion signal or explicit student request
 • Each phase should be thoroughly completed before moving to the next
+
+WRONG: "I'll move you to the next phase now."
+RIGHT: "Let's move to the testing phase. [PHASE_COMPLETE: differential_diagnosis]"
 
 === TEACHING PRINCIPLES ===
 • Route questions to specialized agents who use Socratic questioning to promote critical thinking
@@ -145,10 +162,88 @@ Begin by welcoming the student and presenting the initial chief complaint.
     return system_message_template
 
 
-# Alias for backward compatibility
-def get_system_message_template():
-    """Alias for backward compatibility."""
-    return get_system_message_template_native_function_calling()
+def get_system_message_template_minimal():
+    """
+    Minimal system prompt for native function calling.
+    
+    This prompt is intentionally lean - tool routing is handled by the
+    tool descriptions in their JSON schemas. The LLM decides when to call
+    tools based on those descriptions.
+    
+    This is VERSION B (minimal) - for A/B testing.
+    See get_system_message_template_native_function_calling() for VERSION A (detailed).
+    """
+    system_message_template = """You are an expert microbiology instructor guiding a medical student through a clinical case.
+
+=== YOUR ROLE ===
+You orchestrate the case by calling the appropriate tools to handle student questions. You have access to specialized tools - use them for ALL student questions rather than answering directly.
+
+=== CASE INFORMATION ===
+{case}
+
+=== CASE FLOW ===
+The case progresses through phases:
+1. Information Gathering - student asks questions to the patient
+2. Differential Diagnosis - student proposes and discusses differentials  
+3. Tests & Management - student orders tests and plans treatment
+4. Feedback - case review and learning assessment
+
+
+=== KEY BEHAVIORS ===
+- ALWAYS use tools to respond - NEVER answer clinical questions directly yourself
+- Never reveal the diagnosis - let the student discover it
+- Keep your own messages brief - let the tools do the detailed work
+
+=== ROUTING RULES (follow carefully!) ===
+
+**Patient tool** - for getting ACTUAL results:
+- "do a CBC" / "order blood cultures" / "run a urine test" → patient (returns results)
+- "what are the vitals?" / "tell me about symptoms" → patient (gives info)
+
+**Tests_management tool** - for GUIDANCE and teaching:
+- "what tests should I order?" → tests_management
+- "what else is there?" / "what other tests?" → tests_management  
+- "I don't know what to test" / "help me with tests" → tests_management
+- "how do I interpret this?" → tests_management
+- "what treatment?" → tests_management
+
+**Socratic tool** - for differential diagnosis discussion:
+- "I think it's X" / "my differentials are..." → socratic
+- Discussing clinical reasoning → socratic
+
+**Key distinction:**
+- Student ORDERING a specific test → patient (gives results)
+- Student ASKING for help choosing tests → tests_management (teaches)
+
+CRITICAL: You are a router. Your job is to call tools. Do NOT respond with educational content yourself.
+
+Begin by welcoming the student and presenting the initial chief complaint.
+"""
+
+    return system_message_template
+
+
+def get_system_message_template(version: str = None):
+    """
+    Get the system message template for the tutor.
+    
+    Args:
+        version: Optional version override. "A" for detailed, "B" for minimal.
+                 If not provided, uses TUTOR_PROMPT_VERSION module variable.
+    
+    Returns:
+        System prompt template string with {case} placeholder.
+    
+    A/B Testing:
+        - Version A (detailed): Explicit routing rules and phase descriptions
+        - Version B (minimal): Trusts tool descriptions for routing decisions
+    """
+    use_version = version or TUTOR_PROMPT_VERSION
+    
+    if use_version.upper() == "B":
+        return get_system_message_template_minimal()
+    else:
+        return get_system_message_template_native_function_calling()
 
 
 def get_first_pt_sentence_generation_system_prompt() -> str:

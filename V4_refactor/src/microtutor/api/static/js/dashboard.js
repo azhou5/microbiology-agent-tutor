@@ -225,6 +225,72 @@ async function fetchFAISSStatus() {
 }
 
 /**
+ * Trigger FAISS re-indexing manually
+ */
+async function triggerFAISSReindex() {
+    const reindexBtn = document.getElementById('reindex-btn');
+    
+    try {
+        // Disable button and show loading state
+        if (reindexBtn) {
+            reindexBtn.disabled = true;
+            reindexBtn.textContent = '⏳ Starting...';
+        }
+        
+        console.log('[FAISS] Triggering manual re-index...');
+        
+        const response = await fetch(`${API_BASE}/faiss/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                min_rating: 1,
+                include_regular_feedback: true,
+                include_case_feedback: true
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('[FAISS] Re-index triggered:', data);
+            
+            if (reindexBtn) {
+                reindexBtn.textContent = '✅ Queued!';
+            }
+            
+            // Poll for status updates
+            setTimeout(() => {
+                fetchFAISSStatus();
+                if (reindexBtn) {
+                    reindexBtn.disabled = false;
+                    reindexBtn.textContent = '🔄 Re-index';
+                }
+            }, 2000);
+        } else {
+            const error = await response.json();
+            console.error('[FAISS] Re-index failed:', error);
+            
+            if (reindexBtn) {
+                reindexBtn.textContent = '❌ Failed';
+                setTimeout(() => {
+                    reindexBtn.disabled = false;
+                    reindexBtn.textContent = '🔄 Re-index';
+                }, 2000);
+            }
+        }
+    } catch (error) {
+        console.error('[FAISS] Re-index error:', error);
+        
+        if (reindexBtn) {
+            reindexBtn.textContent = '❌ Error';
+            setTimeout(() => {
+                reindexBtn.disabled = false;
+                reindexBtn.textContent = '🔄 Re-index';
+            }, 2000);
+        }
+    }
+}
+
+/**
  * Update trends chart
  * @param {Object} data - Chart data
  */
@@ -420,6 +486,15 @@ function initializeFeedbackCounter() {
             } else {
                 stopAutoRefresh();
             }
+        });
+    }
+
+    // FAISS re-index button
+    const reindexBtn = document.getElementById('reindex-btn');
+    if (reindexBtn) {
+        reindexBtn.addEventListener('click', () => {
+            console.log('[FAISS] Manual re-index triggered');
+            triggerFAISSReindex();
         });
     }
 

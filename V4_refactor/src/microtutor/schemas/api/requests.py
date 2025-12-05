@@ -130,7 +130,7 @@ class ChatRequest(BaseModel):
     )
     feedback_enabled: Optional[bool] = Field(
         True,
-        description="Whether to enable AI feedback for this request"
+        description="Whether to enable in context feedback for this request"
     )
     feedback_threshold: Optional[float] = Field(
         0.7,

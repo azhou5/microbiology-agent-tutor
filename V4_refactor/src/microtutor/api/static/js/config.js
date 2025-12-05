@@ -57,3 +57,11 @@ const MCQ_CONFIG = {
     showExplanationsOnReveal: true,
     enableScoring: true
 };
+
+// Tool to Phase mapping - maps tool names to corresponding phases
+const TOOL_TO_PHASE = {
+    'patient': 'information_gathering',
+    'socratic': 'differential_diagnosis',
+    'tests_management': 'tests_management',
+    'feedback': 'feedback'
+};

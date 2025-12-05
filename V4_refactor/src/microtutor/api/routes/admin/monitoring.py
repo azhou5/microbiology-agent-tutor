@@ -7,7 +7,7 @@ costs, and other metrics.
 
 import logging
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 try:
     from fastapi import APIRouter, Depends, HTTPException, status
@@ -48,7 +48,7 @@ async def get_cost_summary(
         return {
             "status": "success",
             "data": summary,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to get cost summary: {e}")
@@ -81,7 +81,7 @@ async def get_recent_costs(
             "status": "success",
             "data": recent_costs,
             "count": len(recent_costs),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to get recent costs: {e}")
@@ -138,7 +138,7 @@ async def export_costs(
     """
     try:
         if filename is None:
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             filename = f"microtutor_costs_{timestamp}.json"
         
         # Ensure filename has .json extension
@@ -192,7 +192,7 @@ async def get_background_status(
                 "queue_max_size": background_service.queue_size,
                 "active_workers": len(background_service.workers)
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to get background status: {e}")
@@ -236,7 +236,7 @@ async def detailed_health_check(
             "status": "healthy",
             "service": "microtutor",
             "version": "4.0.0",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "services": {
                 "background_service": {
                     "status": "running" if background_service.running else "stopped",
@@ -259,6 +259,6 @@ async def detailed_health_check(
             "status": "unhealthy",
             "service": "microtutor",
             "version": "4.0.0",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "error": str(e)
         }

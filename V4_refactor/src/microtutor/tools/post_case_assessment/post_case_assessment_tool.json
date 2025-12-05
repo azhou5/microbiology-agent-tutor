@@ -1,7 +1,7 @@
 {
     "name": "post_case_assessment",
     "description": "Generates targeted multiple choice questions (MCQs) after case completion. Analyzes the conversation to identify areas where the student struggled and creates MCQs specifically targeting those weaknesses. Each MCQ includes explanations for all options.",
-    "type": "AgenticTool",
+    "type": "PostCaseAssessmentTool",
     "parameters": {
         "type": "object",
         "properties": {

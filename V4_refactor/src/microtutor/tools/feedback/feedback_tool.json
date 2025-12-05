@@ -1,7 +1,7 @@
 {
     "name": "feedback",
     "description": "Provides comprehensive performance review and learning assessment. Use when students request feedback or at case completion. This agent reviews performance, highlights strengths/weaknesses, and makes connections between presentation, pathophysiology, and management. NOT for patient data or clinical guidance.",
-    "type": "AgenticTool",
+    "type": "FeedbackTool",
     "parameter": {
         "type": "object",
         "properties": {

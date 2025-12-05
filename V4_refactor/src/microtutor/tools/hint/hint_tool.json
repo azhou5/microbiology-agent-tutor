@@ -1,6 +1,6 @@
 {
     "name": "hint",
-    "description": "Use the HINT tool when the student is stuck, confused, or needs guidance on what to investigate next. Trigger conditions: 1) Student asks vague questions like 'what else should I be worried about?' 2) Student seems lost or unsure ('I'm not sure what to ask next') 3) Student asks for help or guidance 4) Student appears to be struggling with the case direction 5) Student asks broad questions that need more specific guidance. The hint tool provides strategic guidance without revealing the diagnosis.",
+    "description": "Use HINT only for process-level guidance when student is lost about WHAT TO DO NEXT. Trigger conditions: 1) 'I don't know what to ask' 2) 'What should I do next?' 3) 'I'm completely stuck' 4) 'Where do I even start?'. Do NOT use for: DDx help (use socratic), patient questions (use patient), test/treatment questions (use tests_management). The hint provides general process guidance using only conversation history - it cannot see the full case.",
     "type": "HintTool",
     "category": "educational_agents",
     "cacheable": false,
@@ -9,15 +9,11 @@
         "properties": {
             "input_text": {
                 "type": "string",
-                "description": "The student's request for help or the context for the hint"
-            },
-            "case": {
-                "type": "string",
-                "description": "The case description for generating appropriate hints"
+                "description": "The student's request for help - the hint will address this specific request"
             },
             "conversation_history": {
                 "type": "array",
-                "description": "Conversation history to understand what has been covered",
+                "description": "Conversation history - the ONLY source of case information for the hint",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -37,18 +33,17 @@
             }
         },
         "required": [
-            "input_text",
-            "case"
+            "input_text"
         ]
     },
-    "prompt_template": "You are a helpful medical tutor providing strategic hints when students are stuck or need guidance.\n\nYour hints should:\n1. Suggest SPECIFIC questions to ask the patient (not general)\n2. Recommend appropriate investigations to consider\n3. Point to key clinical features without revealing diagnosis\n4. Guide epidemiology/pathophysiology thinking\n5. Be educational and scaffold learning\n6. Help students think systematically about the case\n\nCase Information:\n{case}\n\nStudent Request: {input_text}\n\nProvide a helpful hint that guides their investigation:",
+    "prompt_template": "",
     "llm_config": {
         "max_new_tokens": 400,
         "temperature": 0.7
     },
     "metadata": {
-        "version": "1.0",
+        "version": "2.0",
         "author": "MicroTutor Team",
-        "use_case": "Provides scaffolded support when students need guidance"
+        "use_case": "Provides scaffolded support - answers the student's actual question using only discovered information"
     }
 }

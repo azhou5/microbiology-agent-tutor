@@ -1,6 +1,6 @@
 {
     "name": "patient",
-    "description": "Provides actual patient state data (history, exam findings, test results, vitals). Use for ANY question asking for patient information: symptoms, duration, past medical history, family history, medications, allergies, physical exam findings, vital signs, test results. Example: 'How long for? what PMH, FH, current meds? had this before?' -> use patient tool. This agent gives factual patient data, NOT guidelines or recommendations.",
+    "description": "Provides patient data and returns ACTUAL test results. Use when student: (1) asks patient questions (history, symptoms, exam), (2) ORDERS a specific test ('do a CBC', 'get blood cultures', 'run a urine test'). This tool GIVES RESULTS. NOT for 'what tests should I order?' or 'what else is there?' or 'help me choose tests' - those go to tests_management for teaching/guidance.",
     "type": "PatientTool",
     "category": "educational_agents",
     "cacheable": false,

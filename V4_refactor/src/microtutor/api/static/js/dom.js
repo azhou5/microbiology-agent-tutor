@@ -78,6 +78,7 @@ const DOM = {
         this.statusMessage = document.getElementById('status-message');
 
         this.startCaseBtn = document.getElementById('start-case-btn');
+        this.startRandomCaseBtn = document.getElementById('start-random-case-btn');
         this.organismSelect = document.getElementById('organism-select');
 
         this.feedbackModal = document.getElementById('feedback-modal');

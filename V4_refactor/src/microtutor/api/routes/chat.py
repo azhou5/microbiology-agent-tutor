@@ -193,13 +193,17 @@ async def submit_feedback(
     logger.info(f"[FEEDBACK] case_id={request.case_id}, rating={request.rating}, organism={request.organism}")
     
     try:
+        # Convert history to list of dicts for storage
+        chat_history = [{"role": msg.role, "content": msg.content} for msg in request.history] if request.history else []
+        
         background_service.log_feedback_async(
             case_id=request.case_id or "unknown",
             rating=request.rating,
             message=request.message,
             feedback_text=request.feedback_text or "",
             replacement_text=request.replacement_text or "",
-            organism=request.organism or ""
+            organism=request.organism or "",
+            chat_history=chat_history
         )
         return {"status": "success", "message": "Feedback received"}
         
@@ -238,6 +242,63 @@ async def submit_case_feedback(
     except Exception as e:
         logger.error(f"[CASE_FEEDBACK] Error: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to submit case feedback")
+
+
+@router.post(
+    "/clarify",
+    summary="Quick clarification helper",
+    description="Answer general medical education questions without case context"
+)
+async def clarify_question(request: dict) -> dict:
+    """Answer a clarifying question - no case context, just general medical knowledge.
+    
+    This is a simple helper for students to ask things like:
+    - "What is a pertinent positive?"
+    - "How do I interpret CRP levels?"
+    - "What's the difference between sensitivity and specificity?"
+    """
+    message = request.get("message", "")
+    history = request.get("history", [])
+    
+    if not message:
+        return {"response": "Please ask a question!"}
+    
+    logger.info(f"[CLARIFY] Question: {message[:50]}...")
+    
+    try:
+        from microtutor.core.llm.llm_router import chat_complete
+        
+        system_prompt = """You are a helpful medical education assistant. Answer questions clearly and concisely.
+
+You help students understand:
+- Medical terminology and concepts
+- How to interpret lab values and tests
+- Clinical reasoning approaches
+- General medical knowledge
+
+Keep answers brief (2-4 sentences) and educational. You do NOT have access to any specific patient case - 
+you're just a general helper for clarifying concepts.
+
+If asked about a specific patient or case, politely explain that you're just a general helper 
+and they should ask the main tutor about case-specific questions."""
+
+        # Build messages
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(history[-6:])  # Last 3 exchanges for context
+        messages.append({"role": "user", "content": message})
+        
+        response = chat_complete(
+            system_prompt="",
+            user_prompt="",
+            model=config.API_MODEL_NAME,  # Use configured model (Azure gpt-4.1)
+            conversation_history=messages
+        )
+        
+        return {"response": response}
+        
+    except Exception as e:
+        logger.error(f"[CLARIFY] Error: {e}", exc_info=True)
+        return {"response": "Sorry, I couldn't process that question. Please try again."}
 
 
 @router.get(

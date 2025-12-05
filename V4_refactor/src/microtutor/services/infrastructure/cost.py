@@ -6,7 +6,7 @@ This service handles async cost calculation and monitoring for LLM API calls.
 
 import logging
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 import json
 
@@ -106,7 +106,7 @@ class CostService:
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             cost_usd=total_cost,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             case_id=case_id,
             request_type=request_type
         )

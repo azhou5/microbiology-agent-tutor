@@ -15,12 +15,19 @@
         {% include 'partials/case-setup.html' %}
         {% include 'partials/guidelines.html' %}
         {% include 'partials/feedback-controls.html' %}
+        {% include 'partials/case-history.html' %}
 
-        <!-- Main Content Area -->
-        <div class="main-content">
-            {% include 'partials/chat-container.html' %}
-            {% include 'partials/phase-progression.html' %}
+        <!-- Main Content Area with Clarify Sidebar -->
+        <div class="main-content-wrapper">
+            {% include 'partials/clarify-sidebar.html' %}
+            <div class="main-content">
+                {% include 'partials/chat-container.html' %}
+                {% include 'partials/phase-progression.html' %}
+            </div>
         </div>
+
+        <!-- Assessment Section - Full Width Below Main Content -->
+        {% include 'partials/assessment-section.html' %}
 
         <p id="status-message" class="status"></p>
 

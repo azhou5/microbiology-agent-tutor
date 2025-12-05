@@ -1,7 +1,7 @@
 {
     "name": "mcq_tool",
     "description": "Generates personalized multiple choice questions based on clinical guidelines, case context, and student learning needs. Analyzes conversation history to create targeted questions that address specific knowledge gaps and learning objectives.",
-    "type": "AgenticTool",
+    "type": "MCQTool",
     "parameter": {
         "type": "object",
         "properties": {

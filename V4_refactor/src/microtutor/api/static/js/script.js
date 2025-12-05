@@ -918,6 +918,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     return 'patient';
                 case 'socratic':
                     return 'socratic';
+                case 'tests_management':
+                    return 'tests_management';
+                case 'feedback':
+                    return 'feedback';
                 case 'hint':
                     return 'hint';
                 case 'update_phase':
@@ -936,10 +940,12 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function getSpeakerAvatar(speakerType) {
         const avatars = {
-            'patient': '🏥',      // Hospital emoji for patient
-            'tutor': '👨‍🏫',      // Teacher emoji for tutor
-            'socratic': '🤔',     // Thinking emoji for socratic agent
-            'hint': '💡'          // Lightbulb emoji for hints
+            'patient': '🏥',              // Hospital emoji for patient
+            'tutor': '👨‍🏫',              // Teacher emoji for tutor
+            'socratic': '🤔',             // Thinking emoji for socratic agent
+            'tests_management': '🧪',     // Test tube emoji for tests & management
+            'feedback': '📋',             // Clipboard emoji for feedback
+            'hint': '💡'                  // Lightbulb emoji for hints
         };
         return avatars[speakerType] || '👨‍🏫';
     }

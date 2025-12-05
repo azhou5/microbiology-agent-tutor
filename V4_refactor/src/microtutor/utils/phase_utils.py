@@ -35,10 +35,10 @@ TOOL_TO_PHASE = {
 }
 
 # Completion tokens for phase completion detection
+# NOTE: User now controls phase transitions via UI buttons.
+# Agents no longer emit completion signals automatically.
 PHASE_COMPLETION_TOKENS = {
-    "tests_management": "[TESTS_MANAGEMENT_COMPLETE]",
-    "feedback": "[FEEDBACK_COMPLETE]",
-    "socratic": "[SOCRATIC_COMPLETE]",
+    # Empty - user controls when to move on
 }
 
 

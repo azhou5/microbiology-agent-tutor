@@ -69,14 +69,14 @@ class AutoFeedbackRetriever:
             entries_path = index_dir / "feedback_entries.pkl"
             
             if all(p.exists() for p in [index_path, texts_path, entries_path]):
-                with open(index_path, 'rb') as f:
-                    index = pickle.load(f)
-                    # Verify it's a FAISS index
-                    if hasattr(index, 'ntotal'):
-                        self.indices[name] = index
-                    else:
-                        logger.warning(f"Invalid FAISS index format for {name}")
-                        return
+                # Use faiss.read_index() instead of pickle.load() for FAISS indices
+                index = faiss.read_index(str(index_path))
+                # Verify it's a FAISS index
+                if hasattr(index, 'ntotal'):
+                    self.indices[name] = index
+                else:
+                    logger.warning(f"Invalid FAISS index format for {name}")
+                    return
                 with open(texts_path, 'rb') as f:
                     self.texts[name] = pickle.load(f)
                 with open(entries_path, 'rb') as f:

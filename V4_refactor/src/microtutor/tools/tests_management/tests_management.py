@@ -48,6 +48,15 @@ class TestsManagementTool(AgenticTool):
             input_text = kwargs.get('input_text', '')
             conversation_history = kwargs.get('conversation_history', [])
             
+            # Debug: Log conversation history length
+            logger.info(f"[TESTS_MGMT] Received {len(conversation_history)} messages in conversation history")
+            if conversation_history:
+                # Log last few messages to verify context
+                for msg in conversation_history[-3:]:
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')[:100]
+                    logger.info(f"[TESTS_MGMT] Recent msg - {role}: {content}...")
+            
             # Get guidelines context if provided (from database/service)
             guidelines_context = kwargs.get("guidelines_context", "")
             

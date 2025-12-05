@@ -1,6 +1,6 @@
 {
     "name": "socratic",
-    "description": "Facilitates differential diagnosis discussion through socratic questioning. Use when students propose differential diagnoses or discuss clinical reasoning about diagnoses. Example: 'I think it's flu A, TB, or lung cancer' -> use socratic tool. This agent challenges reasoning, asks probing questions, and guides critical thinking about differentials. NOT for test/treatment planning (use tests_management) or patient data (use patient).",
+    "description": "Interactive differential diagnosis discussion with first-principles teaching. Use when student: 1) proposes differentials 2) discusses clinical reasoning 3) responds to Socratic questions. This agent uses 'look-alike challenges' to teach distinguishing features and connects clinical findings to pathophysiology. Student controls when to move on. NOT for ordering tests (use patient) or test guidance (use tests_management).",
     "type": "SocraticTool",
     "category": "educational_agents",
     "cacheable": false,
@@ -42,15 +42,18 @@
             "conversation_history"
         ]
     },
-    "prompt_template": "You are a Socratic medical educator. The student has proposed a differential diagnosis.\n\nYour goal is to:\n1. Challenge their reasoning with probing questions\n2. Help them think through epidemiology, pathophysiology, and clinical presentation\n3. Guide them to refine their differential\n4. Never give away the answer directly\n\nCase Information:\n{case}\n\nStudent's Statement: {input_text}\n\nEngage in Socratic dialogue. If the student has refined their thinking sufficiently, include [SOCRATIC_COMPLETE] in your response.",
     "llm_config": {
         "max_new_tokens": 800,
         "temperature": 0.8
     },
     "metadata": {
-        "version": "1.0",
+        "version": "2.0",
         "author": "MicroTutor Team",
-        "use_case": "Facilitates deep clinical reasoning through Socratic questioning",
-        "completion_signal": "[SOCRATIC_COMPLETE]"
+        "use_case": "Interactive differential diagnosis with look-alike challenges and first-principles pathophysiology teaching",
+        "features": [
+            "look_alike_challenges",
+            "first_principles_teaching",
+            "pathophysiology_connections"
+        ]
     }
 }

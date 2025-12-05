@@ -3,6 +3,74 @@
  */
 
 /**
+ * Update the sticky case summary header with the initial case presentation
+ * @param {Object} data - Response data from start_case API
+ */
+function updateCaseSummaryHeader(data) {
+    const caseSummaryHeader = document.getElementById('case-summary-header');
+    const caseOneLiner = document.getElementById('case-one-liner');
+    const toggleBtn = document.getElementById('toggle-case-summary');
+
+    if (!caseSummaryHeader || !caseOneLiner) return;
+
+    // Extract just the patient one-liner from the welcome message
+    // Format is: "Welcome to today's case.\n\n{one-liner}\n\nBegin by asking..."
+    let caseOneLinerText = '';
+    if (data.history && Array.isArray(data.history)) {
+        const firstAssistantMsg = data.history.find(msg => msg.role === 'assistant');
+        if (firstAssistantMsg) {
+            const content = firstAssistantMsg.content;
+            // Split by double newlines and get the second paragraph (the one-liner)
+            const paragraphs = content.split('\n\n');
+            if (paragraphs.length >= 2) {
+                // The one-liner is typically the second paragraph
+                caseOneLinerText = paragraphs[1].trim();
+            } else {
+                // Fallback: try to extract sentence with age pattern
+                const ageMatch = content.match(/\d{1,3}-year-old\s+(?:man|woman|male|female|patient)[^.]*\./i);
+                if (ageMatch) {
+                    caseOneLinerText = ageMatch[0];
+                } else {
+                    caseOneLinerText = content;
+                }
+            }
+        }
+    }
+
+    // If no presentation found, use a default message
+    if (!caseOneLinerText) {
+        caseOneLinerText = 'Case in progress...';
+    }
+
+    // Update the UI
+    caseOneLiner.textContent = caseOneLinerText;
+    caseSummaryHeader.style.display = 'flex';
+
+    // Store the case presentation in state for reference
+    State.casePresentation = caseOneLinerText;
+
+    // Add toggle functionality
+    if (toggleBtn) {
+        toggleBtn.onclick = () => {
+            toggleBtn.classList.toggle('collapsed');
+            caseSummaryHeader.classList.toggle('collapsed');
+        };
+    }
+
+    console.log('[CASE_SUMMARY] Updated case summary header:', caseOneLinerText);
+}
+
+/**
+ * Hide the case summary header
+ */
+function hideCaseSummaryHeader() {
+    const caseSummaryHeader = document.getElementById('case-summary-header');
+    if (caseSummaryHeader) {
+        caseSummaryHeader.style.display = 'none';
+    }
+}
+
+/**
  * Get all available organisms from the select element
  * @returns {Array<string>} Array of organism values
  */
@@ -76,7 +144,7 @@ function selectRandomOrganism() {
 
     // Update the select element to show the random selection
     if (DOM.organismSelect) {
-        DOM.organismSelect.value = 'random';
+        DOM.organismSelect.value = randomOrganismValue;
         DOM.organismSelect.dataset.randomlySelectedValue = randomOrganismValue;
 
         // Find the display text for the selected organism
@@ -91,27 +159,46 @@ function selectRandomOrganism() {
 }
 
 /**
+ * Start a random case
+ */
+async function handleStartRandomCase() {
+    console.log('[START_RANDOM_CASE] Starting random case...');
+
+    const selectedOrganism = selectRandomOrganism();
+    if (!selectedOrganism) {
+        setStatus('Failed to select random organism.', true);
+        return;
+    }
+
+    // Set the organism in the dropdown (for display purposes)
+    if (DOM.organismSelect) {
+        DOM.organismSelect.value = selectedOrganism;
+    }
+
+    // Start the case with the random organism
+    await handleStartCaseWithOrganism(selectedOrganism);
+}
+
+/**
  * Start a new case
  */
 async function handleStartCase() {
     console.log('[START_CASE] Starting new case...');
 
-    let selectedOrganism = DOM.organismSelect ? DOM.organismSelect.value : null;
-
-    // Handle random selection
-    if (selectedOrganism === 'random') {
-        selectedOrganism = selectRandomOrganism();
-        if (!selectedOrganism) {
-            setStatus('Failed to select random organism.', true);
-            return;
-        }
-    }
+    const selectedOrganism = DOM.organismSelect ? DOM.organismSelect.value : null;
 
     if (!selectedOrganism) {
         setStatus('Please select an organism first.', true);
         return;
     }
 
+    await handleStartCaseWithOrganism(selectedOrganism);
+}
+
+/**
+ * Start a case with a specific organism (shared logic)
+ */
+async function handleStartCaseWithOrganism(selectedOrganism) {
     // Clear previous state
     clearConversationState();
     State.chatHistory = [];
@@ -164,6 +251,9 @@ async function handleStartCase() {
         updatePhaseUI();
         saveConversationState();
 
+        // Update case summary header with the initial case presentation
+        updateCaseSummaryHeader(data);
+
         // Fetch guidelines if enabled
         if (State.guidelinesEnabled) {
             await fetchGuidelines(State.currentOrganismKey);
@@ -171,6 +261,9 @@ async function handleStartCase() {
 
         // Update seen organisms list for random selection
         addSeenOrganism(State.currentOrganismKey);
+
+        // Focus the input for immediate interaction
+        if (DOM.userInput) DOM.userInput.focus();
 
         console.log('[START_CASE] Success!');
     } catch (error) {
@@ -247,7 +340,19 @@ async function handleSendMessage() {
         // Set tool tracking based on backend response
         if (data.tools_used && data.tools_used.length > 0) {
             // Use the first tool (most relevant for speaker detection)
-            setLastToolUsed(data.tools_used[0]);
+            const toolUsed = data.tools_used[0];
+            setLastToolUsed(toolUsed);
+
+            // Update phase based on tool used (dynamic phase inference)
+            if (TOOL_TO_PHASE[toolUsed]) {
+                const newPhase = TOOL_TO_PHASE[toolUsed];
+                if (newPhase !== State.currentPhase) {
+                    State.currentPhase = newPhase;
+                    updatePhaseUI();
+                    saveConversationState();
+                    console.log(`[PHASE] Updated to ${newPhase} based on tool: ${toolUsed}`);
+                }
+            }
         } else {
             State.lastToolUsed = null;
         }
@@ -321,10 +426,16 @@ async function handleSendMessage() {
         disableInput(false);
         setStatus('');
         saveConversationState();
+
+        // Auto-focus the input for continuous conversation
+        if (DOM.userInput) DOM.userInput.focus();
     } catch (error) {
         console.error('[CHAT] Error:', error);
         setStatus(`Error: ${error.message}`, true);
         disableInput(false);
+
+        // Still focus input on error so user can retry
+        if (DOM.userInput) DOM.userInput.focus();
     }
 }
 

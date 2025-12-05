@@ -17,6 +17,40 @@
     margin-bottom: 15px;
 }
 
+/* Primary setup row - centered and prominent */
+.setup-row-primary {
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.organism-group {
+    width: 100%;
+    max-width: 400px;
+}
+
+.organism-group label {
+    font-size: 1.1rem;
+    text-align: center;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.organism-group select {
+    width: 100%;
+    font-size: 1.1rem;
+    padding: 12px 15px;
+}
+
+/* Random option styling - make it prominent */
+#organism-select option[value="random"] {
+    font-weight: 700;
+    font-size: 1.1em;
+    background: linear-gradient(to right, #e3f2fd, #bbdefb);
+    color: #1565c0;
+    padding: 12px;
+}
+
 .setup-group {
     display: flex;
     flex-direction: column;
@@ -85,8 +119,63 @@
 
 .setup-actions {
     display: flex;
+    gap: 12px;
     justify-content: center;
     margin-top: 10px;
+}
+
+/* Larger start button */
+.btn-large {
+    font-size: 1.1rem;
+    padding: 12px 30px;
+}
+
+/* Advanced Settings Collapsible */
+.advanced-settings {
+    margin-top: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: white;
+}
+
+.advanced-settings summary {
+    padding: 10px 15px;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.advanced-settings summary::-webkit-details-marker {
+    display: none;
+}
+
+.advanced-settings summary::before {
+    content: "▶";
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+}
+
+.advanced-settings[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.advanced-settings summary:hover {
+    background: #f8f9fa;
+}
+
+.advanced-settings-content {
+    padding: 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
 }
 
 /* Model Provider Toggle */

@@ -213,12 +213,59 @@ async def generate_assessment(request: AssessmentGenerateRequest):
             num_questions=request.num_questions
         )
         
-        if result.mcqs:
-            response_data = convert_assessment_to_response(result)
+        # Handle dict return from tool.execute()
+        if not result.get('success', False):
+            error_info = result.get('error', {})
+            logger.warning(f"Assessment generation failed: {error_info}")
+            return AssessmentGenerateResponse(
+                success=False,
+                error={
+                    "code": "GENERATION_FAILED",
+                    "message": error_info.get('message', 'Assessment generation failed')
+                },
+                metadata={"case_id": request.case_id}
+            )
+        
+        # Extract MCQs from result dict
+        result_data = result.get('result', {})
+        mcqs_data = result_data.get('mcqs', [])
+        summary_data = result_data.get('summary', {})
+        
+        if mcqs_data:
+            # Convert dict format to response format
+            mcqs_response = []
+            for mcq in mcqs_data:
+                options_response = [
+                    MCQOptionResponse(
+                        letter=opt['letter'],
+                        text=opt['text'],
+                        is_correct=opt['is_correct'],
+                        explanation=opt['explanation']
+                    )
+                    for opt in mcq.get('options', [])
+                ]
+                mcqs_response.append(MCQResponse(
+                    question_id=mcq.get('question_id', ''),
+                    question_text=mcq.get('question_text', ''),
+                    topic=mcq.get('topic', ''),
+                    difficulty=mcq.get('difficulty', 'medium'),
+                    options=options_response,
+                    weakness_addressed=mcq.get('weakness_addressed', ''),
+                    learning_point=mcq.get('learning_point', '')
+                ))
+            
+            response_data = AssessmentResultResponse(
+                mcqs=mcqs_response,
+                summary=AssessmentSummary(
+                    weak_areas_covered=summary_data.get('weak_areas_covered', []),
+                    topics_covered=list(set(mcq.get('topic', '') for mcq in mcqs_data)),
+                    total_questions=len(mcqs_data),
+                    difficulty_distribution=summary_data.get('difficulty_distribution', {})
+                )
+            )
             
             logger.info(
-                f"Generated {len(result.mcqs)} MCQs for case {request.case_id}, "
-                f"covering {len(result.weak_areas)} weak areas"
+                f"Generated {len(mcqs_data)} MCQs for case {request.case_id}"
             )
             
             return AssessmentGenerateResponse(
@@ -228,7 +275,7 @@ async def generate_assessment(request: AssessmentGenerateRequest):
                     "case_id": request.case_id,
                     "organism": request.organism,
                     "questions_requested": request.num_questions,
-                    "questions_generated": len(result.mcqs)
+                    "questions_generated": len(mcqs_data)
                 }
             )
         else:

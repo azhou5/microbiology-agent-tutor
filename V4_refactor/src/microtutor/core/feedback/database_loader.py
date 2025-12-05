@@ -86,7 +86,8 @@ class DatabaseFeedbackLoader:
                     rated_message,
                     feedback_text,
                     replacement_text,
-                    case_id
+                    case_id,
+                    chat_history
                 FROM feedback
                 WHERE 1=1
             """
@@ -117,16 +118,22 @@ class DatabaseFeedbackLoader:
             entries = []
             for row in rows:
                 try:
-                    # Parse chat history from rated_message (if it contains JSON)
+                    import json
+                    
+                    # Try to get chat_history from the feedback table first
                     chat_history = []
-                    try:
-                        if row.rated_message and row.rated_message.startswith('{'):
-                            import json
-                            parsed = json.loads(row.rated_message)
-                            if isinstance(parsed, list):
-                                chat_history = parsed
-                    except:
-                        pass
+                    if hasattr(row, 'chat_history') and row.chat_history:
+                        try:
+                            if isinstance(row.chat_history, str):
+                                chat_history = json.loads(row.chat_history)
+                            elif isinstance(row.chat_history, list):
+                                chat_history = row.chat_history
+                        except:
+                            pass
+                    
+                    # If no chat_history in feedback, try to get from conversation_logs
+                    if not chat_history and row.case_id:
+                        chat_history = self._get_conversation_history(row.case_id)
                     
                     # Determine message type
                     message_type = self._determine_message_type(row.rated_message)
@@ -153,6 +160,24 @@ class DatabaseFeedbackLoader:
             
         except Exception as e:
             logger.error(f"Failed to load regular feedback: {e}")
+            return []
+    
+    def _get_conversation_history(self, case_id: str) -> List[Dict[str, str]]:
+        """Get conversation history from conversation_logs table for a given case_id."""
+        try:
+            result = self.db_session.execute(text("""
+                SELECT role, content
+                FROM conversation_logs
+                WHERE case_id = :case_id
+                ORDER BY timestamp ASC
+            """), {'case_id': case_id})
+            
+            rows = result.fetchall()
+            chat_history = [{"role": row.role, "content": row.content} for row in rows if row.role != 'system']
+            return chat_history
+            
+        except Exception as e:
+            logger.warning(f"Failed to get conversation history for case {case_id}: {e}")
             return []
     
     def _load_case_feedback(self, config: DatabaseFeedbackConfig) -> List[FeedbackEntry]:

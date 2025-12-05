@@ -290,14 +290,19 @@ class BackgroundTaskService:
             
             # Save feedback to database
             with self._db_engine.connect() as conn:
+                # Serialize chat_history to JSON string
+                import json
+                chat_history = data.get('chat_history', [])
+                chat_history_json = json.dumps(chat_history) if chat_history else None
+                
                 # Insert into feedback table
                 conn.execute(text("""
                     INSERT INTO feedback (
                         timestamp, organism, rating, rated_message, 
-                        feedback_text, replacement_text, case_id
+                        feedback_text, replacement_text, case_id, chat_history
                     ) VALUES (
                         :timestamp, :organism, :rating, :message, 
-                        :feedback_text, :replacement_text, :case_id
+                        :feedback_text, :replacement_text, :case_id, :chat_history
                     )
                 """), {
                     'timestamp': data.get('timestamp', datetime.now(pytz.timezone('America/New_York'))),
@@ -306,7 +311,8 @@ class BackgroundTaskService:
                     'message': data.get('message', ''),
                     'feedback_text': data.get('feedback_text', ''),
                     'replacement_text': data.get('replacement_text', ''),
-                    'case_id': data.get('case_id', '')
+                    'case_id': data.get('case_id', ''),
+                    'chat_history': chat_history_json
                 })
                 conn.commit()
                 
@@ -521,7 +527,8 @@ class BackgroundTaskService:
         message: str,
         feedback_text: str = "",
         replacement_text: str = "",
-        organism: str = ""
+        organism: str = "",
+        chat_history: list = None
     ) -> bool:
         """Log feedback asynchronously."""
         task = BackgroundTask(
@@ -533,6 +540,7 @@ class BackgroundTaskService:
                 'feedback_text': feedback_text,
                 'replacement_text': replacement_text,
                 'organism': organism,
+                'chat_history': chat_history or [],
                 'timestamp': datetime.now(pytz.timezone('America/New_York'))
             },
             priority=2
