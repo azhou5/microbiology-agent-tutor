@@ -140,3 +140,12 @@
 2025-12-05 03:40:44,150 - agent_context - INFO - AGENT_CONTEXT | case_id=post_case_assessment | agent=post_case_assessment | interaction=0 | context_len=224
 2025-12-05 03:50:34,438 - agent_context - INFO - AGENT_CONTEXT | case_id=case_1764924623120_a56kc2obo | agent=tutor | interaction=1 | context_len=20
 2025-12-05 03:50:35,887 - agent_context - INFO - AGENT_CONTEXT | case_id=unknown | agent=patient | interaction=1 | context_len=20
+2026-01-08 00:00:53,767 - agent_context - INFO - AGENT_CONTEXT | case_id=case_1761103625287_rhpem3rzj | agent=tutor | interaction=1 | context_len=1087
+2026-01-08 00:00:56,674 - agent_context - INFO - AGENT_CONTEXT | case_id=unknown | agent=patient | interaction=1 | context_len=1087
+2026-01-09 13:46:45,362 - agent_context - INFO - AGENT_CONTEXT | case_id=tests_management | agent=tests_management | interaction=0 | context_len=10265
+2026-01-09 14:11:35,138 - agent_context - INFO - AGENT_CONTEXT | case_id=tests_management | agent=tests_management | interaction=0 | context_len=10265
+2026-01-09 16:22:45,049 - agent_context - INFO - AGENT_CONTEXT | case_id=unknown | agent=patient | interaction=1 | context_len=44
+2026-01-09 16:50:49,375 - agent_context - INFO - AGENT_CONTEXT | case_id=tests_management | agent=tests_management | interaction=0 | context_len=10265
+2026-01-09 17:09:08,488 - agent_context - INFO - AGENT_CONTEXT | case_id=tests_management | agent=tests_management | interaction=0 | context_len=10265
+2026-01-09 17:10:56,669 - agent_context - INFO - AGENT_CONTEXT | case_id=unknown | agent=patient | interaction=1 | context_len=44
+2026-01-09 17:17:22,798 - agent_context - INFO - AGENT_CONTEXT | case_id=tests_management | agent=tests_management | interaction=0 | context_len=10265

@@ -51,18 +51,18 @@ class Config(BaseConfig):
     AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
     AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-    AZURE_OPENAI_DEPLOYMENT_NAME: str = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "o4-mini-0416")
+    AZURE_OPENAI_DEPLOYMENT_NAME: str = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
     
     # Personal OpenAI settings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    PERSONAL_OPENAI_MODEL: str = os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
+    PERSONAL_OPENAI_MODEL: str = os.getenv("PERSONAL_OPENAI_MODEL", "gpt-5")
     
     # Determine which model to use based on USE_AZURE_OPENAI flag
     # This is computed at initialization time
     API_MODEL_NAME: str = (
-        os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "o4-mini-0416")
+        os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
         if os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
-        else os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
+        else os.getenv("PERSONAL_OPENAI_MODEL", "gpt-5")
     )
     
     LLM_BACKEND: str = os.getenv("LLM_BACKEND", "azure")

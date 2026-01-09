@@ -61,6 +61,7 @@ class LLMClient:
             self.deployment_map['gpt-4'] = 'gpt-4.1'  # Map gpt-4 to gpt-4.1 deployment
             self.deployment_map['gpt-4o-1120'] = 'gpt-4o-1120'
             self.deployment_map['o3-mini-0131'] = 'o3-mini-0131'
+            self.deployment_map['gpt-5'] = 'gpt-5'  # Add GPT-5 mapping (assuming deployment name is 'gpt-5')
             
             # Load default deployment from env
             deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")

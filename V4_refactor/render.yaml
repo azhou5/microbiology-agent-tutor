@@ -39,13 +39,13 @@ services:
       - key: AZURE_OPENAI_API_VERSION
         value: "2024-12-01-preview"
       - key: AZURE_OPENAI_DEPLOYMENT_NAME
-        value: "o4-mini-0416"
+        value: "gpt-5"
 
       # Personal OpenAI (alternative to Azure)
       - key: OPENAI_API_KEY
         sync: false # Set this in Render dashboard if using personal OpenAI
       - key: PERSONAL_OPENAI_MODEL
-        value: "o4-mini-2025-04-16"
+        value: "gpt-5"
 
       # Feature Flags
       - key: USE_FAISS

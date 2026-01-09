@@ -208,6 +208,7 @@ async function handleStartCaseWithOrganism(selectedOrganism) {
 
     // Reset phase to Information Gathering
     State.currentPhase = 'information_gathering';
+    updatePhaseUI();
 
     setStatus('Starting new case...');
     disableInput(true);
@@ -460,19 +461,20 @@ function updateModelSelection() {
 
         // Add Azure models (using actual deployment names)
         const azureOptions = [
+            { value: 'gpt-5', text: 'GPT-5 (Preview)' },
             { value: 'gpt-4.1', text: 'GPT-4.1 (2025-04-14)' },
             { value: 'gpt-4o-1120', text: 'GPT-4o (2024-11-20)' },
             { value: 'o4-mini-0416', text: 'o4-mini (2025-04-16)' },
-            { value: 'o3-mini-0131', text: 'o3-mini (2025-01-31)' }
+            { value: 'o3-mini-0131', text: 'o3-mini (2025-01-31)' },
         ];
 
         azureOptions.forEach(option => {
             const optionElement = document.createElement('option');
             optionElement.value = option.value;
             optionElement.textContent = option.text;
-            if (option.value === 'gpt-4.1') {
+            if (option.value === 'gpt-5') {
                 optionElement.selected = true;
-                State.currentModel = 'gpt-4.1';
+                State.currentModel = 'gpt-5';
             }
             DOM.modelSelect.appendChild(optionElement);
         });
@@ -486,6 +488,7 @@ function updateModelSelection() {
 
         // Add Personal models
         const personalOptions = [
+            { value: 'gpt-5', text: 'GPT-5 (Preview)' },
             { value: 'o4', text: 'o4' },
             { value: 'gpt-5-mini-2025-08-07', text: 'GPT-5 Mini (2025-08-07)' },
             { value: 'gpt-5-2025-08-07', text: 'GPT-5 (2025-08-07)' },
@@ -496,9 +499,9 @@ function updateModelSelection() {
             const optionElement = document.createElement('option');
             optionElement.value = option.value;
             optionElement.textContent = option.text;
-            if (option.value === 'o4') {
+            if (option.value === 'gpt-5') {
                 optionElement.selected = true;
-                State.currentModel = 'o4';
+                State.currentModel = 'gpt-5';
             }
             DOM.modelSelect.appendChild(optionElement);
         });

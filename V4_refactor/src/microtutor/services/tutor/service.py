@@ -30,6 +30,7 @@ from microtutor.utils.phase_utils import (
     get_next_phase,
     get_completion_token,
     is_phase_complete,
+    is_forward_transition
 )
 from microtutor.prompts.tutor_prompt import get_system_message_template
 from microtutor.utils.protocols import ToolEngine, FeedbackClient
@@ -190,6 +191,12 @@ class TutorService:
             "management and feedback."
         )
 
+        # Reset guidelines cache for this session if enabled
+        if self.enable_guidelines_prefetch and self.guidelines_cache:
+            # We don't need to clear the whole cache, just ensure we're starting fresh
+            # The client should clear its local state, but we can log it here
+            logger.info(f"Starting new case {case_id} - guidelines prefetch enabled: {enable_guidelines}")
+
         # Return immediately (guidelines load in background)
         dt_ms = (datetime.now() - t0).total_seconds() * 1000
         return TutorResponse(
@@ -234,12 +241,36 @@ class TutorService:
                     TutorResponse(content=f"Phase transition error: {err}", tools_used=[], metadata={"error": "invalid_phase_transition"}),
                     t0
                 )
+            
+            # Enforce forward-only transition
+            if not is_forward_transition(context.current_state, new_state):
+                return self._finalize_response(
+                    TutorResponse(
+                        content="We need to complete the current section before moving back. Let's focus on moving forward!", 
+                        tools_used=[], 
+                        metadata={"error": "backward_phase_transition"}
+                    ),
+                    t0
+                )
+            
+            # Generate summary if moving forward
+            summary = ""
+            if new_state != context.current_state:
+                summary = await self._generate_section_summary(context, context.current_state)
+                
             # Update state and route to the agent for that phase
             context.current_state = new_state
             agent = PHASE_AGENT_MAPPING.get(new_state)
             if agent:
-                routed = await self._route_to_phase_agent(agent, message, context)
+                # Inject summary into message for the next agent
+                routed_message = message
+                if summary:
+                    routed_message += f"\n\n[SYSTEM] Previous Section Summary:\n{summary}"
+                    
+                routed = await self._route_to_phase_agent(agent, routed_message, context)
                 if routed:
+                    if summary:
+                        routed.content = f"**Summary of {context.current_state.replace('_', ' ').title()}:**\n{summary}\n\n---\n\n{routed.content}"
                     return self._finalize_response(routed, t0)
             # If no agent found for phase, continue to LLM routing
 
@@ -326,7 +357,17 @@ class TutorService:
 
         # 6) Update convo + phase; return
         context.conversation_history.append({"role": "assistant", "content": result_text})
-        new_state = determine_phase_from_tools(tools_used, context.current_state)
+        
+        proposed_state = determine_phase_from_tools(tools_used, context.current_state)
+        
+        # Enforce forward-only for implicit transitions too
+        # If tool tries to go back, we stay in current state (or we could warn)
+        if not is_forward_transition(context.current_state, proposed_state):
+            logger.warning(f"Prevented backward transition from {context.current_state} to {proposed_state} triggered by tools {tools_used}")
+            new_state = context.current_state
+        else:
+            new_state = proposed_state
+            
         context.current_state = new_state
 
         return self._finalize_response(
@@ -339,7 +380,90 @@ class TutorService:
             t0,
         )
 
+    async def _generate_section_summary(self, context: TutorContext, phase: TutorState) -> str:
+        """Generate a summary of the key points from the completed phase.
+        
+        Args:
+            context: Current tutor context
+            phase: The phase that was just completed
+            
+        Returns:
+            String summary of the phase
+        """
+        try:
+            # Filter history to get relevant messages (simple heuristic: last 10 messages or since start)
+            # In a real system, we might want to tag messages with phases
+            relevant_history = context.conversation_history[-10:] if len(context.conversation_history) > 10 else context.conversation_history
+            
+            prompt = f"""
+            The student is skipping the remainder of the {phase.value} section.
+            Please acknowledge that we are skipping ahead, and provide a concise summary of the key clinical information that would have been covered in this section for a patient with {context.organism}.
+            
+            Structure the summary clearly:
+            - **Skipped Information Summary:** [Concise summary of what would typically be found/discussed]
+            - **Key Takeaways:** [Most critical points to carry forward]
+            
+            Keep it concise (2-3 sentences max per section) and easy to read at a glance.
+            """
+            
+            messages = prepare_llm_messages(relevant_history, prompt)
+            
+            response = self.llm_client.generate(
+                messages=messages,
+                model=context.model_name,
+                tools=None, # No tools for summarization
+                retries=2
+            )
+            
+            summary = response if isinstance(response, str) else response.get("content", "")
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Error generating phase summary: {e}")
+            return ""
+
     # ---------- Internals ----------
+
+    async def _load_and_format_guidelines(
+        self,
+        context: TutorContext,
+        tool_name: str,
+        tool_args: Dict[str, Any]
+    ) -> Optional[str]:
+        """Load guidelines and inject into tool args. Returns debug text if loaded."""
+        if not self.guidelines_cache:
+            return None
+
+        try:
+            # Always load for management/MCQ tools
+            if not context.guidelines:
+                context.guidelines = await self.guidelines_cache.prefetch_guidelines_for_organism(
+                    context.organism, context.case_description
+                )
+                context.guidelines_fetched_at = datetime.now()
+                logger.info(f"Guidelines loaded for {context.organism} (requested by {tool_name})")
+
+            # Format and add to tool args
+            if context.guidelines:
+                guidelines_context = self.guidelines_cache.format_guidelines_for_tool(
+                    context.guidelines, tool_name
+                )
+                tool_args["guidelines_context"] = guidelines_context
+                
+                # Generate debug text for UI
+                found_items = context.guidelines.get("found_guidelines", [])
+                if found_items:
+                    debug_lines = ["\n\n**[DEBUG] Auto-loaded Guidelines:**"]
+                    for i, item in enumerate(found_items, 1):
+                        title = item.get("title", "Unknown Source")
+                        score = item.get("score", "N/A") # Score might not be in item directly depending on implementation
+                        debug_lines.append(f"{i}. {title}")
+                    return "\n".join(debug_lines)
+                    
+        except Exception as e:
+            logger.warning(f"Failed to load guidelines: {e}")
+            
+        return None
 
     async def _route_to_phase_agent(self, agent: Optional[str], message: str, context: TutorContext) -> Optional[TutorResponse]:
         """
@@ -362,17 +486,30 @@ class TutorService:
             # Pass filtered history (no system prompts) to tools
             # Tools will add their own system prompt when calling LLM
             filtered_history = filter_system_messages(context.conversation_history or [])
-            result = self.tool_engine.execute_tool(agent, {
+            
+            tool_args = {
                 "input_text": message,
                 "case": context.case_description,
                 "conversation_history": filtered_history,
                 "model": context.model_name,
-            })
+            }
+            
+            # Auto-load guidelines for management phase
+            guidelines_debug = None
+            if agent == "tests_management":
+                guidelines_debug = await self._load_and_format_guidelines(context, agent, tool_args)
+            
+            result = self.tool_engine.execute_tool(agent, tool_args)
             if not result.get("success"):
                 logger.error("Phase agent %s failed: %s", agent, result.get("error"))
                 return None
 
             content = str(result.get("result", ""))
+            
+            # Append debug info if available
+            if guidelines_debug:
+                content += guidelines_debug
+
             completion_token = get_completion_token(agent)
             complete = is_phase_complete(content, agent)
             if complete and completion_token:
@@ -439,30 +576,10 @@ class TutorService:
                     logger.error(f"Failed to parse tool arguments for {tool_name}: {e}")
                     tool_args = {}
             
-            # Load and add guidelines if tool needs them and guidelines are enabled
+            # Load and add guidelines if tool needs them (Management or MCQ)
+            guidelines_debug = None
             if tool_name in ["tests_management", "mcq_tool"]:
-                # Check if guidelines are enabled (from context metadata or default False)
-                enable_guidelines = context.session_metadata.get("enable_guidelines", False)
-                
-                if enable_guidelines and self.guidelines_cache:
-                    # Check cache first
-                    if not context.guidelines:
-                        try:
-                            context.guidelines = await self.guidelines_cache.prefetch_guidelines_for_organism(
-                                context.organism, context.case_description
-                            )
-                            context.guidelines_fetched_at = datetime.now()
-                            logger.info(f"Guidelines loaded for {context.organism} (requested by {tool_name})")
-                        except Exception as e:
-                            logger.warning(f"Failed to load guidelines: {e}")
-                            context.guidelines = None
-                    
-                    # Format and add guidelines if available
-                    if context.guidelines:
-                        guidelines_context = self.guidelines_cache.format_guidelines_for_tool(
-                            context.guidelines, tool_name
-                        )
-                        tool_args["guidelines_context"] = guidelines_context
+                guidelines_debug = await self._load_and_format_guidelines(context, tool_name, tool_args)
             
             # Augment tool args with context for agentic tools
             # These tools need case, conversation_history, model to function properly
@@ -485,7 +602,10 @@ class TutorService:
             
             # Collect results
             if result.get("success"):
-                results.append(str(result.get("result", "")))
+                res_content = str(result.get("result", ""))
+                if guidelines_debug:
+                    res_content += guidelines_debug
+                results.append(res_content)
             else:
                 error = result.get("error", {})
                 error_msg = f"Tool {tool_name} failed: {error.get('message', 'Unknown error')}"

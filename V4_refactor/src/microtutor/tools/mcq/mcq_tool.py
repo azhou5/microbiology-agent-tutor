@@ -100,6 +100,7 @@ This will help reinforce your learning through evidence-based questions derived 
                 # Get additional context for personalized MCQ generation
                 conversation_history = kwargs.get('conversation_history', [])
                 learning_focus = kwargs.get('learning_focus', {})
+                guidelines_context = kwargs.get('guidelines_context', "")
                 
                 # Use thread pool to run async function from sync context
                 import concurrent.futures
@@ -117,7 +118,8 @@ This will help reinforce your learning through evidence-based questions derived 
                                 difficulty=difficulty,
                                 session_id=session_id,
                                 conversation_history=conversation_history,
-                                learning_focus=learning_focus
+                                learning_focus=learning_focus,
+                                guidelines_context=guidelines_context
                             )
                         )
                     finally:

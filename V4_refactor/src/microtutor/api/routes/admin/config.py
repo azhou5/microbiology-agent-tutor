@@ -64,6 +64,12 @@ async def get_config() -> ConfigResponse:
         # Azure models
         azure_models = [
             ModelInfo(
+                name="gpt-5",
+                display_name="GPT-5 (Preview)",
+                provider="azure",
+                description="GPT-5 Preview model via Azure OpenAI"
+            ),
+            ModelInfo(
                 name="gpt-4.1",
                 display_name="GPT-4.1 (2025-04-14)",
                 provider="azure",
@@ -91,6 +97,12 @@ async def get_config() -> ConfigResponse:
         
         # Personal OpenAI models
         personal_models = [
+            ModelInfo(
+                name="gpt-5",
+                display_name="GPT-5 (Preview)",
+                provider="personal",
+                description="GPT-5 Preview model via Personal OpenAI"
+            ),
             ModelInfo(
                 name="o4",
                 display_name="o4",
@@ -125,7 +137,7 @@ async def get_config() -> ConfigResponse:
             current_provider=current_provider,
             available_models=available_models,
             azure_endpoint=getattr(config, 'AZURE_OPENAI_ENDPOINT', ''),
-            personal_model=getattr(config, 'PERSONAL_OPENAI_MODEL', 'o4-mini-2025-04-16')
+            personal_model=getattr(config, 'PERSONAL_OPENAI_MODEL', 'gpt-5')
         )
         
     except Exception as e:
@@ -146,6 +158,12 @@ async def get_available_models() -> List[ModelInfo]:
     try:
         # Azure models
         azure_models = [
+            ModelInfo(
+                name="gpt-5",
+                display_name="GPT-5 (Preview)",
+                provider="azure",
+                description="GPT-5 Preview model via Azure OpenAI"
+            ),
             ModelInfo(
                 name="gpt-4.1",
                 display_name="GPT-4.1 (2025-04-14)",
@@ -174,6 +192,12 @@ async def get_available_models() -> List[ModelInfo]:
         
         # Personal OpenAI models
         personal_models = [
+            ModelInfo(
+                name="gpt-5",
+                display_name="GPT-5 (Preview)",
+                provider="personal",
+                description="GPT-5 Preview model via Personal OpenAI"
+            ),
             ModelInfo(
                 name="o4",
                 display_name="o4",

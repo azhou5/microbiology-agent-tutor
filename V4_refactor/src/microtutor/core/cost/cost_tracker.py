@@ -26,6 +26,7 @@ class CostTracker:
     COST_PER_1K_TOKENS = {
         "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
         "gpt-4": {"input": 0.03, "output": 0.06},
+        "gpt-5": {"input": 0.03, "output": 0.06},  # Placeholder pricing
         "gpt-4.1": {"input": 0.0275, "output": 0.11},  # GPT-4.1 (2025-04-14)
         "o4-mini-2025-04-16": {"input": 0.003, "output": 0.012},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},

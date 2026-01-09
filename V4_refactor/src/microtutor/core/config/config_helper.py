@@ -35,9 +35,9 @@ except ImportError:
         # LLM Configuration
         USE_AZURE_OPENAI = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
         API_MODEL_NAME = (
-            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "o4-mini-0416")
+            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5")
             if USE_AZURE_OPENAI
-            else os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
+            else os.getenv("PERSONAL_OPENAI_MODEL", "gpt-5")
         )
         LLM_BACKEND = os.getenv("LLM_BACKEND", "azure")
         

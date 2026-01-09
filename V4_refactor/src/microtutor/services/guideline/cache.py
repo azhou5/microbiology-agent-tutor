@@ -1,54 +1,35 @@
 """
-Guidelines Cache Service - Stub implementation for future RAG-based guidelines.
+Guidelines Cache Service - RAG-based guideline retrieval.
 
-This service is currently a stub that will be implemented with the following protocol:
-
-FUTURE IMPLEMENTATION PLAN:
-===========================
-
-1. **Input Format**: PDF files stored in data/guidelines/
-2. **Conversion**: PDFs → Markdown (using pdf parsing libraries)
-3. **Embedding**: Convert markdown chunks to embeddings (sentence-transformers)
-4. **RAG Pipeline**: 
-   - Store embeddings in vector database (FAISS/Chroma)
-   - When organism-specific guidelines needed:
-     a. Query with organism name + case context
-     b. Retrieve top-k most relevant chunks
-     c. Extract organism-specific sections from retrieved chunks
-     d. Combine into formatted guidelines
-5. **Output**: Formatted guidelines string for tests_management LLM
-
-CURRENT STATUS:
-===============
-- Interface is ready and functional
-- Returns empty guidelines (stub implementation)
-- Can be enabled/disabled via enable_guidelines flag
-- All integration points are in place
+This service implements a RAG pipeline to retrieve relevant clinical guidelines
+based on organism and case context.
 """
 
 import logging
-from typing import Dict, Any, Optional
+import json
+import os
+import numpy as np
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
+
+from openai import AsyncAzureOpenAI, AsyncOpenAI
+from microtutor.core.config.config_helper import config
 
 logger = logging.getLogger(__name__)
 
 
 class GuidelinesCache:
     """
-    Stub service for clinical guidelines caching and retrieval.
+    Service for clinical guidelines caching and RAG retrieval.
     
-    Currently returns empty guidelines. Future implementation will:
-    - Load PDFs from data/guidelines/
-    - Convert to markdown
-    - Create embeddings
-    - Use RAG to find organism-specific sections
-    - Return formatted guidelines for tests_management tool
+    Loads pre-computed embeddings and performs vector search to find
+    relevant guideline chunks for a given case.
     """
     
     def __init__(self, guidelines_dir: Optional[str] = None, project_root: Optional[str] = None):
         """
-        Initialize guidelines cache stub.
+        Initialize guidelines cache.
         
         Args:
             guidelines_dir: Path to guidelines directory (defaults to data/guidelines/)
@@ -59,7 +40,6 @@ class GuidelinesCache:
             self._project_root = Path(project_root)
         else:
             # __file__ is at: V4_refactor/src/microtutor/services/guideline/cache.py
-            # V4_refactor is 5 levels up: guideline -> services -> microtutor -> src -> V4_refactor
             self._project_root = Path(__file__).parent.parent.parent.parent.parent
         
         # Resolve guidelines directory
@@ -71,9 +51,54 @@ class GuidelinesCache:
         # Create guidelines directory if it doesn't exist
         self._guidelines_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Guidelines cache initialized (stub mode) - directory: {self._guidelines_dir}")
-        logger.info("Guidelines functionality will be implemented with PDF→Markdown→Embeddings→RAG pipeline")
-    
+        # Load embeddings
+        # self._guidelines_dir is already set to data/guidelines
+        self.embeddings_path = self._guidelines_dir / "embeddings.jsonl"
+        self.local_embeddings = []
+        self._load_embeddings()
+        
+        # Setup OpenAI client
+        self.client = None
+        self._setup_client()
+        
+        logger.info(f"Guidelines cache initialized - directory: {self._guidelines_dir}")
+        if self.local_embeddings:
+            logger.info(f"RAG enabled with {len(self.local_embeddings)} chunks")
+        else:
+            logger.warning("RAG disabled - no embeddings loaded")
+
+    def _setup_client(self):
+        """Initialize OpenAI client based on config."""
+        try:
+            if config.USE_AZURE_OPENAI:
+                self.client = AsyncAzureOpenAI(
+                    azure_endpoint=config.AZURE_OPENAI_ENDPOINT,
+                    api_key=config.AZURE_OPENAI_API_KEY,
+                    api_version=config.AZURE_OPENAI_API_VERSION
+                )
+            elif config.OPENAI_API_KEY:
+                self.client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+            else:
+                logger.warning("No OpenAI credentials found for GuidelinesCache")
+        except Exception as e:
+            logger.error(f"Failed to setup OpenAI client for GuidelinesCache: {e}")
+
+    def _load_embeddings(self):
+        """Load embeddings from JSONL file."""
+        if self.embeddings_path.exists():
+            try:
+                count = 0
+                with open(self.embeddings_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip():
+                            self.local_embeddings.append(json.loads(line))
+                            count += 1
+                logger.info(f"Loaded {count} guideline embeddings from {self.embeddings_path}")
+            except Exception as e:
+                logger.error(f"Failed to load embeddings: {e}")
+        else:
+            logger.warning(f"Embeddings file not found at {self.embeddings_path}")
+
     def get_cached(self, organism: str) -> Optional[Dict[str, Any]]:
         """
         Get cached guidelines for an organism (stub - always returns None).
@@ -84,7 +109,7 @@ class GuidelinesCache:
         Returns:
             None (stub implementation)
         """
-        # TODO: Implement caching once RAG pipeline is ready
+        # TODO: Implement actual caching mechanism if needed
         return None
     
     async def prefetch_guidelines_for_organism(
@@ -93,26 +118,75 @@ class GuidelinesCache:
         case_description: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Load guidelines for an organism (stub - returns empty guidelines).
-        
-        FUTURE IMPLEMENTATION:
-        - Load PDFs from data/guidelines/
-        - Convert to markdown chunks
-        - Use embeddings + RAG to find organism-specific sections
-        - Extract and format relevant guidelines
-        - Return formatted guidelines dict
+        Retrieve guidelines using RAG.
         
         Args:
             organism: The pathogen/condition
             case_description: Optional case context for targeted search
             
         Returns:
-            Empty guidelines dict (stub implementation)
+            Dict containing retrieved guidelines
         """
-        logger.info(f"Guidelines requested for: {organism} (stub - returning empty)")
+        if not self.local_embeddings or not self.client:
+            return self._get_stub_guidelines(organism)
+            
+        logger.info(f"Searching guidelines for: {organism}")
         
-        # Return empty guidelines structure
-        # TODO: Implement PDF→Markdown→Embeddings→RAG pipeline
+        try:
+            # Construct query: organism + case text
+            query = f"{organism} {case_description or ''}".strip()
+            
+            # Embed query using same model as generation
+            resp = await self.client.embeddings.create(
+                input=query,
+                model="text-embedding-3-small"
+            )
+            query_vec = np.array(resp.data[0].embedding)
+            
+            # Vector search
+            found_items = self._vector_search(query_vec, top_k=2)
+            
+            return {
+                "organism": organism,
+                "found_guidelines": found_items,
+                "fetched_at": datetime.now(),
+                "stub_mode": False
+            }
+            
+        except Exception as e:
+            logger.error(f"Error searching guidelines: {e}")
+            return self._get_stub_guidelines(organism)
+
+    def _vector_search(self, query_vec: np.ndarray, top_k: int = 2) -> List[Dict[str, Any]]:
+        """Perform cosine similarity search."""
+        if not self.local_embeddings:
+            return []
+            
+        scores = []
+        q_norm = np.linalg.norm(query_vec)
+        
+        if q_norm == 0:
+            return []
+            
+        for item in self.local_embeddings:
+            vec = np.array(item['embedding'])
+            v_norm = np.linalg.norm(vec)
+            
+            if v_norm == 0:
+                score = 0
+            else:
+                score = np.dot(query_vec, vec) / (q_norm * v_norm)
+                
+            scores.append((score, item))
+            
+        # Sort by score descending
+        scores.sort(key=lambda x: x[0], reverse=True)
+        
+        # Return top k items
+        return [item for _, item in scores[:top_k]]
+
+    def _get_stub_guidelines(self, organism: str) -> Dict[str, Any]:
+        """Return empty/stub guidelines."""
         return {
             "organism": organism,
             "diagnostic_approach": "",
@@ -122,7 +196,7 @@ class GuidelinesCache:
             "fetched_at": datetime.now(),
             "sources": [],
             "file_source": None,
-            "stub_mode": True  # Flag to indicate this is stub data
+            "stub_mode": True
         }
     
     def format_guidelines_for_tool(
@@ -138,46 +212,32 @@ class GuidelinesCache:
             tool_name: Name of the tool requesting guidelines
             
         Returns:
-            Formatted string to append to tool prompt (empty if no guidelines)
+            Formatted string to append to tool prompt
         """
-        if not guidelines or guidelines.get("stub_mode"):
-            # Return empty string for stub mode
+        if not guidelines:
             return ""
         
-        if tool_name == "tests_management":
-            return f"""
-## Pre-fetched Clinical Guidelines
-
-**Organism:** {guidelines.get('organism', 'Unknown')}
-
-**Diagnostic Approach:**
-{guidelines.get('diagnostic_approach', 'Not available')}
-
-**Treatment Protocols:**
-{guidelines.get('treatment_protocols', 'Not available')}
-
-**Clinical Guidelines:**
-{guidelines.get('clinical_guidelines', 'Not available')}
-
-Use these evidence-based guidelines to inform your discussion with the student.
-"""
+        # Handle stub/empty mode
+        if guidelines.get("stub_mode"):
+            return ""
+            
+        found_items = guidelines.get("found_guidelines", [])
+        if not found_items:
+            return ""
+            
+        # Format for RAG results
+        formatted = "POTENTIAL CLINICAL CONTEXTS (based on similar guidelines):\n"
         
-        elif tool_name == "mcq_tool":
-            return f"""
-## Evidence-Based Context for MCQ Generation
-
-**Organism:** {guidelines.get('organism', 'Unknown')}
-
-**Key Guidelines:**
-- Diagnostic: {guidelines.get('diagnostic_approach', 'Not available')}
-- Treatment: {guidelines.get('treatment_protocols', 'Not available')}
-
-Generate MCQs based on current evidence-based practices.
-"""
-        
-        else:
-            # Generic format
-            return f"\n\n[Clinical Guidelines: {guidelines.get('organism', 'Unknown')}]"
+        for i, item in enumerate(found_items, 1):
+            topic = item.get("topic", "Unknown")
+            text = item.get("text", "")
+            title = item.get("title", "Unknown Source")
+            
+            formatted += f"\n{i}. Topic/Organism: {topic}\n"
+            formatted += f"   Source: {title}\n"
+            formatted += f"   Context: {text}\n"
+            
+        return formatted
 
 
 # Global singleton

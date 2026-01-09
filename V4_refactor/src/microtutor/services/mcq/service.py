@@ -436,7 +436,8 @@ Focus on creating a question that will help this specific student learn and addr
         difficulty: str = "intermediate",
         session_id: str = None,
         conversation_history: list = None,
-        learning_focus: Dict[str, Any] = None
+        learning_focus: Dict[str, Any] = None,
+        guidelines_context: str = None
     ) -> MCQ:
         """
         Generate a new MCQ based on topic and guidelines.
@@ -446,20 +447,26 @@ Focus on creating a question that will help this specific student learn and addr
             case_context: Optional case context for more targeted questions
             difficulty: Question difficulty level
             session_id: Optional session ID for tracking
+            guidelines_context: Optional pre-fetched guidelines (e.g. from local RAG)
             
         Returns:
             MCQ: Generated multiple choice question
         """
         try:
-            # Search for relevant guidelines
-            guidelines_info = self._search_guidelines_for_topic(topic, case_context, conversation_history)
+            # Search for relevant guidelines (external)
+            external_guidelines = self._search_guidelines_for_topic(topic, case_context, conversation_history)
+            
+            # Combine with provided context (local RAG)
+            full_guidelines = external_guidelines
+            if guidelines_context:
+                full_guidelines = f"{guidelines_context}\n\n{external_guidelines}"
             
             # Generate MCQ using LLM
             mcq_data = self._generate_mcq_with_llm(
                 topic=topic,
                 case_context=case_context,
                 difficulty=difficulty,
-                guidelines_info=guidelines_info,
+                guidelines_info=full_guidelines,
                 conversation_history=conversation_history,
                 learning_focus=learning_focus
             )

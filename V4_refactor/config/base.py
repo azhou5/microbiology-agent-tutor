@@ -42,7 +42,7 @@ class BaseConfig(BaseSettings):
     # LLM Configuration (auto-determined from USE_AZURE_OPENAI like V3)
     USE_AZURE_OPENAI: bool = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
     LLM_BACKEND: str = "azure" if os.getenv("USE_AZURE_OPENAI", "false").lower() == "true" else "openai"
-    API_MODEL_NAME: str = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", "o4-mini-0416") if os.getenv("USE_AZURE_OPENAI", "false").lower() == "true" else os.getenv("PERSONAL_OPENAI_MODEL", "o4-mini-2025-04-16")
+    API_MODEL_NAME: str = os.getenv("AZURE_OPENAI_O4_MINI_DEPLOYMENT", "gpt-5") if os.getenv("USE_AZURE_OPENAI", "false").lower() == "true" else os.getenv("PERSONAL_OPENAI_MODEL", "gpt-5")
     LOCAL_MODEL_NAME: str = "distilgpt2"
     TEMPERATURE: float = 0.7  # max_tokens removed - always use model default
     

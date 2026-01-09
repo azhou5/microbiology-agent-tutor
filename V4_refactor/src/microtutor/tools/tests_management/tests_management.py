@@ -138,6 +138,11 @@ class TestsManagementTool(AgenticTool):
             # Call LLM for guidance
             response = self._call_llm("", **kwargs)
             
+            # DEBUG: Append guidelines to response
+            guidelines_context = kwargs.get("guidelines_context", "")
+            if guidelines_context:
+                response += f"\n\n\n--- [DEBUG] GUIDELINES USED ---\n{guidelines_context}\n-------------------------------"
+            
             return {
                 "success": True,
                 "result": response,

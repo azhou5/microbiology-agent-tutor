@@ -21,4 +21,4 @@ echo "🚀 Starting MicroTutor V4 on http://localhost:$PORT"
 echo "📚 API docs: http://localhost:$PORT/api/docs"
 
 # Start the server
-python3 -m uvicorn microtutor.api.app:app --host 0.0.0.0 --port "$PORT" --reload
+python -m uvicorn microtutor.api.app:app --host 0.0.0.0 --port "$PORT" --reload

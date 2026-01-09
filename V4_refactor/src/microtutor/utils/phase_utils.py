@@ -34,6 +34,15 @@ TOOL_TO_PHASE = {
     "feedback": TutorState.FEEDBACK,
 }
 
+# Standard phase order
+PHASE_ORDER = [
+    TutorState.INITIALIZING,
+    TutorState.INFORMATION_GATHERING,
+    TutorState.DIFFERENTIAL_DIAGNOSIS,
+    TutorState.TESTS_MANAGEMENT,
+    TutorState.FEEDBACK,
+]
+
 # Completion tokens for phase completion detection
 # NOTE: User now controls phase transitions via UI buttons.
 # Agents no longer emit completion signals automatically.
@@ -56,7 +65,14 @@ def determine_phase_from_tools(tools_used: list[str], current: TutorState) -> Tu
     """
     if not tools_used:
         return current
-    return TOOL_TO_PHASE.get(tools_used[0], current)
+    
+    proposed_phase = TOOL_TO_PHASE.get(tools_used[0], current)
+    
+    # Enforce forward-only flow for implicit transitions too
+    if is_forward_transition(current, proposed_phase):
+        return proposed_phase
+    
+    return current
 
 
 def validate_phase_transition(phase_name: str) -> Tuple[bool, Optional[TutorState], Optional[str]]:
@@ -91,17 +107,37 @@ def get_next_phase(current: TutorState) -> Optional[TutorState]:
     Returns:
         Next phase state, or None if at the end
     """
-    order = [
-        TutorState.INFORMATION_GATHERING,
-        TutorState.DIFFERENTIAL_DIAGNOSIS,
-        TutorState.TESTS_MANAGEMENT,
-        TutorState.FEEDBACK,
-    ]
     try:
-        i = order.index(current)
-        return order[i + 1] if i + 1 < len(order) else None
+        # Use PHASE_ORDER directly, filtering out INITIALIZING if current is not INITIALIZING
+        # effectively PHASE_ORDER covers it
+        if current not in PHASE_ORDER:
+            return None
+            
+        i = PHASE_ORDER.index(current)
+        return PHASE_ORDER[i + 1] if i + 1 < len(PHASE_ORDER) else None
     except ValueError:
         return None
+
+
+def is_forward_transition(current: TutorState, target: TutorState) -> bool:
+    """Check if the transition is forward or staying same (not backward).
+    
+    Args:
+        current: Current phase state
+        target: Target phase state
+        
+    Returns:
+        True if target is same or later in sequence than current.
+    """
+    if current == target:
+        return True
+        
+    try:
+        curr_idx = PHASE_ORDER.index(current)
+        targ_idx = PHASE_ORDER.index(target)
+        return targ_idx > curr_idx
+    except ValueError:
+        return False
 
 
 def get_completion_token(agent_name: str) -> Optional[str]:
