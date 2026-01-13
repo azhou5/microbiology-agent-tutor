@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentOrganismKey = null;
     let currentPhase = 'information_gathering';
     let currentModelProvider = 'azure';
-    let currentModel = 'gpt-4.1';  // Default to gpt-4.1
+    let currentModel = 'gpt-5';  // Default to gpt-5
     let guidelinesEnabled = true;
     let currentGuidelines = null;
 
@@ -554,8 +554,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Add Azure models (using actual deployment names)
             const azureOptions = [
-                { value: 'gpt-5', text: 'GPT-5 (Preview)' },
-                { value: 'gpt-4.1', text: 'GPT-4.1 (2025-04-14)' },
+                { value: 'gpt-5', text: 'GPT-5' },
+                { value: 'gpt-5-mini', text: 'GPT-5 Mini' },
                 { value: 'gpt-4o-1120', text: 'GPT-4o (2024-11-20)' },
                 { value: 'o4-mini-0416', text: 'o4-mini (2025-04-16)' },
                 { value: 'o3-mini-0131', text: 'o3-mini (2025-01-31)' },
@@ -584,7 +584,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 { value: 'gpt-5', text: 'GPT-5 (Preview)' },
                 { value: 'gpt-5-mini-2025-08-07', text: 'GPT-5 Mini (2025-08-07)' },
                 { value: 'gpt-5-2025-08-07', text: 'GPT-5 (2025-08-07)' },
-                { value: 'gpt-4.1-2025-04-14', text: 'GPT-4.1 (2025-04-14)' }
             ];
 
             personalOptions.forEach(option => {

@@ -23,7 +23,7 @@ class SocraticTool(AgenticTool):
     def _call_llm(self, prompt: str, **kwargs) -> str:
         """Call LLM to generate Socratic response."""
         try:
-            model = kwargs.get('model', self.llm_config.get('model', 'gpt-4'))
+            model = kwargs.get('model', self.llm_config.get('model', 'gpt-5'))
             case = kwargs.get('case', '')
             conversation_history = kwargs.get('conversation_history', [])
             
@@ -35,7 +35,9 @@ class SocraticTool(AgenticTool):
             # Feedback was added to the last user message in tutor_service_v2.py
             # Prepare messages with system prompt (includes case) + conversation history (which includes feedback)
             from microtutor.utils.conversation_utils import prepare_llm_messages
-            llm_messages = prepare_llm_messages(conversation_history, system_prompt)
+            # Ensure history is passed as list of dicts
+            clean_history = conversation_history if isinstance(conversation_history, list) else []
+            llm_messages = prepare_llm_messages(clean_history, system_prompt)
             
             # Call LLM with prepared messages (includes system prompt + feedback from conversation_history)
             # Note: system_prompt is already in llm_messages, so we don't pass it separately
@@ -62,7 +64,7 @@ class SocraticTool(AgenticTool):
             case=arguments.get('case', ''),
             input_text=arguments.get('input_text', ''),
             conversation_history=arguments.get('conversation_history', []),
-            model=arguments.get('model', 'gpt-4')
+            model=arguments.get('model', 'gpt-5')
         )
 
 
@@ -95,7 +97,7 @@ def run_socratic(
         'input_text': input_text,
         'case': case,
         'conversation_history': conversation_history or [],
-        'model': model or 'gpt-4'
+        'model': model or 'gpt-5'
     })
     
     if result['success']:

@@ -11,25 +11,10 @@
                 "type": "string",
                 "description": "The student's request for help - the hint will address this specific request"
             },
-            "conversation_history": {
-                "type": "array",
-                "description": "Conversation history - the ONLY source of case information for the hint",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "role": {
-                            "type": "string"
-                        },
-                        "content": {
-                            "type": "string"
-                        }
-                    }
-                }
-            },
             "model": {
                 "type": "string",
                 "description": "LLM model to use",
-                "default": "gpt-4"
+                "default": "gpt-5"
             }
         },
         "required": [

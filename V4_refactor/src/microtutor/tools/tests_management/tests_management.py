@@ -43,7 +43,7 @@ class TestsManagementTool(AgenticTool):
     def _call_llm(self, prompt: str, **kwargs) -> str:
         """Call LLM to generate tests and management guidance."""
         try:
-            model = kwargs.get('model', self.llm_config.get('model', 'gpt-4'))
+            model = kwargs.get('model', self.llm_config.get('model', 'gpt-5'))
             case = kwargs.get('case', '')
             input_text = kwargs.get('input_text', '')
             conversation_history = kwargs.get('conversation_history', [])
@@ -51,6 +51,8 @@ class TestsManagementTool(AgenticTool):
             # Debug: Log conversation history length
             logger.info(f"[TESTS_MGMT] Received {len(conversation_history)} messages in conversation history")
             if conversation_history:
+                # Log full conversation history to inspect structure
+                logger.info(f"[TESTS_MGMT] FULL HISTORY DUMP: {conversation_history}")
                 # Log last few messages to verify context
                 for msg in conversation_history[-3:]:
                     role = msg.get('role', 'unknown')
@@ -70,7 +72,9 @@ class TestsManagementTool(AgenticTool):
                 logger.info("Using guidelines context from service")
             
             # Prepare messages with system prompt + conversation history (which includes feedback)
-            llm_messages = prepare_llm_messages(conversation_history, system_prompt)
+            # Ensure history is passed as list of dicts
+            clean_history = conversation_history if isinstance(conversation_history, list) else []
+            llm_messages = prepare_llm_messages(clean_history, system_prompt)
             
             # Check if feedback is in the conversation history
             feedback_in_history = False
@@ -137,11 +141,6 @@ class TestsManagementTool(AgenticTool):
             
             # Call LLM for guidance
             response = self._call_llm("", **kwargs)
-            
-            # DEBUG: Append guidelines to response
-            guidelines_context = kwargs.get("guidelines_context", "")
-            if guidelines_context:
-                response += f"\n\n\n--- [DEBUG] GUIDELINES USED ---\n{guidelines_context}\n-------------------------------"
             
             return {
                 "success": True,

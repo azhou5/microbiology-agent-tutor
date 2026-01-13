@@ -208,6 +208,9 @@ class AgenticTool(BaseTool):
         """Execute by calling LLM."""
         prompt = self._build_prompt(arguments)
         try:
-            return self._call_llm(prompt, **self.llm_config)
+            # Merge llm_config with runtime arguments, preferring arguments for overlaps
+            # This ensures keys like 'conversation_history', 'case', 'case_id' are passed to _call_llm
+            call_kwargs = {**self.llm_config, **arguments}
+            return self._call_llm(prompt, **call_kwargs)
         except Exception as e:
             raise ToolLLMError(f"LLM call failed: {e}", tool_name=self.name)

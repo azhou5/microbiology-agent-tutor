@@ -117,7 +117,7 @@ class PatientTool(AgenticTool):
     def _call_llm(self, prompt: str, **kwargs) -> str:
         """Call LLM to generate patient response."""
         try:
-            model = kwargs.get('model', self.llm_config.get('model', 'gpt-4'))
+            model = kwargs.get('model', self.llm_config.get('model', 'gpt-5'))
             case = kwargs.get('case', '')
             input_text = kwargs.get('input_text', '')
             conversation_history = kwargs.get('conversation_history', [])
@@ -130,7 +130,9 @@ class PatientTool(AgenticTool):
             # Feedback was added to the last user message in tutor_service_v2.py
             # Prepare messages with system prompt (includes case) + conversation history (which includes feedback)
             from microtutor.utils.conversation_utils import prepare_llm_messages
-            llm_messages = prepare_llm_messages(conversation_history, system_prompt)
+            # Ensure history is passed as list of dicts
+            clean_history = conversation_history if isinstance(conversation_history, list) else []
+            llm_messages = prepare_llm_messages(clean_history, system_prompt)
             
             # Increment interaction counter and log agent context
             self.interaction_counter += 1
@@ -188,7 +190,7 @@ class PatientTool(AgenticTool):
             case=case,
             input_text=input_text,
             conversation_history=arguments.get('conversation_history', []),
-            model=arguments.get('model', 'gpt-4')
+            model=arguments.get('model', 'gpt-5')
         )
         
         # Check for audio data
@@ -240,7 +242,7 @@ def run_patient(
         'input_text': input_text,
         'case': case,
         'conversation_history': conversation_history or [],
-        'model': model or 'gpt-4'
+        'model': model or 'gpt-5'
     })
     
     if result['success']:

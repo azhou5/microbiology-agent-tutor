@@ -83,7 +83,14 @@ def prepare_llm_messages(
     
     # Prepend system prompt for LLM call
     messages = [{"role": "system", "content": full_system_prompt}]
-    messages.extend(clean_history)
+    
+    # Add history, ensuring no system messages
+    for msg in clean_history:
+        messages.append({
+            "role": msg["role"], 
+            "content": msg["content"]
+        })
+    
     return messages
 
 

@@ -317,7 +317,9 @@ async function handleSendMessage() {
                 model_name: State.currentModel,
                 model_provider: State.currentModelProvider,
                 feedback_enabled: State.feedbackEnabled,
-                feedback_threshold: State.feedbackThreshold
+                feedback_threshold: State.feedbackThreshold,
+                // Keep backend TutorContext phase stable across requests (especially after skipping sections)
+                current_phase: State.currentPhase
             }),
         });
 
@@ -379,10 +381,23 @@ async function handleSendMessage() {
         if (data.history) {
             State.chatHistory = validateChatHistory(data.history);
         }
-        addMessageToHistory('assistant', data.response);
+        // IMPORTANT: do not append assistant again here.
+        // `State.chatHistory` was just replaced by the server-returned canonical history
+        // which already includes the assistant response. Appending again duplicates turns
+        // and can confuse downstream context/routing.
 
         // Update phase information from backend metadata
         if (data.metadata) {
+            // Update guidelines if loaded by backend
+            if (data.metadata.guidelines_loaded) {
+                // If guidelines were loaded on backend but we haven't fetched them yet,
+                // fetch them now to sync the UI
+                if (!State.currentGuidelines || State.currentGuidelines.organism !== data.metadata.organism) {
+                    console.log('[GUIDELINES] Backend loaded guidelines, syncing UI...');
+                    fetchGuidelines(data.metadata.organism);
+                }
+            }
+
             // Update current phase
             if (data.metadata.current_phase && data.metadata.current_phase !== State.currentPhase) {
                 State.currentPhase = data.metadata.current_phase;
@@ -462,7 +477,7 @@ function updateModelSelection() {
         // Add Azure models (using actual deployment names)
         const azureOptions = [
             { value: 'gpt-5', text: 'GPT-5 (Preview)' },
-            { value: 'gpt-4.1', text: 'GPT-4.1 (2025-04-14)' },
+            { value: 'gpt-5-mini', text: 'GPT-5 Mini (Preview)' },
             { value: 'gpt-4o-1120', text: 'GPT-4o (2024-11-20)' },
             { value: 'o4-mini-0416', text: 'o4-mini (2025-04-16)' },
             { value: 'o3-mini-0131', text: 'o3-mini (2025-01-31)' },
@@ -492,7 +507,6 @@ function updateModelSelection() {
             { value: 'o4', text: 'o4' },
             { value: 'gpt-5-mini-2025-08-07', text: 'GPT-5 Mini (2025-08-07)' },
             { value: 'gpt-5-2025-08-07', text: 'GPT-5 (2025-08-07)' },
-            { value: 'gpt-4.1-2025-04-14', text: 'GPT-4.1 (2025-04-14)' }
         ];
 
         personalOptions.forEach(option => {

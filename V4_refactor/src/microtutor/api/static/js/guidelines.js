@@ -225,15 +225,6 @@ async function fetchGuidelines(organism) {
         const data = await response.json();
         State.currentGuidelines = data;
 
-        // Check if stub mode (no real data yet)
-        if (data.stub_mode) {
-            updateGuidelinesStatus('📋 Guidelines coming soon', 0);
-            if (DOM.guidelinesContent) {
-                DOM.guidelinesContent.innerHTML = '<div class="guidelines-loading">Guidelines feature is under development.</div>';
-            }
-            return;
-        }
-
         // Count actual guideline sections found
         let count = 0;
         if (data.clinical_guidelines) count++;

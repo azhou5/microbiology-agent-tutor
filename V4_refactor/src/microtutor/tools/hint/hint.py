@@ -19,7 +19,7 @@ class HintTool(AgenticTool):
     def _call_llm(self, prompt: str, **kwargs) -> str:
         """Call LLM to generate hint."""
         try:
-            model = kwargs.get('model', self.llm_config.get('model', 'gpt-4'))
+            model = kwargs.get('model', self.llm_config.get('model', 'gpt-5'))
             conversation_history = kwargs.get('conversation_history', [])
             
             # Get system prompt - no case info, only uses conversation history
@@ -27,7 +27,9 @@ class HintTool(AgenticTool):
             
             # Prepare messages with system prompt + conversation history
             from microtutor.utils.conversation_utils import prepare_llm_messages
-            llm_messages = prepare_llm_messages(conversation_history, system_prompt)
+            # Ensure history is passed as list of dicts
+            clean_history = conversation_history if isinstance(conversation_history, list) else []
+            llm_messages = prepare_llm_messages(clean_history, system_prompt)
             
             # Call LLM with prepared messages
             response = chat_complete(
@@ -52,7 +54,7 @@ class HintTool(AgenticTool):
             "",
             conversation_history=arguments.get('conversation_history', []),
             input_text=arguments.get('input_text', ''),
-            model=arguments.get('model', 'gpt-4')
+            model=arguments.get('model', 'gpt-5')
         )
 
 
@@ -97,7 +99,7 @@ def run_hint(
         'input_text': input_text,
         'case': case,
         'covered_topics': covered_topics,
-        'model': model or 'gpt-4'
+        'model': model or 'gpt-5'
     })
     
     if result['success']:

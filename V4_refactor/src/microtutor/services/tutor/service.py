@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 class ServiceConfig:
     model_name: str
     enable_feedback: bool = True
-    fallback_model: str = "gpt-4.1"
+    fallback_model: str = "gpt-5"
     first_pt_sentence_json_relpath: str = os.path.join("data", "cases", "cached", "ambiguous_with_ages.json")
 
 # -------- TutorService --------
@@ -262,15 +262,34 @@ class TutorService:
             context.current_state = new_state
             agent = PHASE_AGENT_MAPPING.get(new_state)
             if agent:
+                # IMPORTANT: phase transitions are part of the real conversation.
+                # Persist the user's phase-transition command and the phase agent's response
+                # so subsequent turns have full continuity (no "restart" feeling).
+                if not context.conversation_history:
+                    context.conversation_history = []
+                if not (
+                    context.conversation_history
+                    and context.conversation_history[-1].get("role") == "user"
+                    and context.conversation_history[-1].get("content") == message
+                ):
+                    context.conversation_history.append({"role": "user", "content": message})
+
                 # Inject summary into message for the next agent
                 routed_message = message
                 if summary:
-                    routed_message += f"\n\n[SYSTEM] Previous Section Summary:\n{summary}"
+                    routed_message += f"\n\n[SYSTEM] The student has skipped previous sections. Here is a summary of what they skipped:\n{summary}"
                     
                 routed = await self._route_to_phase_agent(agent, routed_message, context)
                 if routed:
+                    # Persist the assistant response from the phase agent into the main history
+                    if not (
+                        context.conversation_history
+                        and context.conversation_history[-1].get("role") == "assistant"
+                        and context.conversation_history[-1].get("content") == routed.content
+                    ):
+                        context.conversation_history.append({"role": "assistant", "content": routed.content})
                     if summary:
-                        routed.content = f"**Summary of {context.current_state.replace('_', ' ').title()}:**\n{summary}\n\n---\n\n{routed.content}"
+                        routed.content = f"**Summary of Skipped Sections:**\n{summary}\n\n---\n\n{routed.content}"
                     return self._finalize_response(routed, t0)
             # If no agent found for phase, continue to LLM routing
 
@@ -293,7 +312,7 @@ class TutorService:
                 current_message=message,
                 conversation_history=context.conversation_history,
                 message_type="all",  # Use "all" to get all feedback types
-                k=5,  # Increase to get more examples
+                k=3,  # Increase to get more examples
                 similarity_threshold=feedback_threshold,
             ) or []
             feedback_struct = retrieved
@@ -313,7 +332,25 @@ class TutorService:
         # 3) Log & add user message to chat history
         self.interaction_counter += 1
         enhanced_message = message + ("\n\n" + feedback_str if feedback_str else "")
-        context.conversation_history.append({"role": "user", "content": enhanced_message})
+        # Avoid duplicate/near-duplicate user messages if the client already included
+        # the latest turn in history.
+        #
+        # Common problematic case:
+        # - Client includes the raw `message` as the last user item in history.
+        # - Server appends feedback examples to form `enhanced_message`.
+        # If we naively append, we end up with two consecutive user turns that are
+        # semantically the same, which can confuse routing/tools.
+        if context.conversation_history and context.conversation_history[-1].get("role") == "user":
+            last_content = context.conversation_history[-1].get("content", "")
+            if last_content == enhanced_message:
+                pass  # already present
+            elif last_content == message and enhanced_message != message:
+                # Upgrade the last user message in-place to include feedback context
+                context.conversation_history[-1]["content"] = enhanced_message
+            else:
+                context.conversation_history.append({"role": "user", "content": enhanced_message})
+        else:
+            context.conversation_history.append({"role": "user", "content": enhanced_message})
         
         # Get system prompt for logging (not stored in history)
         tutor_system_prompt = get_system_message_template().format(
@@ -356,8 +393,16 @@ class TutorService:
             raise ValueError("LLM returned empty response.")
 
         # 6) Update convo + phase; return
-        context.conversation_history.append({"role": "assistant", "content": result_text})
+        # Ensure we're not duplicating the assistant's message if it was already added by a tool
+        # In this architecture, the tool output IS the assistant's message, so we append it here.
+        if not (
+            context.conversation_history
+            and context.conversation_history[-1].get("role") == "assistant"
+            and context.conversation_history[-1].get("content") == result_text
+        ):
+            context.conversation_history.append({"role": "assistant", "content": result_text})
         
+        # Determine new phase based on tools used
         proposed_state = determine_phase_from_tools(tools_used, context.current_state)
         
         # Enforce forward-only for implicit transitions too
@@ -374,7 +419,12 @@ class TutorService:
             TutorResponse(
                 content=result_text,
                 tools_used=tools_used,
-                metadata={"case_id": context.case_id, "state": new_state.value, "organism": context.organism},
+                metadata={
+                    "case_id": context.case_id, 
+                    "state": new_state.value, 
+                    "organism": context.organism,
+                    "guidelines_loaded": bool(context.guidelines)
+                },
                 feedback_examples=feedback_struct,
             ),
             t0,
@@ -397,10 +447,12 @@ class TutorService:
             
             prompt = f"""
             The student is skipping the remainder of the {phase.value} section.
-            Please acknowledge that we are skipping ahead, and provide a concise summary of the key clinical information that would have been covered in this section for a patient with {context.organism}.
+            Please acknowledge that we are skipping ahead, and provide a concise summary of the key clinical information that would have been covered in the skipped sections (e.g. Information Gathering, Differential Diagnosis) for a patient with {context.organism}.
+            
+            IMPORTANT: Do NOT include information from the section we are skipping TO (e.g. do not include tests or management if we are skipping to Tests & Management). Only summarize the history and exam findings.
             
             Structure the summary clearly:
-            - **Skipped Information Summary:** [Concise summary of what would typically be found/discussed]
+            - **Skipped Information Summary:** [Concise summary of history/exam/DDx]
             - **Key Takeaways:** [Most critical points to carry forward]
             
             Keep it concise (2-3 sentences max per section) and easy to read at a glance.
@@ -491,7 +543,7 @@ class TutorService:
                 "input_text": message,
                 "case": context.case_description,
                 "conversation_history": filtered_history,
-                "model": context.model_name,
+                "model": context.get_model_name(),
             }
             
             # Auto-load guidelines for management phase
@@ -583,28 +635,40 @@ class TutorService:
             
             # Augment tool args with context for agentic tools
             # These tools need case, conversation_history, model to function properly
-            if tool_name in ["patient", "socratic", "tests_management", "feedback"]:
+            if tool_name in ["patient", "socratic", "tests_management", "feedback", "mcq_tool", "post_case_assessment"]:
                 tool_args["case"] = context.case_description or ""
                 tool_args["conversation_history"] = context.conversation_history or []
-                tool_args["model"] = context.model_name or "gpt-4"
+                tool_args["model"] = context.model_name or global_config.API_MODEL_NAME or "gpt-5"
                 tool_args["case_id"] = context.case_id or ""
             elif tool_name == "hint":
                 # Hint tool does NOT get the full case - only conversation history
                 # This prevents leaking undiscovered case information
                 tool_args["case"] = ""  # No case access
                 tool_args["conversation_history"] = context.conversation_history or []
-                tool_args["model"] = context.model_name or "gpt-4"
+                tool_args["model"] = context.model_name or global_config.API_MODEL_NAME or "gpt-5"
                 tool_args["case_id"] = context.case_id or ""
             
             # Execute tool
-            logger.info(f"Executing tool: {tool_name} with args keys={list(tool_args.keys())}")
+            hist_len = len(context.conversation_history or [])
+            logger.info(
+                f"Executing tool: {tool_name} with args keys={list(tool_args.keys())} history_len={hist_len}"
+            )
+            if hist_len:
+                try:
+                    last = context.conversation_history[-1]
+                    logger.info(
+                        f"[TOOL_CTX] last_msg role={last.get('role')} content={str(last.get('content',''))[:120]}..."
+                    )
+                except Exception:
+                    pass
             result = self.tool_engine.execute_tool(tool_name, tool_args)
             
             # Collect results
             if result.get("success"):
                 res_content = str(result.get("result", ""))
+                # If guidelines were loaded and debug info is available, append it to the response
                 if guidelines_debug:
-                    res_content += guidelines_debug
+                    res_content += f"\n\n{guidelines_debug}"
                 results.append(res_content)
             else:
                 error = result.get("error", {})

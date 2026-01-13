@@ -16,7 +16,7 @@ const State = {
 
     // Model state
     currentModelProvider: 'azure',
-    currentModel: 'gpt-4.1',
+    currentModel: 'gpt-5',
 
     // Guidelines state
     guidelinesEnabled: true,
@@ -67,7 +67,7 @@ const State = {
         this.currentPhase = 'information_gathering';
         this.caseComplete = false;
         this.currentModelProvider = 'azure';
-        this.currentModel = 'gpt-4.1';
+        this.currentModel = 'gpt-5';
         this.guidelinesEnabled = true;
         this.currentGuidelines = null;
         this.feedbackEnabled = true;

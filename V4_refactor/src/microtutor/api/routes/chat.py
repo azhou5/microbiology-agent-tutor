@@ -6,12 +6,15 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from microtutor.api.dependencies import get_tutor_service
+from microtutor.api.dependencies import get_db
 from microtutor.core.config.config_helper import config
 from microtutor.schemas.api.requests import StartCaseRequest, ChatRequest, FeedbackRequest, CaseFeedbackRequest
 from microtutor.schemas.api.responses import StartCaseResponse, ChatResponse, ErrorResponse
 from microtutor.schemas.domain.domain import TutorContext
 from microtutor.services.infrastructure.background import BackgroundTaskService, get_background_service
 from microtutor.services.tutor.service import TutorService
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -94,6 +97,7 @@ async def chat(
     request: ChatRequest,
     tutor_service: TutorService = Depends(get_tutor_service),
     background_service: BackgroundTaskService = Depends(get_background_service)
+    ,db: Session = Depends(get_db)
 ) -> ChatResponse:
     """Process a chat message from the student.
     
@@ -119,6 +123,35 @@ async def chat(
         # Filter system messages from incoming history
         from microtutor.utils.conversation_utils import filter_system_messages
         clean_history = filter_system_messages([msg.model_dump() for msg in request.history])
+
+        # If client history is empty (or clearly incomplete), fall back to server-side history.
+        # This prevents "I don't see any tests ordered yet" when the client failed to send prior turns.
+        if (not clean_history) and db is not None:
+            try:
+                # Pull a bounded window of messages, then restore chronological order.
+                # Note: conversation_logs in V4 schema stores role/content; metadata may not exist.
+                result = db.execute(
+                    text(
+                        """
+                        SELECT role, content
+                        FROM conversation_logs
+                        WHERE case_id = :case_id
+                        ORDER BY timestamp DESC
+                        LIMIT :limit
+                        """
+                    ),
+                    {"case_id": request.case_id, "limit": 80},
+                )
+                rows = result.fetchall()
+                db_history = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+                db_history = filter_system_messages(db_history)
+                if db_history:
+                    logger.warning(
+                        f"[CHAT] Client sent empty history; hydrated {len(db_history)} msgs from DB for case_id={request.case_id}"
+                    )
+                    clean_history = db_history
+            except Exception as e:
+                logger.warning(f"[CHAT] Failed to hydrate history from DB: {e}")
         
         context = TutorContext(
             case_id=request.case_id,
@@ -128,6 +161,15 @@ async def chat(
             use_azure=use_azure,
             session_metadata={"enable_guidelines": request.enable_guidelines or False}
         )
+        # Persist phase across requests.
+        # Without this, every /chat call starts from INITIALIZING and the tutor may
+        # infer/overwrite phase back to information gathering after a skip.
+        if request.current_phase:
+            try:
+                from microtutor.schemas.domain.domain import TutorState
+                context.current_state = TutorState(request.current_phase)
+            except Exception:
+                logger.warning(f"[CHAT] Invalid current_phase from client: {request.current_phase!r}")
         
         # Log user message asynchronously
         background_service.log_conversation_async(
@@ -163,7 +205,11 @@ async def chat(
             metadata={
                 "processing_time_ms": processing_time,
                 "case_id": request.case_id,
-                "organism": request.organism_key
+                "organism": request.organism_key,
+                # Bubble up tutor/service metadata (phase, guidelines flags, etc.)
+                **(response.metadata or {}),
+                # Normalize phase naming for frontend consumers
+                "current_phase": (response.metadata or {}).get("current_phase") or (response.metadata or {}).get("state"),
             },
             feedback_examples=response.feedback_examples or []
         )
@@ -290,7 +336,7 @@ and they should ask the main tutor about case-specific questions."""
         response = chat_complete(
             system_prompt="",
             user_prompt="",
-            model=config.API_MODEL_NAME,  # Use configured model (Azure gpt-4.1)
+            model=config.API_MODEL_NAME,  # Use configured model (default: gpt-5)
             conversation_history=messages
         )
         

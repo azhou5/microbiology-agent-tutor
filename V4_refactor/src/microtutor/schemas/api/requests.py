@@ -142,6 +142,10 @@ class ChatRequest(BaseModel):
         default=False,
         description="Whether to enable clinical guidelines for this request"
     )
+    current_phase: Optional[str] = Field(
+        default=None,
+        description="Frontend-reported current phase (e.g. 'information_gathering', 'differential_diagnosis', 'tests_management', 'feedback')"
+    )
     
     @field_validator('message')
     @classmethod

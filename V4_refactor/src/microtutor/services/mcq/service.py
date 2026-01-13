@@ -170,7 +170,7 @@ Focus on details that would be most relevant for guideline search and MCQ genera
             response = chat_complete(
                 system_prompt="You are an expert clinician who extracts key clinical details from patient cases.",
                 user_prompt=analysis_prompt,
-                model=self.config.get('model', 'gpt-4')
+                model=self.config.get('model', 'gpt-5')
             )
             
             import json
@@ -395,7 +395,7 @@ Focus on creating a question that will help this specific student learn and addr
             response = chat_complete(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=self.config.get('model', 'gpt-4')
+                model=self.config.get('model', 'gpt-5')
             )
             
             # Parse JSON response

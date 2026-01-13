@@ -116,7 +116,9 @@ class LLMClient:
             raise Exception("LLM client not initialized")
         
         primary_model = model or self.model
-        fallback_model = fallback_model or "gpt-4.1"
+        # Default fallback to GPT-5 to avoid silently downgrading subagents to GPT-4.1.
+        # (Callers can still pass an explicit fallback_model if desired.)
+        fallback_model = fallback_model or "gpt-5"
         
         # Try primary model first
         result = self._try_model(primary_model, messages, tools, retries)

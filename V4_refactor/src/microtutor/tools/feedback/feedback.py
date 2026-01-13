@@ -29,7 +29,7 @@ class FeedbackTool(AgenticTool):
     def _call_llm(self, prompt: str, **kwargs) -> str:
         """Call LLM to generate comprehensive feedback."""
         try:
-            model = kwargs.get('model', self.llm_config.get('model', 'gpt-4'))
+            model = kwargs.get('model', self.llm_config.get('model', 'gpt-5'))
             case = kwargs.get('case', '')
             input_text = kwargs.get('input_text', '')
             conversation_history = kwargs.get('conversation_history', [])
@@ -42,7 +42,9 @@ class FeedbackTool(AgenticTool):
             # Feedback was added to the last user message in tutor_service_v2.py
             # Prepare messages with system prompt (includes case) + conversation history (which includes feedback)
             from microtutor.utils.conversation_utils import prepare_llm_messages
-            llm_messages = prepare_llm_messages(conversation_history, system_prompt)
+            # Ensure history is passed as list of dicts
+            clean_history = conversation_history if isinstance(conversation_history, list) else []
+            llm_messages = prepare_llm_messages(clean_history, system_prompt)
             
             # Check if feedback is in the conversation history (last user message)
             feedback_in_history = False

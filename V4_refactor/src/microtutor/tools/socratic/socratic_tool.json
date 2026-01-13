@@ -11,35 +11,14 @@
                 "type": "string",
                 "description": "The student's differential diagnosis or response during Socratic dialogue"
             },
-            "case": {
-                "type": "string",
-                "description": "The case description for reference"
-            },
-            "conversation_history": {
-                "type": "array",
-                "description": "Full conversation history for context",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "role": {
-                            "type": "string"
-                        },
-                        "content": {
-                            "type": "string"
-                        }
-                    }
-                }
-            },
             "model": {
                 "type": "string",
                 "description": "LLM model to use",
-                "default": "gpt-4"
+                "default": "gpt-5"
             }
         },
         "required": [
-            "input_text",
-            "case",
-            "conversation_history"
+            "input_text"
         ]
     },
     "llm_config": {

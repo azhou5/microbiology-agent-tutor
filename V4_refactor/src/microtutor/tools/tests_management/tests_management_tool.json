@@ -9,33 +9,13 @@
                 "type": "string",
                 "description": "The student's question or input about tests and management"
             },
-            "case": {
-                "type": "string",
-                "description": "The case description"
-            },
-            "conversation_history": {
-                "type": "array",
-                "description": "Previous conversation history",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "role": {
-                            "type": "string"
-                        },
-                        "content": {
-                            "type": "string"
-                        }
-                    }
-                }
-            },
             "model": {
                 "type": "string",
                 "description": "LLM model to use (optional)"
             }
         },
         "required": [
-            "input_text",
-            "case"
+            "input_text"
         ]
     },
     "cacheable": false,

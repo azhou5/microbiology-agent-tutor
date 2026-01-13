@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 try:
     from microtutor.api.routes import guidelines
     GUIDELINES_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     GUIDELINES_AVAILABLE = False
-    logger.warning("Guidelines router not available (missing dependencies)")
+    logger.warning(f"Guidelines router not available (missing dependencies): {e}")
 
 # Get the directory where this file is located
 BASE_DIR = Path(__file__).resolve().parent
@@ -170,7 +170,7 @@ logger.info("✅ FAISS management routes enabled")
 
 # Include optional guidelines router
 if GUIDELINES_AVAILABLE:
-    app.include_router(guidelines.router, tags=["guidelines"])
+    app.include_router(guidelines.router, prefix="/api/v1", tags=["guidelines"])
     logger.info("✅ Guidelines API routes enabled")
 else:
     logger.info("ℹ️  Guidelines API routes disabled (install dependencies to enable)")

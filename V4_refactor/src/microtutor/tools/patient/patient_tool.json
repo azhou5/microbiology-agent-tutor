@@ -11,34 +11,14 @@
                 "type": "string",
                 "description": "The question or statement directed to the patient"
             },
-            "case": {
-                "type": "string",
-                "description": "The case description containing patient information"
-            },
-            "conversation_history": {
-                "type": "array",
-                "description": "Previous conversation messages for context",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "role": {
-                            "type": "string"
-                        },
-                        "content": {
-                            "type": "string"
-                        }
-                    }
-                }
-            },
             "model": {
                 "type": "string",
                 "description": "LLM model to use for response generation",
-                "default": "gpt-4"
+                "default": "gpt-5"
             }
         },
         "required": [
-            "input_text",
-            "case"
+            "input_text"
         ]
     },
     "prompt_template": "You are a patient. You are answering questions from a medical student.\n\nIMPORTANT RULES:\n1. Provide ONLY the information SPECIFICALLY asked by the student\n2. If the question is general or open, ask for more specific details\n3. Never give hints or reveal the diagnosis\n4. Never use medical jargon\n5. Do not volunteer information that wasn't asked\n\nCase Information:\n{case}\n\nStudent Question: {input_text}\n\nRespond as the patient:",

@@ -49,7 +49,7 @@ async def get_config() -> ConfigResponse:
             )
         # Get current configuration
         use_azure = getattr(config, 'USE_AZURE_OPENAI', True)
-        current_model = getattr(config, 'API_MODEL_NAME', 'gpt-4.1')
+        current_model = getattr(config, 'API_MODEL_NAME', 'gpt-5')
         current_provider = 'azure' if use_azure else 'personal'
         
         # Log current configuration
@@ -70,10 +70,10 @@ async def get_config() -> ConfigResponse:
                 description="GPT-5 Preview model via Azure OpenAI"
             ),
             ModelInfo(
-                name="gpt-4.1",
-                display_name="GPT-4.1 (2025-04-14)",
+                name="gpt-5-mini",
+                display_name="GPT-5 Mini (Preview)",
                 provider="azure",
-                description="Latest GPT-4.1 model via Azure OpenAI"
+                description="GPT-5 Mini Preview model via Azure OpenAI"
             ),
             ModelInfo(
                 name="gpt-4o-1120",
@@ -120,12 +120,6 @@ async def get_config() -> ConfigResponse:
                 display_name="GPT-5 (2025-08-07)",
                 provider="personal",
                 description="GPT-5 model via Personal OpenAI"
-            ),
-            ModelInfo(
-                name="gpt-4.1-2025-04-14",
-                display_name="GPT-4.1 (2025-04-14)",
-                provider="personal",
-                description="GPT-4.1 model via Personal OpenAI"
             )
         ]
         
@@ -165,10 +159,10 @@ async def get_available_models() -> List[ModelInfo]:
                 description="GPT-5 Preview model via Azure OpenAI"
             ),
             ModelInfo(
-                name="gpt-4.1",
-                display_name="GPT-4.1 (2025-04-14)",
+                name="gpt-5-mini",
+                display_name="GPT-5 Mini (Preview)",
                 provider="azure",
-                description="Latest GPT-4.1 model via Azure OpenAI"
+                description="GPT-5 Mini Preview model via Azure OpenAI"
             ),
             ModelInfo(
                 name="gpt-4o-1120",
@@ -215,12 +209,6 @@ async def get_available_models() -> List[ModelInfo]:
                 display_name="GPT-5 (2025-08-07)",
                 provider="personal",
                 description="GPT-5 model via Personal OpenAI"
-            ),
-            ModelInfo(
-                name="gpt-4.1-2025-04-14",
-                display_name="GPT-4.1 (2025-04-14)",
-                provider="personal",
-                description="GPT-4.1 model via Personal OpenAI"
             )
         ]
         

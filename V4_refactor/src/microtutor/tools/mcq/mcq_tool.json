@@ -9,10 +9,6 @@
                 "type": "string",
                 "description": "Medical topic for the question (e.g., 'MRSA treatment', 'diagnostic approach', 'antimicrobial selection')"
             },
-            "case": {
-                "type": "string",
-                "description": "Patient case context to make questions clinically relevant and specific"
-            },
             "difficulty": {
                 "type": "string",
                 "description": "Question difficulty level based on student's current understanding",
@@ -26,21 +22,6 @@
             "session_id": {
                 "type": "string",
                 "description": "Session ID for tracking (optional)"
-            },
-            "conversation_history": {
-                "type": "array",
-                "description": "Previous conversation messages to analyze learning patterns and gaps",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "role": {
-                            "type": "string"
-                        },
-                        "content": {
-                            "type": "string"
-                        }
-                    }
-                }
             },
             "learning_focus": {
                 "type": "object",

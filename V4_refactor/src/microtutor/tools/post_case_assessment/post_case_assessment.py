@@ -248,7 +248,7 @@ class PostCaseAssessmentTool(AgenticTool):
             case = kwargs['case']
             conversation_history = kwargs['conversation_history']
             num_questions = kwargs.get('num_questions', self.default_num_questions)
-            model = kwargs.get('model', self.llm_config.get('model', 'gpt-4'))
+            model = kwargs.get('model', self.llm_config.get('model', 'gpt-5'))
             
             # Step 1: Analyze conversation for weak areas
             logger.info("Analyzing conversation for student weak areas...")
