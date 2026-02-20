@@ -229,6 +229,8 @@ Route all parts about test selection and management to the tests_management agen
 • Agent provides feedback on correct/incorrect approaches and evidence-based practices
 • COMPLETION SIGNAL: When tests_management agent indicates comprehensive testing and treatment planned, conclude with [PHASE_COMPLETE: tests_management]
 Almost everything in the tests management section should be routed to the tests_management agent.
+
+
 - "what tests should I order?" → tests_management
 - "what else is there?" / "what other tests?" → tests_management  
 - "I don't know what to test" / "help me with tests" → tests_management

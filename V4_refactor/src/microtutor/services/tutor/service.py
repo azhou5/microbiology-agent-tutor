@@ -544,6 +544,7 @@ class TutorService:
                 "case": context.case_description,
                 "conversation_history": filtered_history,
                 "model": context.get_model_name(),
+                "organism": context.organism or "",
             }
             
             # Auto-load guidelines for management phase
@@ -640,6 +641,7 @@ class TutorService:
                 tool_args["conversation_history"] = context.conversation_history or []
                 tool_args["model"] = context.model_name or global_config.API_MODEL_NAME or "gpt-5"
                 tool_args["case_id"] = context.case_id or ""
+                tool_args["organism"] = context.organism or ""
             elif tool_name == "hint":
                 # Hint tool does NOT get the full case - only conversation history
                 # This prevents leaking undiscovered case information

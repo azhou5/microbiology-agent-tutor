@@ -9,6 +9,7 @@ from microtutor.schemas.tools.tool_models import AgenticTool
 from microtutor.schemas.tools.tool_errors import ToolLLMError
 from microtutor.core.llm.llm_router import chat_complete
 from microtutor.prompts.socratic_prompts import get_socratic_system_prompt
+from microtutor.utils.csv_guidance import csv_guidance
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,32 @@ class SocraticTool(AgenticTool):
             model = kwargs.get('model', self.llm_config.get('model', 'gpt-5'))
             case = kwargs.get('case', '')
             conversation_history = kwargs.get('conversation_history', [])
+            # Get organism from kwargs (passed from TutorService)
+            # If not passed explicitly, we might try to infer it, but TutorService should pass it.
+            # In V4, TutorService passes 'case' and 'conversation_history'. 
+            # We need to ensure 'organism' is also passed in tool_args.
+            organism = kwargs.get('organism', '') 
             
-            # Get system prompt template and format with case
+            # Get CSV guidance
+            csv_guidance_text = ""
+            if organism:
+                crucial_factors = csv_guidance.get_crucial_factors(organism)
+                if crucial_factors:
+                    factors_list = "\n- ".join(crucial_factors)
+                    csv_guidance_text = (
+                        f"=== CRITICAL GUIDANCE FROM KNOWLEDGE BASE ===\n"
+                        f"For the correct diagnosis ({organism}), the following factors are CRITICAL. "
+                        f"Ensure the student considers these associations in their differential:\n"
+                        f"- {factors_list}\n\n"
+                        f"Guide the student to identify these specific connections."
+                    )
+            
+            # Get system prompt template and format with case and csv_guidance
             system_prompt_template = get_socratic_system_prompt()
-            system_prompt = system_prompt_template.format(case=case)
+            system_prompt = system_prompt_template.format(
+                case=case,
+                csv_guidance=csv_guidance_text
+            )
             
             # Use conversation_history which already includes feedback at the end
             # Feedback was added to the last user message in tutor_service_v2.py
@@ -64,7 +87,8 @@ class SocraticTool(AgenticTool):
             case=arguments.get('case', ''),
             input_text=arguments.get('input_text', ''),
             conversation_history=arguments.get('conversation_history', []),
-            model=arguments.get('model', 'gpt-5')
+            model=arguments.get('model', 'gpt-5'),
+            organism=arguments.get('organism', '') # Pass organism
         )
 
 
