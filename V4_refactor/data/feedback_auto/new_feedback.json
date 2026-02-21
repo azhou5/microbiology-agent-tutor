@@ -1,0 +1,41 @@
+[
+  {
+    "rating": 3,
+    "message": "About three days ago.",
+    "feedback_text": "",
+    "replacement_text": "",
+    "case_id": "case_1771604557087_nir1cfzfg",
+    "organism": "staphylococcus aureus",
+    "history": [
+      {
+        "role": "user",
+        "content": "when did it start?"
+      },
+      {
+        "role": "assistant",
+        "content": "About three days ago."
+      }
+    ],
+    "timestamp": "2026-02-20T11:24:30.590605"
+  },
+  {
+    "feedback_kind": "message",
+    "rating": 2,
+    "message": "It started about eleven days ago \u2014 I woke with dizziness and a headache on the right side of my head (temporal region).",
+    "feedback_text": "patients should not say \"temporal region\" or use jargon. ",
+    "replacement_text": "",
+    "case_id": "case_1771629390703_xh6n4unww",
+    "organism": "Case_07011",
+    "history": [
+      {
+        "role": "user",
+        "content": "when didd it start?"
+      },
+      {
+        "role": "assistant",
+        "content": "It started about eleven days ago \u2014 I woke with dizziness and a headache on the right side of my head (temporal region)."
+      }
+    ],
+    "timestamp": "2026-02-20T18:17:40.667478"
+  }
+]

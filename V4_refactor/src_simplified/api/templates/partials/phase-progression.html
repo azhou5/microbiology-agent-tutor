@@ -1,0 +1,35 @@
+<!-- Phase Progression Sidebar -->
+<!-- Related JS modules: phase.js, mcq.js -->
+<div id="phase-progression" class="phase-progression" style="display: none;">
+    <h3>🎯 Case Progress</h3>
+    <div class="phase-buttons">
+        <button class="phase-btn" data-phase="information_gathering">
+            <span class="phase-icon">📋</span>
+            <span class="phase-text">Information Gathering</span>
+        </button>
+        <button class="phase-btn" data-phase="differential_diagnosis">
+            <span class="phase-icon">🔍</span>
+            <span class="phase-text">Differential Diagnosis</span>
+        </button>
+        <button class="phase-btn" data-phase="tests_management">
+            <span class="phase-icon">🧪</span>
+            <span class="phase-text">Tests & Management</span>
+        </button>
+        <button class="phase-btn" data-phase="deeper_dive">
+            <span class="phase-icon">🔬</span>
+            <span class="phase-text">Deeper Dive (Optional)</span>
+        </button>
+        <button class="phase-btn phase-btn-assessment" data-phase="assessment" disabled>
+            <span class="phase-icon">📝</span>
+            <span class="phase-text">Assessment MCQs</span>
+            <span class="phase-badge">After Case</span>
+        </button>
+        <button class="phase-btn" data-phase="feedback">
+            <span class="phase-icon">✅</span>
+            <span class="phase-text">Feedback</span>
+        </button>
+    </div>
+    <div class="phase-guidance">
+        <p id="phase-guidance-text">Start by gathering patient history and examination findings.</p>
+    </div>
+</div>

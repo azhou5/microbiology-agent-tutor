@@ -1,0 +1,623 @@
+/**
+ * API call functions for MicroTutor V4
+ */
+
+/**
+ * Update the sticky case summary header with the initial case presentation
+ * @param {Object} data - Response data from start_case API
+ */
+function updateCaseSummaryHeader(data) {
+    const caseSummaryHeader = document.getElementById('case-summary-header');
+    const caseOneLiner = document.getElementById('case-one-liner');
+    const toggleBtn = document.getElementById('toggle-case-summary');
+
+    if (!caseSummaryHeader || !caseOneLiner) return;
+
+    // Extract just the patient one-liner from the welcome message
+    // Format is: "Welcome to today's case.\n\n{one-liner}\n\nBegin by asking..."
+    let caseOneLinerText = '';
+    if (data.history && Array.isArray(data.history)) {
+        const firstAssistantMsg = data.history.find(msg => msg.role === 'assistant');
+        if (firstAssistantMsg) {
+            const content = firstAssistantMsg.content;
+            // Split by double newlines and get the second paragraph (the one-liner)
+            const paragraphs = content.split('\n\n');
+            if (paragraphs.length >= 2) {
+                // The one-liner is typically the second paragraph
+                caseOneLinerText = paragraphs[1].trim();
+            } else {
+                // Fallback: try to extract sentence with age pattern
+                const ageMatch = content.match(/\d{1,3}-year-old\s+(?:man|woman|male|female|patient)[^.]*\./i);
+                if (ageMatch) {
+                    caseOneLinerText = ageMatch[0];
+                } else {
+                    caseOneLinerText = content;
+                }
+            }
+        }
+    }
+
+    // If no presentation found, use a default message
+    if (!caseOneLinerText) {
+        caseOneLinerText = 'Case in progress...';
+    }
+
+    // Update the UI
+    caseOneLiner.textContent = caseOneLinerText;
+    caseSummaryHeader.style.display = 'flex';
+
+    // Store the case presentation in state for reference
+    State.casePresentation = caseOneLinerText;
+
+    // Add toggle functionality
+    if (toggleBtn) {
+        toggleBtn.onclick = () => {
+            toggleBtn.classList.toggle('collapsed');
+            caseSummaryHeader.classList.toggle('collapsed');
+        };
+    }
+
+    console.log('[CASE_SUMMARY] Updated case summary header:', caseOneLinerText);
+}
+
+/**
+ * Hide the case summary header
+ */
+function hideCaseSummaryHeader() {
+    const caseSummaryHeader = document.getElementById('case-summary-header');
+    if (caseSummaryHeader) {
+        caseSummaryHeader.style.display = 'none';
+    }
+}
+
+/**
+ * Get all available organisms from the select element
+ * @returns {Array<string>} Array of organism values
+ */
+function getAllOrganisms() {
+    if (!DOM.organismSelect) return [];
+
+    const organisms = [];
+    const optgroups = DOM.organismSelect.getElementsByTagName('optgroup');
+
+    for (let group of optgroups) {
+        const groupOptions = group.getElementsByTagName('option');
+        for (let option of groupOptions) {
+            if (option.value && option.value !== 'random') {
+                organisms.push(option.value);
+            }
+        }
+    }
+    return organisms;
+}
+
+/**
+ * Select a random organism using sampling without replacement
+ * @returns {string|null} Selected organism key or null
+ */
+function selectRandomOrganism() {
+    console.log('[RANDOM] Starting random organism selection');
+
+    const allAvailableOrganisms = getAllOrganisms();
+
+    if (allAvailableOrganisms.length === 0) {
+        console.log('[RANDOM] No organisms available');
+        setStatus('No organisms available to start a case.', true);
+        return null;
+    }
+
+    // Get seen organisms from localStorage
+    const seenOrganisms = getSeenOrganisms();
+    console.log('[RANDOM] Previously seen organisms:', seenOrganisms);
+
+    // Determine unseen organisms
+    let unseenOrganisms = allAvailableOrganisms.filter(o => !seenOrganisms.includes(o));
+    console.log('[RANDOM] Unseen organisms:', unseenOrganisms);
+
+    // Check if we need to reset
+    if (unseenOrganisms.length === 0 && allAvailableOrganisms.length > 0) {
+        console.log('[RANDOM] All organisms have been seen. Resetting the list.');
+        clearSeenOrganisms();
+        unseenOrganisms = allAvailableOrganisms;
+        setStatus('You have completed all available organisms! The cycle will now repeat.');
+
+        // Try to avoid the very last organism from the previous cycle
+        if (unseenOrganisms.length > 1 && State.currentOrganismKey) {
+            const finalPool = unseenOrganisms.filter(o => o !== State.currentOrganismKey);
+            if (finalPool.length > 0) {
+                unseenOrganisms = finalPool;
+                console.log(`[RANDOM] Starting new cycle, avoiding last organism '${State.currentOrganismKey}'`);
+            }
+        }
+    }
+
+    // Select from the available pool
+    const optionsToUse = unseenOrganisms;
+    if (optionsToUse.length === 0) {
+        console.error('[RANDOM] No options to select from');
+        return null;
+    }
+
+    const randomIndex = Math.floor(Math.random() * optionsToUse.length);
+    const randomOrganismValue = optionsToUse[randomIndex];
+    console.log(`[RANDOM] Selected random organism: ${randomOrganismValue}`);
+
+    // Update the select element to show the random selection
+    if (DOM.organismSelect) {
+        DOM.organismSelect.value = randomOrganismValue;
+        DOM.organismSelect.dataset.randomlySelectedValue = randomOrganismValue;
+
+        // Find the display text for the selected organism
+        const matchedOption = Array.from(DOM.organismSelect.options).find(opt => opt.value === randomOrganismValue);
+        const randomOrganismText = matchedOption ? matchedOption.textContent : randomOrganismValue;
+        DOM.organismSelect.dataset.randomlySelectedText = randomOrganismText;
+
+        console.log(`[RANDOM] Random selection complete: ${randomOrganismValue} (${randomOrganismText})`);
+    }
+
+    return randomOrganismValue;
+}
+
+/**
+ * Start a random case
+ */
+async function handleStartRandomCase() {
+    console.log('[START_RANDOM_CASE] Starting random case...');
+
+    const selectedOrganism = selectRandomOrganism();
+    if (!selectedOrganism) {
+        setStatus('Failed to select random organism.', true);
+        return;
+    }
+
+    // Set the organism in the dropdown (for display purposes)
+    if (DOM.organismSelect) {
+        DOM.organismSelect.value = selectedOrganism;
+    }
+
+    // Start the case with the random organism
+    await handleStartCaseWithOrganism(selectedOrganism);
+}
+
+/**
+ * Start a new case
+ */
+async function handleStartCase() {
+    console.log('[START_CASE] Starting new case...');
+
+    const selectedOrganism = DOM.organismSelect ? DOM.organismSelect.value : null;
+
+    if (!selectedOrganism) {
+        setStatus('Please select an organism first.', true);
+        return;
+    }
+
+    await handleStartCaseWithOrganism(selectedOrganism);
+}
+
+/**
+ * Start a case with a specific organism (shared logic)
+ */
+async function handleStartCaseWithOrganism(selectedOrganism) {
+    // Clear previous state
+    clearConversationState();
+    State.chatHistory = [];
+    if (DOM.chatbox) DOM.chatbox.innerHTML = '';
+    State.currentCaseId = generateCaseId();
+    State.currentOrganismKey = selectedOrganism;
+
+    // Reset phase to Information Gathering
+    State.currentPhase = 'information_gathering';
+    updatePhaseUI();
+
+    setStatus('Starting new case...');
+    disableInput(true);
+    if (DOM.finishBtn) DOM.finishBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/start_case`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                organism: State.currentOrganismKey,
+                case_id: State.currentCaseId,
+                model_name: State.currentModel,
+                model_provider: State.currentModelProvider
+            }),
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || err.error || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('[START_CASE] Response:', data);
+
+        // Initialize history from response with validation
+        State.chatHistory = validateChatHistory(data.history);
+
+        // Display messages
+        if (DOM.chatbox) DOM.chatbox.innerHTML = '';
+        State.chatHistory.forEach(msg => {
+            if (msg.role !== 'system') {
+                if (msg.role === 'assistant') {
+                    addMessage(msg.role, msg.content, false, 'maintutor', null, null, 'MainTutor');
+                } else {
+                    addMessage(msg.role, msg.content, false);
+                }
+            }
+        });
+
+        setStatus(`Case started. Case ID: ${State.currentCaseId}`);
+        disableInput(false);
+        if (DOM.finishBtn) DOM.finishBtn.disabled = false;
+        showPhaseProgression();
+        updatePhaseUI();
+        saveConversationState();
+
+        // Update case summary header with the initial case presentation
+        updateCaseSummaryHeader(data);
+
+        // Update seen organisms list for random selection
+        addSeenOrganism(State.currentOrganismKey);
+
+        // Focus the input for immediate interaction
+        if (DOM.userInput) DOM.userInput.focus();
+
+        console.log('[START_CASE] Success!');
+    } catch (error) {
+        console.error('[START_CASE] Error:', error);
+        setStatus(`Error: ${error.message}`, true);
+        disableInput(false);
+        State.currentOrganismKey = null;
+        State.currentCaseId = null;
+    }
+}
+
+/**
+ * Send a chat message
+ */
+async function handleSendMessage() {
+    const messageText = DOM.userInput ? DOM.userInput.value.trim() : '';
+    if (!messageText) return;
+
+    // Self-heal case/session state for a smoother UX:
+    // backend /chat can initialize a session if case_id is new and organism_key is provided.
+    if (!State.currentCaseId) {
+        State.currentCaseId = generateCaseId();
+    }
+    if (!State.currentOrganismKey) {
+        State.currentOrganismKey =
+            (DOM.organismSelect && DOM.organismSelect.value) ? DOM.organismSelect.value : 'Case_07011';
+    }
+
+    console.log('[CHAT] Sending message...');
+
+    addMessage('user', messageText);
+    addMessageToHistory('user', messageText);
+    if (DOM.userInput) DOM.userInput.value = '';
+    disableInput(true);
+
+    try {
+        // Filter out malformed messages before sending
+        const validHistory = validateChatHistory(State.chatHistory);
+
+        // Log feedback settings being sent
+        console.log(`🎯 [CHAT] Sending Request with Feedback Settings:`);
+        console.log(`🔧 [CHAT] Feedback Enabled: ${State.feedbackEnabled}`);
+        console.log(`📊 [CHAT] Threshold: ${State.feedbackThreshold.toFixed(1)}`);
+        console.log(`🤖 [CHAT] Model: ${State.currentModel} (${State.currentModelProvider})`);
+
+        const response = await fetch(`${API_BASE}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: messageText,
+                history: validHistory,
+                organism_key: State.currentOrganismKey,
+                case_id: State.currentCaseId,
+                model_name: State.currentModel,
+                model_provider: State.currentModelProvider,
+                feedback_enabled: State.feedbackEnabled,
+                feedback_threshold: State.feedbackThreshold,
+                // Keep backend TutorContext phase stable across requests (especially after skipping sections)
+                current_phase: State.currentPhase
+            }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+
+            if (errData.detail && errData.detail.includes('case')) {
+                setStatus("Session expired. Please start a new case.", true);
+                disableInput(true);
+                if (DOM.finishBtn) DOM.finishBtn.disabled = true;
+                clearConversationState();
+                return;
+            }
+
+            throw new Error(errData.detail || errData.error || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('[CHAT] Response:', data);
+
+        // Set tool tracking based on backend response
+        if (data.tools_used && data.tools_used.length > 0) {
+            // Use the first tool (most relevant for speaker detection)
+            const toolUsed = data.tools_used[0];
+            setLastToolUsed(toolUsed);
+
+            // Update phase based on tool used (dynamic phase inference)
+            if (TOOL_TO_PHASE[toolUsed]) {
+                const newPhaseRaw = TOOL_TO_PHASE[toolUsed];
+                const newPhase = (typeof normalizePhaseForUI === 'function')
+                    ? normalizePhaseForUI(newPhaseRaw)
+                    : newPhaseRaw;
+                if (newPhase !== State.currentPhase) {
+                    State.currentPhase = newPhase;
+                    updatePhaseUI();
+                    saveConversationState();
+                    console.log(`[PHASE] Updated to ${newPhase} based on tool: ${toolUsed}`);
+                }
+            }
+        } else {
+            State.lastToolUsed = null;
+        }
+
+        // Check for audio data in response
+        let audioData = null;
+        let responseText = data.response;
+
+        // Try to parse JSON response for audio data
+        try {
+            const parsedResponse = JSON.parse(data.response);
+            if (parsedResponse.has_audio && parsedResponse.audio_data) {
+                audioData = parsedResponse;
+                responseText = parsedResponse.response;
+            }
+        } catch (e) {
+            // Not JSON, use as plain text
+        }
+
+        // Check for image URL in metadata
+        let imageUrl = null;
+        if (data.image_url) {
+            imageUrl = data.image_url;
+            console.log('[CHAT] Received image URL (top-level):', imageUrl);
+        } else if (data.metadata && data.metadata.image_url) {
+            imageUrl = data.metadata.image_url;
+            console.log('[CHAT] Received image URL:', imageUrl);
+        }
+
+        let messageId = null;
+        if (data.orchestrator_message) {
+            addMessage(
+                'assistant',
+                data.orchestrator_message,
+                false,
+                data.main_speaker || 'maintutor',
+                null,
+                null,
+                'MainTutor'
+            );
+        }
+
+        const subagentText = data.subagent_response || responseText;
+        const subagentSpeaker = data.subagent_speaker || State.lastToolUsed || 'tutor';
+        const subagentLabelMap = {
+            patient: 'Patient Agent',
+            maintutor_differential: 'MainTutor',
+            deeper_dive_tutor: 'Deeper Dive Tutor',
+            tests_management: 'Tests & Management Agent',
+            feedback: 'Feedback Agent',
+            post_case_assessment: 'Assessment Agent',
+            tutor: 'Tutor Agent'
+        };
+        const subagentLabel = subagentLabelMap[subagentSpeaker] || 'Subagent';
+
+        messageId = addMessage(
+            'assistant',
+            subagentText,
+            false,
+            subagentSpeaker,
+            audioData,
+            imageUrl,
+            subagentLabel
+        );
+
+        // Filter out malformed messages from server history
+        if (data.history) {
+            State.chatHistory = validateChatHistory(data.history);
+        }
+        // IMPORTANT: do not append assistant again here.
+        // `State.chatHistory` was just replaced by the server-returned canonical history
+        // which already includes the assistant response. Appending again duplicates turns
+        // and can confuse downstream context/routing.
+
+        // Update phase information from backend metadata
+        if (data.metadata) {
+            // Update current phase
+            if (data.metadata.current_phase && data.metadata.current_phase !== State.currentPhase) {
+                const backendPhase = (typeof normalizePhaseForUI === 'function')
+                    ? normalizePhaseForUI(data.metadata.current_phase)
+                    : data.metadata.current_phase;
+                State.currentPhase = backendPhase;
+                updatePhaseUI();
+                console.log('[PHASE] Backend phase update:', backendPhase);
+            }
+
+            // Update phase locking
+            if (data.metadata.phase_locked !== undefined) {
+                updatePhaseLocking(data.metadata.phase_locked);
+            }
+
+            // Update phase progress and guidance
+            if (data.metadata.phase_progress !== undefined) {
+                updatePhaseProgress(data.metadata.phase_progress);
+            }
+
+            if (data.metadata.phase_guidance) {
+                updatePhaseGuidance(data.metadata.phase_guidance);
+            }
+
+            if (data.metadata.completion_criteria) {
+                updateCompletionCriteria(data.metadata.completion_criteria);
+            }
+        }
+
+        disableInput(false);
+        setStatus('');
+        saveConversationState();
+
+        // Auto-focus the input for continuous conversation
+        if (DOM.userInput) DOM.userInput.focus();
+    } catch (error) {
+        console.error('[CHAT] Error:', error);
+        setStatus(`Error: ${error.message}`, true);
+        disableInput(false);
+
+        // Still focus input on error so user can retry
+        if (DOM.userInput) DOM.userInput.focus();
+    }
+}
+
+/**
+ * Update model selection based on provider
+ */
+function updateModelSelection() {
+    if (!DOM.azureProvider || !DOM.personalProvider || !DOM.modelSelect) {
+        return;
+    }
+
+    // Clear all options first
+    DOM.modelSelect.innerHTML = '';
+
+    // Update current provider
+    if (DOM.azureProvider.checked) {
+        const previousProvider = State.currentModelProvider;
+        State.currentModelProvider = 'azure';
+        if (previousProvider !== 'azure') {
+            console.log(`🔄 [FRONTEND] Provider Changed: ${previousProvider.toUpperCase()} → AZURE`);
+        }
+
+        // Add Azure models (using actual deployment names)
+        const azureOptions = [
+            { value: 'gpt-5', text: 'GPT-5 (Preview)' },
+            { value: 'gpt-5-mini', text: 'GPT-5 Mini (Preview)' },
+            { value: 'gpt-4o-1120', text: 'GPT-4o (2024-11-20)' },
+            { value: 'o4-mini-0416', text: 'o4-mini (2025-04-16)' },
+            { value: 'o3-mini-0131', text: 'o3-mini (2025-01-31)' },
+        ];
+
+        azureOptions.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option.value;
+            optionElement.textContent = option.text;
+            const preferredModel = State.currentModel || 'gpt-5-mini';
+            if (option.value === preferredModel || (!State.currentModel && option.value === 'gpt-5-mini')) {
+                optionElement.selected = true;
+                State.currentModel = option.value;
+            }
+            DOM.modelSelect.appendChild(optionElement);
+        });
+
+    } else {
+        const previousProvider = State.currentModelProvider;
+        State.currentModelProvider = 'personal';
+        if (previousProvider !== 'personal') {
+            console.log(`🔄 [FRONTEND] Provider Changed: ${previousProvider.toUpperCase()} → PERSONAL`);
+        }
+
+        // Add Personal models
+        const personalOptions = [
+            { value: 'gpt-5', text: 'GPT-5 (Preview)' },
+            { value: 'o4', text: 'o4' },
+            { value: 'gpt-5-mini-2025-08-07', text: 'GPT-5 Mini (2025-08-07)' },
+            { value: 'gpt-5-2025-08-07', text: 'GPT-5 (2025-08-07)' },
+        ];
+
+        personalOptions.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option.value;
+            optionElement.textContent = option.text;
+            const preferredModel = State.currentModel || 'gpt-5';
+            if (option.value === preferredModel || (!State.currentModel && option.value === 'gpt-5')) {
+                optionElement.selected = true;
+                State.currentModel = option.value;
+            }
+            DOM.modelSelect.appendChild(optionElement);
+        });
+    }
+
+    console.log(`[MODEL] Provider: ${State.currentModelProvider}, Model: ${State.currentModel}`);
+}
+
+/**
+ * Update current model when selection changes
+ */
+function updateCurrentModel() {
+    if (DOM.modelSelect && DOM.modelSelect.value) {
+        const previousModel = State.currentModel;
+        State.currentModel = DOM.modelSelect.value;
+        console.log(`[MODEL] Selected model: ${State.currentModel}`);
+        console.log(`🔄 [FRONTEND] Model Changed: ${previousModel} → ${State.currentModel}`);
+        console.log(`🔧 [FRONTEND] Current System: ${State.currentModelProvider.toUpperCase()}`);
+        console.log(`🤖 [FRONTEND] Current Model: ${State.currentModel}`);
+    }
+}
+
+/**
+ * Sync frontend configuration with backend
+ */
+async function syncWithBackendConfig() {
+    try {
+        console.log('[CONFIG] Syncing with backend configuration...');
+
+        const response = await fetch('/api/v1/config', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const config = await response.json();
+        console.log('[CONFIG] Backend configuration:', config);
+
+        // Update provider selection
+        if (config.use_azure) {
+            if (DOM.azureProvider) DOM.azureProvider.checked = true;
+            if (DOM.personalProvider) DOM.personalProvider.checked = false;
+            State.currentModelProvider = 'azure';
+        } else {
+            if (DOM.azureProvider) DOM.azureProvider.checked = false;
+            if (DOM.personalProvider) DOM.personalProvider.checked = true;
+            State.currentModelProvider = 'personal';
+        }
+
+        // Update model selection
+        State.currentModel = config.current_model;
+
+        // Refresh model selection UI
+        updateModelSelection();
+
+        // Set the correct model in the dropdown
+        if (DOM.modelSelect) {
+            DOM.modelSelect.value = State.currentModel;
+        }
+
+        console.log(`[CONFIG] Synced - Provider: ${State.currentModelProvider}, Model: ${State.currentModel}`);
+        console.log(`✅ [FRONTEND] Configuration Synced with Backend`);
+        console.log(`🔧 [FRONTEND] System: ${State.currentModelProvider.toUpperCase()}`);
+        console.log(`🤖 [FRONTEND] Model: ${State.currentModel}`);
+
+    } catch (error) {
+        console.warn('[CONFIG] Failed to sync with backend, using defaults:', error);
+        // Continue with default configuration
+    }
+}

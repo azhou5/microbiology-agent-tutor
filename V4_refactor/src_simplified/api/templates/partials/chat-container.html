@@ -1,0 +1,33 @@
+<!-- Chat Container -->
+<!-- Related JS modules: chat.js, voice.js, mcq.js -->
+<div class="chat-container">
+    <!-- Sticky Case Summary - shows the initial case presentation -->
+    <div id="case-summary-header" class="case-summary-header" style="display: none;">
+        <div class="case-summary-content">
+            <span class="case-summary-icon">📋</span>
+            <span id="case-one-liner" class="case-one-liner-text">Loading case...</span>
+        </div>
+        <button id="toggle-case-summary" class="toggle-case-summary" title="Collapse/Expand">▼</button>
+    </div>
+
+    <div id="chatbox" class="chatbox">
+        <div class="welcome-message">
+            <p>👋 Welcome to MicroTutor V4!</p>
+            <p>Select an organism above and click "Start New Case" to begin your interactive microbiology case study.
+            </p>
+        </div>
+    </div>
+
+    <div id="input-area" class="input-area">
+        <textarea id="user-input" placeholder="Enter your message..." rows="1" disabled></textarea>
+        <div class="button-group">
+            <button id="send-btn" class="btn btn-success" disabled>
+                <span class="btn-icon">📤</span> Send
+            </button>
+            <button id="finish-btn" class="btn btn-warning" disabled>
+                <span class="btn-icon">🏁</span> Finish Case
+            </button>
+        </div>
+    </div>
+</div>
+<!-- Assessment section is now in its own partial: assessment-section.html -->

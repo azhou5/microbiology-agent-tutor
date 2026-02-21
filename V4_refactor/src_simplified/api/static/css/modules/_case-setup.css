@@ -1,0 +1,220 @@
+/* Case Setup Styles */
+/* Related HTML partial: partials/case-setup.html */
+/* Related JS modules: api.js */
+.case-setup {
+    padding: 20px;
+    background: linear-gradient(to right, #f8f9fa, #e9ecef);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.setup-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 15px;
+}
+
+/* Primary setup row - centered and prominent */
+.setup-row-primary {
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.organism-group {
+    width: 100%;
+    max-width: 400px;
+}
+
+.organism-group label {
+    font-size: 1.1rem;
+    text-align: center;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.organism-group select {
+    width: 100%;
+    font-size: 1.1rem;
+    padding: 12px 15px;
+}
+
+/* Random option styling - make it prominent */
+#organism-select option[value="random"] {
+    font-weight: 700;
+    font-size: 1.1em;
+    background: linear-gradient(to right, #e3f2fd, #bbdefb);
+    color: #1565c0;
+    padding: 12px;
+}
+
+.setup-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 200px;
+}
+
+.setup-group label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.setup-group select {
+    padding: 10px 15px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    min-width: 200px;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.setup-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.setup-group select option {
+    padding: 10px 12px;
+    background: white;
+    color: var(--text-primary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.setup-group select option:hover {
+    background: #e3f2fd;
+    color: var(--primary-color);
+}
+
+.setup-group select option:checked {
+    background: var(--primary-color);
+    color: white;
+    font-weight: 600;
+}
+
+.setup-group select option:focus {
+    background: var(--primary-color);
+    color: white;
+    outline: none;
+}
+
+.setup-group select optgroup[style*="display: none"] {
+    display: none !important;
+}
+
+.setup-group select optgroup {
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: #f8f9fa;
+    padding: 4px 8px;
+}
+
+.setup-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+/* Larger start button */
+.btn-large {
+    font-size: 1.1rem;
+    padding: 12px 30px;
+}
+
+/* Advanced Settings Collapsible */
+.advanced-settings {
+    margin-top: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: white;
+}
+
+.advanced-settings summary {
+    padding: 10px 15px;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.advanced-settings summary::-webkit-details-marker {
+    display: none;
+}
+
+.advanced-settings summary::before {
+    content: "▶";
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+}
+
+.advanced-settings[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.advanced-settings summary:hover {
+    background: #f8f9fa;
+}
+
+.advanced-settings-content {
+    padding: 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+}
+
+/* Model Provider Toggle */
+.model-provider-toggle {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 2px solid var(--border-color);
+}
+
+.model-provider-toggle input[type="radio"] {
+    display: none;
+}
+
+.model-provider-toggle label {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid transparent;
+    margin: 0;
+    min-width: auto;
+}
+
+.model-provider-toggle input[type="radio"]:checked+label {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.model-provider-toggle label:hover {
+    background: #e9ecef;
+}
+
+.model-provider-toggle input[type="radio"]:checked+label:hover {
+    background: var(--primary-hover);
+}

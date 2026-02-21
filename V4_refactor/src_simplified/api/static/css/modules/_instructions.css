@@ -1,0 +1,32 @@
+/* Instructions Section Styles */
+/* Related HTML partial: partials/instructions.html */
+.instructions {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.instructions h2 {
+    font-size: 1.4rem;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.instructions ol {
+    padding-left: 20px;
+    margin: 0;
+}
+
+.instructions li {
+    margin-bottom: 8px;
+}
+
+.instructions li:last-child {
+    margin-bottom: 0;
+}
+
+.instructions strong {
+    font-weight: 600;
+}

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDImages Tutor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        {% include 'partials/header.html' %}
+        {% include 'partials/instructions.html' %}
+        {% include 'partials/case-setup.html' %}
+        {% include 'partials/case-history.html' %}
+
+        <!-- Main Content Area with Clarify Sidebar -->
+        <div class="main-content-wrapper">
+            {% include 'partials/clarify-sidebar.html' %}
+            <div class="main-content">
+                {% include 'partials/chat-container.html' %}
+                {% include 'partials/phase-progression.html' %}
+            </div>
+        </div>
+
+        <!-- Assessment Section - Full Width Below Main Content -->
+        {% include 'partials/assessment-section.html' %}
+
+        <p id="status-message" class="status"></p>
+
+        <footer>
+            <p>Powered by FastAPI & OpenAI | Version 4.0.0</p>
+        </footer>
+    </div>
+
+    {% include 'partials/scripts.html' %}
+</body>
+
+</html>

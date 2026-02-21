@@ -1,0 +1,45 @@
+<!-- Case Setup Section -->
+<!-- Related JS modules: api.js, dom.js -->
+<div class="case-setup">
+    <!-- Primary Setup Row - Organism Selection -->
+    <div class="setup-row setup-row-primary">
+        <div class="setup-group organism-group">
+            <label for="organism-select">Select a Case:</label>
+            <select id="organism-select">
+                <option value="">-- Choose a curated case --</option>
+                <optgroup label="Curated Cases">
+                    <option value="Case_07011" selected>Case 07011 (Staphylococcus aureus)</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="setup-actions">
+            <button id="start-case-btn" class="btn btn-primary btn-large">🚀 Start New Case</button>
+            <button id="start-random-case-btn" class="btn btn-secondary btn-large">🎲 Start Random Case</button>
+        </div>
+    </div>
+
+    <!-- Advanced Settings (Collapsible) -->
+    <details class="advanced-settings">
+        <summary>⚙️ Advanced Settings</summary>
+        <div class="advanced-settings-content">
+            <div class="setup-group">
+                <label for="model-provider">Model Provider:</label>
+                <div class="model-provider-toggle">
+                    <input type="radio" id="azure-provider" name="model-provider" value="azure" checked>
+                    <label for="azure-provider">Azure</label>
+                    <input type="radio" id="personal-provider" name="model-provider" value="personal">
+                    <label for="personal-provider">Personal</label>
+                </div>
+            </div>
+
+            <div class="setup-group">
+                <label for="model-select">Select Model:</label>
+                <select id="model-select">
+                    <!-- Options will be dynamically populated based on provider selection -->
+                </select>
+            </div>
+
+        </div>
+    </details>
+</div>
