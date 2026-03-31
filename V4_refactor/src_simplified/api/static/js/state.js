@@ -1,36 +1,41 @@
 /**
- * State management for MicroTutor V4
- * Centralized application state
+ * Centralised application state for MicroTutor V4.
  */
 
 const State = {
-    // Chat state
+    // Chat
     chatHistory: [],
-    phaseHistory: [],
 
-    // Case state
+    // Case
     currentCaseId: null,
     currentOrganismKey: null,
-    currentPhase: 'information_gathering',
+    displayOrganism: null,
     caseComplete: false,
 
-    // Model state
+    // Module pipeline
+    selectedModules: [],
+    enableMcqs: false,
+    moduleQueue: [],
+    currentModule: 'history_taking',
+
+    // Model
     currentModelProvider: 'azure',
     currentModel: 'gpt-5-mini',
+    moduleModels: {},
 
-    // Guidelines state (disabled in IDImages Tutor mode)
+    // Guidelines (disabled in simplified mode)
     guidelinesEnabled: false,
     currentGuidelines: null,
 
-    // Feedback state
+    // Feedback
     feedbackEnabled: true,
     feedbackThreshold: 0.7,
 
-    // Dashboard state
+    // Dashboard
     chartInstance: null,
     chartVisible: true,
 
-    // Voice state
+    // Voice (unused in simplified but kept for compat)
     mediaRecorder: null,
     audioChunks: [],
     isRecording: false,
@@ -38,7 +43,7 @@ const State = {
     voiceInitialized: false,
     recordingStartTime: null,
 
-    // Feedback counter state
+    // Feedback counter
     autoRefreshInterval: null,
     isRefreshing: false,
 
@@ -49,25 +54,37 @@ const State = {
     assessmentComplete: false,
     assessmentWeakAreas: [],
 
-    // Legacy MCQ state (for backward compatibility)
+    // Legacy MCQ state
     currentMCQ: null,
     currentSessionId: null,
+
+    // Pinned images (URLs already displayed, shown persistently)
+    pinnedImages: [],
+
+    // Findings checklist (history-taking progress tracker)
+    findingsProgress: { history_exam: { checked: 0, total: 0 }, investigations: { checked: 0, total: 0 } },
+    gatheredFindings: {},
+
+    // EMR notes display tracking
+    emrNotesDisplayed: 0,
 
     // Tool tracking
     lastToolUsed: null,
 
-    /**
-     * Reset all state to initial values
-     */
+
     reset() {
         this.chatHistory = [];
-        this.phaseHistory = [];
         this.currentCaseId = null;
         this.currentOrganismKey = null;
-        this.currentPhase = 'information_gathering';
+        this.displayOrganism = null;
         this.caseComplete = false;
+        this.selectedModules = [];
+        this.enableMcqs = false;
+        this.moduleQueue = [];
+        this.currentModule = 'history_taking';
         this.currentModelProvider = 'azure';
         this.currentModel = 'gpt-5-mini';
+        this.moduleModels = {};
         this.guidelinesEnabled = false;
         this.currentGuidelines = null;
         this.feedbackEnabled = true;
@@ -89,12 +106,13 @@ const State = {
         this.assessmentWeakAreas = [];
         this.currentMCQ = null;
         this.currentSessionId = null;
+        this.pinnedImages = [];
+        this.findingsProgress = { history_exam: { checked: 0, total: 0 }, investigations: { checked: 0, total: 0 } };
+        this.gatheredFindings = {};
+        this.emrNotesDisplayed = 0;
         this.lastToolUsed = null;
     },
 
-    /**
-     * Reset only assessment state (for retrying)
-     */
     resetAssessment() {
         this.assessmentMCQs = [];
         this.assessmentAnswers = {};

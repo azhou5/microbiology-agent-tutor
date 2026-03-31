@@ -1,0 +1,402 @@
+{
+  "history_exam": [
+    {
+      "id": "he_1",
+      "category": "HPI",
+      "label": "Initial symptom onset",
+      "detail": "Well until 11 days before admission when dizziness and right temporal headache developed"
+    },
+    {
+      "id": "he_2",
+      "category": "HPI",
+      "label": "Headache course",
+      "detail": "Right temporal headaches recurred after transient improvement; worse with noise"
+    },
+    {
+      "id": "he_3",
+      "category": "HPI",
+      "label": "Worsening prior to admission",
+      "detail": "Three days before admission headache severity increased significantly"
+    },
+    {
+      "id": "he_4",
+      "category": "HPI",
+      "label": "Associated chest symptom",
+      "detail": "Pleuritic chest pain on the left developed the day after worsening headache"
+    },
+    {
+      "id": "he_5",
+      "category": "HPI",
+      "label": "Gastrointestinal symptoms",
+      "detail": "Emesis occurred the day after headache worsened; later awoke with nausea and vomiting the following morning"
+    },
+    {
+      "id": "he_6",
+      "category": "HPI",
+      "label": "Ocular prodrome",
+      "detail": "While in outside ED both eyes felt 'weird' but no diplopia or changes in vision initially"
+    },
+    {
+      "id": "he_7",
+      "category": "HPI",
+      "label": "Response to ED meds",
+      "detail": "Prochlorperazine and diphenhydramine administered in outside ED with partial improvement"
+    },
+    {
+      "id": "he_8",
+      "category": "HPI",
+      "label": "Antibiotic given at discharge from outside ED",
+      "detail": "Discharged on azithromycin"
+    },
+    {
+      "id": "he_9",
+      "category": "HPI",
+      "label": "Treatment by primary care after ED visit",
+      "detail": "Seen by PCP after nausea/vomiting; received trimethobenzamide and IV fluids"
+    },
+    {
+      "id": "he_10",
+      "category": "HPI",
+      "label": "Acute ocular worsening",
+      "detail": "That evening bilateral eye pain developed and over ~3 hours periorbital swelling and right-eye proptosis occurred"
+    },
+    {
+      "id": "he_11",
+      "category": "HPI",
+      "label": "Onset of diplopia",
+      "detail": "Diplopia noted 5 hours after onset of eye pain"
+    },
+    {
+      "id": "he_12",
+      "category": "HPI",
+      "label": "Progression and transfer",
+      "detail": "Returned to ED and was transferred to tertiary care hospital for further evaluation"
+    },
+    {
+      "id": "he_13",
+      "category": "HPI",
+      "label": "Facial/jaw pain during admission",
+      "detail": "Right-sided facial pain persisted and moved to lateral jaw and neck on the right, associated with trismus"
+    },
+    {
+      "id": "he_14",
+      "category": "PMH",
+      "label": "Chronic medical history",
+      "detail": "History of temporomandibular joint disorder"
+    },
+    {
+      "id": "he_15",
+      "category": "Medications",
+      "label": "Chronic medication",
+      "detail": "Oral contraceptive pills"
+    },
+    {
+      "id": "he_16",
+      "category": "Medications",
+      "label": "Medications administered in outside ED",
+      "detail": "Prochlorperazine and diphenhydramine given at outside ED; discharged on azithromycin"
+    },
+    {
+      "id": "he_17",
+      "category": "Medications",
+      "label": "Medications given by PCP",
+      "detail": "Trimethobenzamide and intravenous fluids administered by PCP"
+    },
+    {
+      "id": "he_18",
+      "category": "Medications",
+      "label": "Empiric hospital antibiotics",
+      "detail": "Vancomycin, ceftriaxone and metronidazole started empirically on admission"
+    },
+    {
+      "id": "he_19",
+      "category": "Medications",
+      "label": "Definitive hospital antibiotics",
+      "detail": "Antibiotics changed to nafcillin and rifampin when cultures identified MSSA; continued for 4 weeks"
+    },
+    {
+      "id": "he_20",
+      "category": "Medications",
+      "label": "Anticoagulation",
+      "detail": "Patient was anticoagulated during admission; later maintained on coumadin pending evaluation for coagulopathy"
+    },
+    {
+      "id": "he_21",
+      "category": "Allergies",
+      "label": "Medication allergy history",
+      "detail": "No medication allergies reported; amoxicillin previously caused vomiting"
+    },
+    {
+      "id": "he_22",
+      "category": "Social History",
+      "label": "Household/family",
+      "detail": "Lives with husband, two young children and two dogs"
+    },
+    {
+      "id": "he_23",
+      "category": "Epidemiological History",
+      "label": "Children's recent illness",
+      "detail": "Both children had recently had staphylococcal skin infections"
+    },
+    {
+      "id": "he_24",
+      "category": "Epidemiological History",
+      "label": "Travel history",
+      "detail": "Recently traveled to Northern New England with her family"
+    },
+    {
+      "id": "he_25",
+      "category": "Epidemiological History",
+      "label": "Trauma/exposure history",
+      "detail": "Reported no trauma, no tick exposure, and no insect bites"
+    },
+    {
+      "id": "he_26",
+      "category": "Social History",
+      "label": "Tobacco/alcohol/drug use",
+      "detail": "Does not smoke, drink alcohol, or use illicit drugs"
+    },
+    {
+      "id": "he_27",
+      "category": "Vitals",
+      "label": "Temperature",
+      "detail": "101.9\u00b0F (38.8\u00b0C) on presentation"
+    },
+    {
+      "id": "he_28",
+      "category": "Vitals",
+      "label": "Pulse",
+      "detail": "100 beats per minute"
+    },
+    {
+      "id": "he_29",
+      "category": "Vitals",
+      "label": "Blood pressure",
+      "detail": "133/66 mm Hg"
+    },
+    {
+      "id": "he_30",
+      "category": "Vitals",
+      "label": "Respiratory rate",
+      "detail": "18 breaths per minute"
+    },
+    {
+      "id": "he_31",
+      "category": "Vitals",
+      "label": "Oxygen saturation",
+      "detail": "96% on ambient air"
+    },
+    {
+      "id": "he_32",
+      "category": "Physical Exam",
+      "label": "General appearance and mentation",
+      "detail": "Appeared uncomfortable, lying in bed with eyes closed, easily roused, oriented, and answered questions appropriately"
+    },
+    {
+      "id": "he_33",
+      "category": "Physical Exam",
+      "label": "Pupils",
+      "detail": "Pupils 4.5 mm bilaterally and constricted to 3 mm with illumination (reactive)"
+    },
+    {
+      "id": "he_34",
+      "category": "Physical Exam",
+      "label": "Right facial swelling",
+      "detail": "Mild facial swelling of the right cheek"
+    },
+    {
+      "id": "he_35",
+      "category": "Physical Exam",
+      "label": "Periorbital edema",
+      "detail": "Mild periorbital edema on the right"
+    },
+    {
+      "id": "he_36",
+      "category": "Physical Exam",
+      "label": "Periorbital erythema and proptosis",
+      "detail": "Erythema and 3\u20134 mm proptosis of the right eye compared to the left"
+    },
+    {
+      "id": "he_37",
+      "category": "Physical Exam",
+      "label": "Chemosis and ptosis",
+      "detail": "Chemosis and ptosis present on the right"
+    },
+    {
+      "id": "he_38",
+      "category": "Physical Exam",
+      "label": "Extraocular movements (left)",
+      "detail": "Extraocular movements of the left eye normal"
+    },
+    {
+      "id": "he_39",
+      "category": "Physical Exam",
+      "label": "Extraocular movements (right)",
+      "detail": "Right eye: limited medial adduction; no lateral, superior or inferior motion"
+    },
+    {
+      "id": "he_40",
+      "category": "Physical Exam",
+      "label": "Periorbital tenderness",
+      "detail": "Mild tenderness periorbitally on the right"
+    },
+    {
+      "id": "he_41",
+      "category": "Physical Exam",
+      "label": "Forehead lesion",
+      "detail": "Small crusted papule on forehead between the eyebrows"
+    },
+    {
+      "id": "he_42",
+      "category": "Physical Exam",
+      "label": "Fundoscopic exam",
+      "detail": "Fundoscopic examination was normal"
+    },
+    {
+      "id": "he_43",
+      "category": "Physical Exam",
+      "label": "Tympanic membranes",
+      "detail": "Tympanic membranes were normal"
+    },
+    {
+      "id": "he_44",
+      "category": "Physical Exam",
+      "label": "Neck exam",
+      "detail": "Neck stiffness present"
+    },
+    {
+      "id": "he_45",
+      "category": "Physical Exam",
+      "label": "Cervical lymph nodes",
+      "detail": "No cervical lymphadenopathy"
+    },
+    {
+      "id": "he_46",
+      "category": "Physical Exam",
+      "label": "Other systems",
+      "detail": "Remainder of physical examination was normal"
+    }
+  ],
+  "investigations": [
+    {
+      "id": "ix_1",
+      "category": "Labs",
+      "label": "Complete blood count (CBC)",
+      "detail": "WBC 18,600 /mm3 (93% neutrophils, 3% lymphocytes, 4% monocytes), hematocrit 33.6%, platelets 216,000 /mm3"
+    },
+    {
+      "id": "ix_2",
+      "category": "Labs",
+      "label": "Serum chemistries and liver function tests",
+      "detail": "Serum chemistries and liver function tests reported as normal"
+    },
+    {
+      "id": "ix_3",
+      "category": "Labs",
+      "label": "D-dimer",
+      "detail": "D-dimer 1029 ng/mL (reference <500 ng/mL)"
+    },
+    {
+      "id": "ix_4",
+      "category": "Labs",
+      "label": "Pregnancy test",
+      "detail": "Pregnancy test negative"
+    },
+    {
+      "id": "ix_5",
+      "category": "CSF",
+      "label": "CSF analysis (glucose/protein/cells)",
+      "detail": "CSF glucose 69 mg/dL, protein 180 mg/dL; Tube 1: 1575 RBC/mm3 and 1130 WBC/mm3 (83% neutrophils, 17% monocytes); Tube 4: 195 RBC/mm3 and 3000 WBC/mm3 (82% neutrophils, 18% lymphocytes)"
+    },
+    {
+      "id": "ix_6",
+      "category": "Microbiology",
+      "label": "Gram stain of CSF cytospin",
+      "detail": "Gram stain of CSF cytospin: abundant polymorphonuclear leukocytes and no organisms visualized"
+    },
+    {
+      "id": "ix_7",
+      "category": "Microbiology",
+      "label": "Blood and CSF cultures",
+      "detail": "Blood and CSF cultures (day of admission) grew methicillin-sensitive Staphylococcus aureus (MSSA)"
+    },
+    {
+      "id": "ix_8",
+      "category": "Imaging",
+      "label": "Chest CT (PE protocol) at outside ED",
+      "detail": "Chest CT showed two pulmonary nodules on the right and a left lower lobe abnormality thought to be inflammatory process or infarct"
+    },
+    {
+      "id": "ix_9",
+      "category": "Imaging",
+      "label": "Chest CT during admission",
+      "detail": "CT chest showed left upper lobe cavitary lesion and multiple small scattered lesions consistent with septic pulmonary emboli"
+    },
+    {
+      "id": "ix_10",
+      "category": "Imaging",
+      "label": "Brain MRI",
+      "detail": "MRI of the brain suggestive of thromboses and dural enhancement consistent with meningitis"
+    },
+    {
+      "id": "ix_11",
+      "category": "Imaging",
+      "label": "CT angiography of the head",
+      "detail": "CT angiography revealed thrombosis of both cavernous sinuses, both superior ophthalmic veins (complete on right, partial on left), dorsal clival venous plexus, right sigmoid sinus, right internal jugular vein, and likely bilateral sphenoparietal sinuses"
+    },
+    {
+      "id": "ix_12",
+      "category": "Imaging",
+      "label": "CT scan of the neck",
+      "detail": "CT neck showed some soft tissue swelling but no evidence of abscess"
+    },
+    {
+      "id": "ix_13",
+      "category": "Imaging",
+      "label": "Transthoracic echocardiography",
+      "detail": "Transthoracic echocardiogram showed no vegetations"
+    },
+    {
+      "id": "ix_14",
+      "category": "Procedures",
+      "label": "Lumbar puncture",
+      "detail": "Lumbar puncture performed with CSF analysis and cytospin gram stain"
+    },
+    {
+      "id": "ix_15",
+      "category": "Microbiology",
+      "label": "Gram stain of aerobic blood culture",
+      "detail": "Gram stain of aerobic blood culture demonstrated gram-positive cocci consistent with Staphylococcus (culture confirmed MSSA)"
+    },
+    {
+      "id": "ix_16",
+      "category": "Other Ix",
+      "label": "Empiric antimicrobial therapy initiated",
+      "detail": "Empiric IV vancomycin, ceftriaxone and metronidazole started on admission"
+    },
+    {
+      "id": "ix_17",
+      "category": "Other Ix",
+      "label": "Definitive antimicrobial therapy and duration",
+      "detail": "Therapy changed to nafcillin and rifampin for methicillin-sensitive Staphylococcus aureus and continued for 4 weeks"
+    },
+    {
+      "id": "ix_18",
+      "category": "Other Ix",
+      "label": "Anticoagulation during admission",
+      "detail": "Anticoagulation was initiated during admission; patient continued on coumadin post-discharge pending coagulopathy evaluation"
+    },
+    {
+      "id": "ix_19",
+      "category": "Imaging",
+      "label": "Follow-up CT angiography (~10 months)",
+      "detail": "CT angiography 10 months after admission: non-significant opacification in bilateral cavernous sinuses, normal caliber superior ophthalmic veins bilaterally, stable persistent thrombosis of right sigmoid sinus, jugular sinus and internal jugular vein; transverse sinus enhanced normally"
+    },
+    {
+      "id": "ix_20",
+      "category": "Other Ix",
+      "label": "Clinical course (fever and ocular improvement)",
+      "detail": "Fevers resolved during admission; slow but significant improvement in ptosis, proptosis and eye movement; near-complete resolution by ~3 months except intermittent headaches at ~9 months"
+    }
+  ]
+}

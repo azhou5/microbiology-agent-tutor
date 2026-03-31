@@ -14,6 +14,20 @@ function escapeHtml(text) {
 }
 
 /**
+ * Remove internal LLM figure markers from visible assistant/patient text.
+ * @param {string} text - Raw message
+ * @returns {string} Text without [[display_figure:N]] tokens
+ */
+function stripDisplayFigureMarkers(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text
+        .replace(/\[\[\s*display_figure\s*:\s*\d+\s*\]\]/gi, '')
+        .replace(/\bdisplay_figure\s*\(\s*\d+\s*\)/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+/**
  * Convert markdown links and formatting to HTML
  * @param {string} text - Markdown text to convert
  * @returns {string} HTML formatted text

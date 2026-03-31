@@ -106,10 +106,9 @@ function showAssessmentSection(autoGenerate = false) {
             }
         }
 
-        // Update phase
-        State.currentPhase = 'assessment';
-        if (typeof updatePhaseUI === 'function') {
-            updatePhaseUI();
+        State.currentModule = 'feedback';
+        if (typeof updateModuleUI === 'function') {
+            updateModuleUI();
         }
 
         // Scroll to assessment section

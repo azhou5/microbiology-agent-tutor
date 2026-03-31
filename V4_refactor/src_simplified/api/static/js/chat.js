@@ -208,7 +208,11 @@ function addMessage(sender, messageContent, addFeedbackUI = false, speakerType =
     const messageTextSpan = document.createElement('span');
     // Use markdown rendering for assistant messages
     if (sender === 'assistant') {
-        messageTextSpan.innerHTML = markdownToHtml(messageContent);
+        const visibleText =
+            typeof stripDisplayFigureMarkers === 'function'
+                ? stripDisplayFigureMarkers(messageContent)
+                : messageContent;
+        messageTextSpan.innerHTML = markdownToHtml(visibleText);
     } else {
         messageTextSpan.textContent = messageContent;
     }
