@@ -1,214 +1,473 @@
 /**
- * API call functions for MicroTutor V4
+ * API call functions for MicroTutor V4.
  */
 
-/**
- * Update the sticky case summary header with the initial case presentation
- * @param {Object} data - Response data from start_case API
- */
+// ── helpers ──────────────────────────────────────────────────────────────
+
 function updateCaseSummaryHeader(data) {
     const caseSummaryHeader = document.getElementById('case-summary-header');
     const caseOneLiner = document.getElementById('case-one-liner');
     const toggleBtn = document.getElementById('toggle-case-summary');
-
     if (!caseSummaryHeader || !caseOneLiner) return;
 
-    // Extract just the patient one-liner from the welcome message
-    // Format is: "Welcome to today's case.\n\n{one-liner}\n\nBegin by asking..."
-    let caseOneLinerText = '';
+    let text = '';
     if (data.history && Array.isArray(data.history)) {
-        const firstAssistantMsg = data.history.find(msg => msg.role === 'assistant');
-        if (firstAssistantMsg) {
-            const content = firstAssistantMsg.content;
-            // Split by double newlines and get the second paragraph (the one-liner)
-            const paragraphs = content.split('\n\n');
-            if (paragraphs.length >= 2) {
-                // The one-liner is typically the second paragraph
-                caseOneLinerText = paragraphs[1].trim();
-            } else {
-                // Fallback: try to extract sentence with age pattern
-                const ageMatch = content.match(/\d{1,3}-year-old\s+(?:man|woman|male|female|patient)[^.]*\./i);
-                if (ageMatch) {
-                    caseOneLinerText = ageMatch[0];
-                } else {
-                    caseOneLinerText = content;
-                }
-            }
+        const first = data.history.find(m => m.role === 'assistant');
+        if (first) {
+            const parts = first.content.split('\n\n');
+            text = parts.length >= 2
+                ? parts[1].trim()
+                : (first.content.match(/\d{1,3}-year-old\s+(?:man|woman|male|female|patient)[^.]*\./i) || [first.content])[0];
         }
     }
-
-    // If no presentation found, use a default message
-    if (!caseOneLinerText) {
-        caseOneLinerText = 'Case in progress...';
-    }
-
-    // Update the UI
-    caseOneLiner.textContent = caseOneLinerText;
+    caseOneLiner.textContent = text || 'Case in progress...';
     caseSummaryHeader.style.display = 'flex';
+    State.casePresentation = text;
 
-    // Store the case presentation in state for reference
-    State.casePresentation = caseOneLinerText;
-
-    // Add toggle functionality
     if (toggleBtn) {
         toggleBtn.onclick = () => {
             toggleBtn.classList.toggle('collapsed');
             caseSummaryHeader.classList.toggle('collapsed');
         };
     }
-
-    console.log('[CASE_SUMMARY] Updated case summary header:', caseOneLinerText);
 }
 
-/**
- * Hide the case summary header
- */
 function hideCaseSummaryHeader() {
-    const caseSummaryHeader = document.getElementById('case-summary-header');
-    if (caseSummaryHeader) {
-        caseSummaryHeader.style.display = 'none';
-    }
+    const el = document.getElementById('case-summary-header');
+    if (el) el.style.display = 'none';
 }
 
-/**
- * Get all available organisms from the select element
- * @returns {Array<string>} Array of organism values
- */
 function getAllOrganisms() {
     if (!DOM.organismSelect) return [];
-
-    const organisms = [];
-    const optgroups = DOM.organismSelect.getElementsByTagName('optgroup');
-
-    for (let group of optgroups) {
-        const groupOptions = group.getElementsByTagName('option');
-        for (let option of groupOptions) {
-            if (option.value && option.value !== 'random') {
-                organisms.push(option.value);
-            }
+    const orgs = [];
+    for (const group of DOM.organismSelect.getElementsByTagName('optgroup')) {
+        for (const opt of group.getElementsByTagName('option')) {
+            if (opt.value && opt.value !== 'random') orgs.push(opt.value);
         }
     }
-    return organisms;
+    return orgs;
+}
+
+// ── module selection helpers ─────────────────────────────────────────────
+
+function getSelectedModules() {
+    const boxes = document.querySelectorAll('input[name="selected_modules"]:checked');
+    return Array.from(boxes).map(b => b.value);
+}
+
+function getEnableMcqs() {
+    const cb = document.getElementById('mod-mcqs');
+    return cb ? cb.checked : false;
+}
+
+function getModuleModels() {
+    const models = {};
+    document.querySelectorAll('.module-model-select').forEach(sel => {
+        if (sel.value && sel.dataset.module) {
+            models[sel.dataset.module] = sel.value;
+        }
+    });
+    return models;
+}
+
+// ── case presentation image lightbox ─────────────────────────────────────
+
+/**
+ * Open full-screen lightbox for a case presentation thumbnail.
+ * @param {string} src - Image URL
+ * @param {string} [alt] - Alt text
+ */
+function openCaseImageLightbox(src, alt) {
+    const root = document.getElementById('case-image-lightbox');
+    const img = document.getElementById('case-image-lightbox-img');
+    if (!root || !img || !src) return;
+    img.src = src;
+    img.alt = alt || 'Case image';
+    root.classList.add('is-active');
+    root.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
 }
 
 /**
- * Select a random organism using sampling without replacement
- * @returns {string|null} Selected organism key or null
+ * Close the case image lightbox and restore page scroll.
  */
-function selectRandomOrganism() {
-    console.log('[RANDOM] Starting random organism selection');
-
-    const allAvailableOrganisms = getAllOrganisms();
-
-    if (allAvailableOrganisms.length === 0) {
-        console.log('[RANDOM] No organisms available');
-        setStatus('No organisms available to start a case.', true);
-        return null;
+function closeCaseImageLightbox() {
+    const root = document.getElementById('case-image-lightbox');
+    const img = document.getElementById('case-image-lightbox-img');
+    if (!root) return;
+    root.classList.remove('is-active');
+    root.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    if (img) {
+        img.removeAttribute('src');
+        img.alt = '';
     }
-
-    // Get seen organisms from localStorage
-    const seenOrganisms = getSeenOrganisms();
-    console.log('[RANDOM] Previously seen organisms:', seenOrganisms);
-
-    // Determine unseen organisms
-    let unseenOrganisms = allAvailableOrganisms.filter(o => !seenOrganisms.includes(o));
-    console.log('[RANDOM] Unseen organisms:', unseenOrganisms);
-
-    // Check if we need to reset
-    if (unseenOrganisms.length === 0 && allAvailableOrganisms.length > 0) {
-        console.log('[RANDOM] All organisms have been seen. Resetting the list.');
-        clearSeenOrganisms();
-        unseenOrganisms = allAvailableOrganisms;
-        setStatus('You have completed all available organisms! The cycle will now repeat.');
-
-        // Try to avoid the very last organism from the previous cycle
-        if (unseenOrganisms.length > 1 && State.currentOrganismKey) {
-            const finalPool = unseenOrganisms.filter(o => o !== State.currentOrganismKey);
-            if (finalPool.length > 0) {
-                unseenOrganisms = finalPool;
-                console.log(`[RANDOM] Starting new cycle, avoiding last organism '${State.currentOrganismKey}'`);
-            }
-        }
-    }
-
-    // Select from the available pool
-    const optionsToUse = unseenOrganisms;
-    if (optionsToUse.length === 0) {
-        console.error('[RANDOM] No options to select from');
-        return null;
-    }
-
-    const randomIndex = Math.floor(Math.random() * optionsToUse.length);
-    const randomOrganismValue = optionsToUse[randomIndex];
-    console.log(`[RANDOM] Selected random organism: ${randomOrganismValue}`);
-
-    // Update the select element to show the random selection
-    if (DOM.organismSelect) {
-        DOM.organismSelect.value = randomOrganismValue;
-        DOM.organismSelect.dataset.randomlySelectedValue = randomOrganismValue;
-
-        // Find the display text for the selected organism
-        const matchedOption = Array.from(DOM.organismSelect.options).find(opt => opt.value === randomOrganismValue);
-        const randomOrganismText = matchedOption ? matchedOption.textContent : randomOrganismValue;
-        DOM.organismSelect.dataset.randomlySelectedText = randomOrganismText;
-
-        console.log(`[RANDOM] Random selection complete: ${randomOrganismValue} (${randomOrganismText})`);
-    }
-
-    return randomOrganismValue;
 }
 
 /**
- * Start a random case
+ * Wire backdrop, close control, and Escape (once). Thumbnails call openCaseImageLightbox directly
+ * when they are created in showCasePresentation so clicks work even if this runs late.
  */
-async function handleStartRandomCase() {
-    console.log('[START_RANDOM_CASE] Starting random case...');
+function initCaseImageLightbox() {
+    const root = document.getElementById('case-image-lightbox');
+    if (!root || root.dataset.lightboxBound === '1') return;
+    root.dataset.lightboxBound = '1';
 
-    const selectedOrganism = selectRandomOrganism();
-    if (!selectedOrganism) {
-        setStatus('Failed to select random organism.', true);
+    root.addEventListener('click', (e) => {
+        if (e.target === root || e.target.classList.contains('case-image-lightbox-close')) {
+            closeCaseImageLightbox();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && root.classList.contains('is-active')) {
+            closeCaseImageLightbox();
+        }
+    });
+}
+
+// ── case presentation panel ──────────────────────────────────────────────
+
+/**
+ * Show or hide the case presentation panel based on first_module.
+ * For history_taking the panel stays hidden (patient gives info interactively).
+ * For all other modules the full case text + images are rendered.
+ */
+function showCasePresentation(data) {
+    const panel = document.getElementById('case-presentation');
+    const textEl = document.getElementById('case-presentation-text');
+    const imagesEl = document.getElementById('case-presentation-images');
+    const titleEl = document.getElementById('case-presentation-title');
+    const toggleBtn = document.getElementById('toggle-case-presentation');
+
+    if (!panel || !textEl) return;
+
+    const firstModule = data.first_module || 'history_taking';
+
+    if (firstModule === 'history_taking' && (!data.case_text || data.case_text.length === 0)) {
+        panel.style.display = 'none';
         return;
     }
 
-    // Set the organism in the dropdown (for display purposes)
-    if (DOM.organismSelect) {
-        DOM.organismSelect.value = selectedOrganism;
+    // For non-history modules, always show the panel
+    if (firstModule === 'history_taking') {
+        panel.style.display = 'none';
+        return;
     }
 
-    // Start the case with the random organism
-    await handleStartCaseWithOrganism(selectedOrganism);
+    // Title
+    const displayOrg = data.display_organism || data.organism || 'Case';
+    if (titleEl) {
+        titleEl.textContent = displayOrg === 'Random' ? 'Case Presentation' : `Case: ${displayOrg}`;
+    }
+
+    // Images
+    if (imagesEl) {
+        imagesEl.innerHTML = '';
+        if (data.case_images && data.case_images.length > 0) {
+            data.case_images.forEach(url => {
+                const img = document.createElement('img');
+                img.src = url;
+                img.className = 'case-presentation-img';
+                img.alt = 'Case image';
+                img.title = 'Click to enlarge';
+                img.loading = 'lazy';
+                img.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const src = img.currentSrc || img.src;
+                    if (src) openCaseImageLightbox(src, img.alt || '');
+                });
+                imagesEl.appendChild(img);
+            });
+        }
+    }
+
+    // Case text -- use shared markdownToHtml from utils.js (marked is not bundled)
+    if (textEl && data.case_text) {
+        if (typeof markdownToHtml === 'function') {
+            textEl.innerHTML = markdownToHtml(data.case_text);
+        } else {
+            textEl.innerHTML = '<pre style="white-space:pre-wrap;font-family:inherit;">' +
+                data.case_text.replace(/</g, '&lt;').replace(/>/g, '&gt;') +
+                '</pre>';
+        }
+    }
+
+    panel.style.display = 'block';
+
+    // Toggle collapse
+    if (toggleBtn) {
+        toggleBtn.onclick = () => {
+            panel.classList.toggle('collapsed');
+            toggleBtn.textContent = panel.classList.contains('collapsed') ? '\u25B6' : '\u25BC';
+        };
+    }
 }
 
-/**
- * Start a new case
- */
+function hideCasePresentation() {
+    const panel = document.getElementById('case-presentation');
+    if (panel) panel.style.display = 'none';
+}
+
+// ── EMR panel ────────────────────────────────────────────────────────────
+
+function resetEMRPanel() {
+    State.findingsProgress = { history_exam: { checked: 0, total: 0 }, investigations: { checked: 0, total: 0 } };
+    State.gatheredFindings = {};
+    State.pinnedImages = [];
+    State.emrNotesDisplayed = 0;
+
+    const placeholders = {
+        'emr-patient-info-content': 'Gather history from the patient...',
+        'emr-examination-content': 'No examination findings yet.',
+        'emr-observations-content': 'No observations recorded.',
+    };
+    for (const [id, text] of Object.entries(placeholders)) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = `<p class="emr-placeholder">${text}</p>`;
+    }
+
+    ['emr-ix-bedside', 'emr-ix-bloods', 'emr-ix-imaging', 'emr-ix-microbiology', 'emr-ix-special'].forEach(id => {
+        const sub = document.getElementById(id);
+        if (sub) {
+            const content = sub.querySelector('.emr-section-content');
+            if (content) content.innerHTML = '';
+        }
+    });
+
+    updateEMRProgressBars({ history_exam: { checked: 0, total: 0 }, investigations: { checked: 0, total: 0 } });
+}
+
+function updateEMRProgressBars(progress) {
+    if (!progress) return;
+    const he = progress.history_exam || { checked: 0, total: 0 };
+    const ix = progress.investigations || { checked: 0, total: 0 };
+
+    const hePct = he.total > 0 ? Math.round((he.checked / he.total) * 100) : 0;
+    const ixPct = ix.total > 0 ? Math.round((ix.checked / ix.total) * 100) : 0;
+
+    if (DOM.historyExamBar) DOM.historyExamBar.style.width = `${hePct}%`;
+    if (DOM.historyExamCount) DOM.historyExamCount.textContent = `${he.checked}/${he.total}`;
+    if (DOM.investigationsBar) DOM.investigationsBar.style.width = `${ixPct}%`;
+    if (DOM.investigationsBarCount) DOM.investigationsBarCount.textContent = `${ix.checked}/${ix.total}`;
+}
+
+function setEMRBusy(busy) {
+    if (DOM.emrSpinner) DOM.emrSpinner.classList.toggle('active', busy);
+}
+
+function updateEMRFromChecklist(findingsData) {
+    if (!findingsData) return;
+    updateEMRProgressBars(findingsData.progress);
+}
+
+async function handleEMRRefresh() {
+    if (!State.currentCaseId) return;
+    const btn = DOM.emrRefreshBtn;
+    if (btn) btn.classList.add('refreshing');
+    setEMRBusy(true);
+
+    try {
+        const res = await fetch(`${API_BASE}/emr_refresh/${State.currentCaseId}`, { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Full replacement: clear all sections then re-render
+        State.emrNotesDisplayed = 0;
+        _clearEMRSections();
+        if (data.emr_notes) updateEMRNotes(data.emr_notes);
+        if (data.findings_checklist) updateEMRFromChecklist(data.findings_checklist);
+    } catch (err) {
+        console.error('[EMR_REFRESH] Error:', err);
+    } finally {
+        if (btn) btn.classList.remove('refreshing');
+        setEMRBusy(false);
+    }
+}
+
+function _clearEMRSections() {
+    ['emr-patient-info-content', 'emr-examination-content', 'emr-observations-content'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+    ['emr-ix-bedside', 'emr-ix-bloods', 'emr-ix-imaging', 'emr-ix-microbiology', 'emr-ix-special'].forEach(id => {
+        const sub = document.getElementById(id);
+        if (sub) {
+            const content = sub.querySelector('.emr-section-content');
+            if (content) content.innerHTML = '';
+        }
+    });
+}
+
+// Maps note sections → EMR panel targets.
+// Top-level sections resolve to a DOM.emr*Content element.
+// Investigation sections resolve to a subsection ID whose child .emr-section-content is the target.
+const EMR_NOTE_SECTION_MAP = {
+    HPI: { type: 'top', key: 'patient-info' },
+    PMH: { type: 'top', key: 'patient-info' },
+    Medications: { type: 'top', key: 'patient-info' },
+    Allergies: { type: 'top', key: 'patient-info' },
+    'Social History': { type: 'top', key: 'patient-info' },
+    'Family History': { type: 'top', key: 'patient-info' },
+    'Epidemiological History': { type: 'top', key: 'patient-info' },
+    'Physical Exam': { type: 'top', key: 'examination' },
+    Vitals: { type: 'top', key: 'observations' },
+    Bedside: { type: 'ix', id: 'emr-ix-bedside' },
+    Bloods: { type: 'ix', id: 'emr-ix-bloods' },
+    Imaging: { type: 'ix', id: 'emr-ix-imaging' },
+    Microbiology: { type: 'ix', id: 'emr-ix-microbiology' },
+    Special: { type: 'ix', id: 'emr-ix-special' },
+};
+
+function _resolveEMRContentEl(mapping) {
+    if (mapping.type === 'top') {
+        if (mapping.key === 'patient-info') return DOM.emrPatientInfoContent;
+        if (mapping.key === 'examination') return DOM.emrExaminationContent;
+        if (mapping.key === 'observations') return DOM.emrObservationsContent;
+        return null;
+    }
+    const sub = document.getElementById(mapping.id);
+    return sub ? sub.querySelector('.emr-section-content') : null;
+}
+
+function updateEMRNotes(notes) {
+    if (!notes || !Array.isArray(notes)) return;
+
+    const displayedCount = State.emrNotesDisplayed || 0;
+    const newNotes = notes.slice(displayedCount);
+    console.log(`[EMR_NOTES] total=${notes.length}, displayed=${displayedCount}, new=${newNotes.length}`);
+    if (newNotes.length === 0) return;
+
+    const grouped = {};
+    newNotes.forEach(n => {
+        const sec = n.section || 'HPI';
+        if (!grouped[sec]) grouped[sec] = [];
+        grouped[sec].push({ content: n.content, image_url: n.image_url || null });
+    });
+
+    for (const [section, items] of Object.entries(grouped)) {
+        const mapping = EMR_NOTE_SECTION_MAP[section];
+        if (!mapping) continue;
+
+        const contentEl = _resolveEMRContentEl(mapping);
+        if (!contentEl) continue;
+
+        const placeholder = contentEl.querySelector('.emr-placeholder');
+        if (placeholder) placeholder.remove();
+
+        // For investigation subsections the parent <h5> already labels the category,
+        // so we skip the inner header to avoid redundancy.
+        const skipHeader = mapping.type === 'ix';
+
+        let listEl = contentEl.querySelector(`.emr-note-list[data-section="${section}"]`);
+        if (!listEl) {
+            if (!skipHeader) {
+                const headerEl = document.createElement('div');
+                headerEl.className = 'emr-note-header';
+                headerEl.dataset.section = section;
+                headerEl.textContent = section;
+                contentEl.appendChild(headerEl);
+            }
+            listEl = document.createElement('ul');
+            listEl.className = 'emr-note-list';
+            listEl.dataset.section = section;
+            contentEl.appendChild(listEl);
+        }
+
+        items.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'emr-note-item';
+            li.textContent = item.content;
+            listEl.appendChild(li);
+
+            if (item.image_url) {
+                const img = document.createElement('img');
+                img.src = item.image_url;
+                img.className = 'emr-result-image';
+                img.alt = item.content;
+                img.title = 'Click to enlarge';
+                img.loading = 'lazy';
+                img.addEventListener('click', () => {
+                    if (typeof openCaseImageLightbox === 'function') {
+                        openCaseImageLightbox(img.currentSrc || img.src, img.alt);
+                    }
+                });
+                listEl.appendChild(img);
+            }
+        });
+    }
+
+    State.emrNotesDisplayed = notes.length;
+}
+
+let _emrPollController = null;
+
+function pollEMRNotes(caseId) {
+    if (_emrPollController) _emrPollController.abort();
+    _emrPollController = new AbortController();
+    const signal = _emrPollController.signal;
+    const delays = [2000, 3000, 5000, 8000];
+    const startCount = State.emrNotesDisplayed || 0;
+
+    setEMRBusy(true);
+
+    (async () => {
+        try {
+            for (const delay of delays) {
+                await new Promise(r => setTimeout(r, delay));
+                if (signal.aborted) return;
+                try {
+                    const res = await fetch(`${API_BASE}/emr_notes/${caseId}`, { signal });
+                    if (res.status === 404) return;
+                    if (!res.ok) continue;
+                    const payload = await res.json();
+                    if (payload.emr_notes) updateEMRNotes(payload.emr_notes);
+                    if (payload.findings_checklist) updateEMRFromChecklist(payload.findings_checklist);
+                    const busy = payload.emr_busy === true;
+                    setEMRBusy(busy);
+                    if (!busy && (payload.emr_notes || []).length > startCount) return;
+                } catch { return; }
+            }
+        } finally {
+            setEMRBusy(false);
+        }
+    })();
+}
+
+// ── start case ───────────────────────────────────────────────────────────
+
 async function handleStartCase() {
-    console.log('[START_CASE] Starting new case...');
-
     const selectedOrganism = DOM.organismSelect ? DOM.organismSelect.value : null;
-
     if (!selectedOrganism) {
-        setStatus('Please select an organism first.', true);
+        setStatus('Please select a case first.', true);
+        return;
+    }
+
+    const modules = getSelectedModules();
+    if (modules.length === 0) {
+        setStatus('Please select at least one module.', true);
         return;
     }
 
     await handleStartCaseWithOrganism(selectedOrganism);
 }
 
-/**
- * Start a case with a specific organism (shared logic)
- */
 async function handleStartCaseWithOrganism(selectedOrganism) {
-    // Clear previous state
     clearConversationState();
     State.chatHistory = [];
+    State.pinnedImages = [];
     if (DOM.chatbox) DOM.chatbox.innerHTML = '';
+
+    resetEMRPanel();
+    hideCasePresentation();
+    hideCaseSummaryHeader();
+
     State.currentCaseId = generateCaseId();
     State.currentOrganismKey = selectedOrganism;
-
-    // Reset phase to Information Gathering
-    State.currentPhase = 'information_gathering';
-    updatePhaseUI();
+    State.selectedModules = getSelectedModules();
+    State.enableMcqs = getEnableMcqs();
+    State.moduleModels = getModuleModels();
 
     setStatus('Starting new case...');
     disableInput(true);
@@ -221,8 +480,13 @@ async function handleStartCaseWithOrganism(selectedOrganism) {
             body: JSON.stringify({
                 organism: State.currentOrganismKey,
                 case_id: State.currentCaseId,
+                selected_modules: State.selectedModules,
+                enable_mcqs: State.enableMcqs,
                 model_name: State.currentModel,
-                model_provider: State.currentModelProvider
+                model_provider: State.currentModelProvider,
+                enable_emr_notes: EMR_FLAGS.enableEmrNotes,
+                enable_checklist: EMR_FLAGS.enableChecklist,
+                module_models: State.moduleModels || {},
             }),
         });
 
@@ -234,38 +498,75 @@ async function handleStartCaseWithOrganism(selectedOrganism) {
         const data = await response.json();
         console.log('[START_CASE] Response:', data);
 
-        // Initialize history from response with validation
+        // Store the actual organism (may differ if random)
+        if (data.display_organism === 'Random') {
+            State.displayOrganism = 'Random';
+        } else {
+            State.displayOrganism = data.organism || selectedOrganism;
+        }
+        State.currentOrganismKey = data.organism || selectedOrganism;
+
+        // Module pipeline from backend
+        const meta = data.metadata || {};
+        State.moduleQueue = meta.module_queue || State.selectedModules;
+        State.currentModule = meta.current_module || State.moduleQueue[0] || 'history_taking';
+        State.enableMcqs = meta.enable_mcqs || State.enableMcqs;
+
         State.chatHistory = validateChatHistory(data.history);
 
-        // Display messages
         if (DOM.chatbox) DOM.chatbox.innerHTML = '';
+
+        const initialSpeaker = data.initial_speaker || 'maintutor';
+        const speakerLabelMap = {
+            patient: 'Patient',
+            ddx_tutor: 'DDx Tutor',
+            tx_tutor: 'Tx Tutor',
+            pathophys_epi_tutor: 'Pathophys & Epi Tutor',
+            feedback: 'Feedback',
+            maintutor: 'MainTutor',
+        };
+        const initialLabel = speakerLabelMap[initialSpeaker] || 'Tutor';
+        const initialType = initialSpeaker === 'patient' ? 'patient' : (initialSpeaker === 'maintutor' ? 'maintutor' : 'tutor');
+
         State.chatHistory.forEach(msg => {
             if (msg.role !== 'system') {
-                if (msg.role === 'assistant') {
-                    addMessage(msg.role, msg.content, false, 'maintutor', null, null, 'MainTutor');
-                } else {
-                    addMessage(msg.role, msg.content, false);
-                }
+                const spkType = msg.role === 'assistant' ? initialType : undefined;
+                const spkLabel = msg.role === 'assistant' ? initialLabel : undefined;
+                addMessage(msg.role, msg.content, false, spkType, null, null, spkLabel);
             }
         });
 
         setStatus(`Case started. Case ID: ${State.currentCaseId}`);
         disableInput(false);
         if (DOM.finishBtn) DOM.finishBtn.disabled = false;
+
+        // Show case presentation panel for non-history modules
+        showCasePresentation(data);
+
+        buildModuleProgressUI(State.moduleQueue);
         showPhaseProgression();
-        updatePhaseUI();
+        updateModuleUI();
         saveConversationState();
 
-        // Update case summary header with the initial case presentation
-        updateCaseSummaryHeader(data);
+        // One-liner header only for history-taking first module
+        if (data.first_module === 'history_taking') {
+            updateCaseSummaryHeader(data);
+        }
 
-        // Update seen organisms list for random selection
         addSeenOrganism(State.currentOrganismKey);
 
-        // Focus the input for immediate interaction
-        if (DOM.userInput) DOM.userInput.focus();
+        // Initialize checklist progress
+        if (data.findings_checklist) {
+            updateEMRProgressBars(data.findings_checklist.progress);
+        }
+        if (data.emr_notes) {
+            updateEMRNotes(data.emr_notes);
+        }
 
-        console.log('[START_CASE] Success!');
+        // Poll for background EMR/checklist tasks fired on the first message
+        pollEMRNotes(State.currentCaseId);
+
+        if (DOM.userInput) DOM.userInput.focus();
     } catch (error) {
         console.error('[START_CASE] Error:', error);
         setStatus(`Error: ${error.message}`, true);
@@ -275,24 +576,17 @@ async function handleStartCaseWithOrganism(selectedOrganism) {
     }
 }
 
-/**
- * Send a chat message
- */
+// ── chat ─────────────────────────────────────────────────────────────────
+
 async function handleSendMessage() {
     const messageText = DOM.userInput ? DOM.userInput.value.trim() : '';
     if (!messageText) return;
 
-    // Self-heal case/session state for a smoother UX:
-    // backend /chat can initialize a session if case_id is new and organism_key is provided.
-    if (!State.currentCaseId) {
-        State.currentCaseId = generateCaseId();
-    }
+    if (!State.currentCaseId) State.currentCaseId = generateCaseId();
     if (!State.currentOrganismKey) {
         State.currentOrganismKey =
             (DOM.organismSelect && DOM.organismSelect.value) ? DOM.organismSelect.value : 'Case_07011';
     }
-
-    console.log('[CHAT] Sending message...');
 
     addMessage('user', messageText);
     addMessageToHistory('user', messageText);
@@ -300,14 +594,7 @@ async function handleSendMessage() {
     disableInput(true);
 
     try {
-        // Filter out malformed messages before sending
         const validHistory = validateChatHistory(State.chatHistory);
-
-        // Log feedback settings being sent
-        console.log(`🎯 [CHAT] Sending Request with Feedback Settings:`);
-        console.log(`🔧 [CHAT] Feedback Enabled: ${State.feedbackEnabled}`);
-        console.log(`📊 [CHAT] Threshold: ${State.feedbackThreshold.toFixed(1)}`);
-        console.log(`🤖 [CHAT] Model: ${State.currentModel} (${State.currentModelProvider})`);
 
         const response = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
@@ -321,276 +608,147 @@ async function handleSendMessage() {
                 model_provider: State.currentModelProvider,
                 feedback_enabled: State.feedbackEnabled,
                 feedback_threshold: State.feedbackThreshold,
-                // Keep backend TutorContext phase stable across requests (especially after skipping sections)
-                current_phase: State.currentPhase
+                current_module: State.currentModule,
             }),
         });
 
         if (!response.ok) {
             const errData = await response.json();
-
             if (errData.detail && errData.detail.includes('case')) {
-                setStatus("Session expired. Please start a new case.", true);
+                setStatus('Session expired. Please start a new case.', true);
                 disableInput(true);
                 if (DOM.finishBtn) DOM.finishBtn.disabled = true;
                 clearConversationState();
                 return;
             }
-
             throw new Error(errData.detail || errData.error || `HTTP ${response.status}`);
         }
 
         const data = await response.json();
         console.log('[CHAT] Response:', data);
 
-        // Set tool tracking based on backend response
+        // Tool tracking
         if (data.tools_used && data.tools_used.length > 0) {
-            // Use the first tool (most relevant for speaker detection)
-            const toolUsed = data.tools_used[0];
-            setLastToolUsed(toolUsed);
-
-            // Update phase based on tool used (dynamic phase inference)
-            if (TOOL_TO_PHASE[toolUsed]) {
-                const newPhaseRaw = TOOL_TO_PHASE[toolUsed];
-                const newPhase = (typeof normalizePhaseForUI === 'function')
-                    ? normalizePhaseForUI(newPhaseRaw)
-                    : newPhaseRaw;
-                if (newPhase !== State.currentPhase) {
-                    State.currentPhase = newPhase;
-                    updatePhaseUI();
-                    saveConversationState();
-                    console.log(`[PHASE] Updated to ${newPhase} based on tool: ${toolUsed}`);
-                }
-            }
+            setLastToolUsed(data.tools_used[0]);
         } else {
             State.lastToolUsed = null;
         }
 
-        // Check for audio data in response
-        let audioData = null;
-        let responseText = data.response;
-
-        // Try to parse JSON response for audio data
-        try {
-            const parsedResponse = JSON.parse(data.response);
-            if (parsedResponse.has_audio && parsedResponse.audio_data) {
-                audioData = parsedResponse;
-                responseText = parsedResponse.response;
-            }
-        } catch (e) {
-            // Not JSON, use as plain text
+        // Update EMR panel from whatever the response already carries
+        if (data.findings_checklist) {
+            updateEMRFromChecklist(data.findings_checklist);
+        }
+        if (data.emr_notes) {
+            updateEMRNotes(data.emr_notes);
         }
 
-        // Check for image URL in metadata
-        let imageUrl = null;
-        if (data.image_url) {
-            imageUrl = data.image_url;
-            console.log('[CHAT] Received image URL (top-level):', imageUrl);
-        } else if (data.metadata && data.metadata.image_url) {
-            imageUrl = data.metadata.image_url;
-            console.log('[CHAT] Received image URL:', imageUrl);
-        }
+        // Poll for async EMR notes / checklist updates (fire-and-forget)
+        pollEMRNotes(State.currentCaseId);
 
-        let messageId = null;
-        if (data.orchestrator_message) {
-            addMessage(
-                'assistant',
-                data.orchestrator_message,
-                false,
-                data.main_speaker || 'maintutor',
-                null,
-                null,
-                'MainTutor'
-            );
-        }
-
-        const subagentText = data.subagent_response || responseText;
+        const subagentText = data.subagent_response || data.response;
         const subagentSpeaker = data.subagent_speaker || State.lastToolUsed || 'tutor';
         const subagentLabelMap = {
-            patient: 'Patient Agent',
-            maintutor_differential: 'MainTutor',
-            deeper_dive_tutor: 'Deeper Dive Tutor',
-            tests_management: 'Tests & Management Agent',
-            feedback: 'Feedback Agent',
-            post_case_assessment: 'Assessment Agent',
-            tutor: 'Tutor Agent'
+            patient: 'Patient',
+            ddx_tutor: 'DDx Tutor',
+            tx_tutor: 'Management Tutor',
+            pathophys_epi_tutor: 'Pathophys & Epi Tutor',
+            feedback: 'Feedback',
+            tutor: 'Tutor',
         };
-        const subagentLabel = subagentLabelMap[subagentSpeaker] || 'Subagent';
+        const subagentLabel = subagentLabelMap[subagentSpeaker] || 'Tutor';
+        const chatImageUrl = data.image_url || null;
 
-        messageId = addMessage(
-            'assistant',
-            subagentText,
-            false,
-            subagentSpeaker,
-            audioData,
-            imageUrl,
-            subagentLabel
-        );
+        addMessage('assistant', subagentText, false, subagentSpeaker, null, chatImageUrl, subagentLabel);
 
-        // Filter out malformed messages from server history
+        // Sync history
         if (data.history) {
             State.chatHistory = validateChatHistory(data.history);
         }
-        // IMPORTANT: do not append assistant again here.
-        // `State.chatHistory` was just replaced by the server-returned canonical history
-        // which already includes the assistant response. Appending again duplicates turns
-        // and can confuse downstream context/routing.
 
-        // Update phase information from backend metadata
+        // Update module state from backend metadata
         if (data.metadata) {
-            // Update current phase
-            if (data.metadata.current_phase && data.metadata.current_phase !== State.currentPhase) {
-                const backendPhase = (typeof normalizePhaseForUI === 'function')
-                    ? normalizePhaseForUI(data.metadata.current_phase)
-                    : data.metadata.current_phase;
-                State.currentPhase = backendPhase;
-                updatePhaseUI();
-                console.log('[PHASE] Backend phase update:', backendPhase);
+            if (data.metadata.current_module && data.metadata.current_module !== State.currentModule) {
+                State.currentModule = data.metadata.current_module;
+                updateModuleUI();
+                console.log('[MODULE] Updated to:', State.currentModule);
             }
-
-            // Update phase locking
-            if (data.metadata.phase_locked !== undefined) {
-                updatePhaseLocking(data.metadata.phase_locked);
+            if (data.metadata.module_queue) {
+                State.moduleQueue = data.metadata.module_queue;
             }
-
-            // Update phase progress and guidance
-            if (data.metadata.phase_progress !== undefined) {
-                updatePhaseProgress(data.metadata.phase_progress);
-            }
-
-            if (data.metadata.phase_guidance) {
-                updatePhaseGuidance(data.metadata.phase_guidance);
-            }
-
-            if (data.metadata.completion_criteria) {
-                updateCompletionCriteria(data.metadata.completion_criteria);
+            // Auto-trigger MCQ generation when we enter the feedback module
+            if (data.metadata.current_module === 'feedback' && data.metadata.enable_mcqs) {
+                if (DOM.finishBtn) DOM.finishBtn.textContent = '📝 Generating MCQs...';
+                if (typeof showAssessmentSection === 'function') showAssessmentSection();
+                setTimeout(() => {
+                    if (typeof handleGenerateAssessment === 'function') handleGenerateAssessment();
+                }, 500);
             }
         }
 
         disableInput(false);
         setStatus('');
         saveConversationState();
-
-        // Auto-focus the input for continuous conversation
         if (DOM.userInput) DOM.userInput.focus();
+
     } catch (error) {
         console.error('[CHAT] Error:', error);
         setStatus(`Error: ${error.message}`, true);
         disableInput(false);
-
-        // Still focus input on error so user can retry
         if (DOM.userInput) DOM.userInput.focus();
     }
 }
 
-/**
- * Update model selection based on provider
- */
-function updateModelSelection() {
-    if (!DOM.azureProvider || !DOM.personalProvider || !DOM.modelSelect) {
-        return;
-    }
+// ── model selection ──────────────────────────────────────────────────────
 
-    // Clear all options first
+function updateModelSelection() {
+    if (!DOM.azureProvider || !DOM.personalProvider || !DOM.modelSelect) return;
     DOM.modelSelect.innerHTML = '';
 
-    // Update current provider
-    if (DOM.azureProvider.checked) {
-        const previousProvider = State.currentModelProvider;
-        State.currentModelProvider = 'azure';
-        if (previousProvider !== 'azure') {
-            console.log(`🔄 [FRONTEND] Provider Changed: ${previousProvider.toUpperCase()} → AZURE`);
-        }
+    const isAzure = DOM.azureProvider.checked;
+    State.currentModelProvider = isAzure ? 'azure' : 'personal';
 
-        // Add Azure models (using actual deployment names)
-        const azureOptions = [
+    const options = isAzure
+        ? [
             { value: 'gpt-5', text: 'GPT-5 (Preview)' },
             { value: 'gpt-5-mini', text: 'GPT-5 Mini (Preview)' },
             { value: 'gpt-4o-1120', text: 'GPT-4o (2024-11-20)' },
             { value: 'o4-mini-0416', text: 'o4-mini (2025-04-16)' },
             { value: 'o3-mini-0131', text: 'o3-mini (2025-01-31)' },
-        ];
-
-        azureOptions.forEach(option => {
-            const optionElement = document.createElement('option');
-            optionElement.value = option.value;
-            optionElement.textContent = option.text;
-            const preferredModel = State.currentModel || 'gpt-5-mini';
-            if (option.value === preferredModel || (!State.currentModel && option.value === 'gpt-5-mini')) {
-                optionElement.selected = true;
-                State.currentModel = option.value;
-            }
-            DOM.modelSelect.appendChild(optionElement);
-        });
-
-    } else {
-        const previousProvider = State.currentModelProvider;
-        State.currentModelProvider = 'personal';
-        if (previousProvider !== 'personal') {
-            console.log(`🔄 [FRONTEND] Provider Changed: ${previousProvider.toUpperCase()} → PERSONAL`);
-        }
-
-        // Add Personal models
-        const personalOptions = [
+        ]
+        : [
             { value: 'gpt-5', text: 'GPT-5 (Preview)' },
             { value: 'o4', text: 'o4' },
             { value: 'gpt-5-mini-2025-08-07', text: 'GPT-5 Mini (2025-08-07)' },
             { value: 'gpt-5-2025-08-07', text: 'GPT-5 (2025-08-07)' },
         ];
 
-        personalOptions.forEach(option => {
-            const optionElement = document.createElement('option');
-            optionElement.value = option.value;
-            optionElement.textContent = option.text;
-            const preferredModel = State.currentModel || 'gpt-5';
-            if (option.value === preferredModel || (!State.currentModel && option.value === 'gpt-5')) {
-                optionElement.selected = true;
-                State.currentModel = option.value;
-            }
-            DOM.modelSelect.appendChild(optionElement);
-        });
-    }
-
-    console.log(`[MODEL] Provider: ${State.currentModelProvider}, Model: ${State.currentModel}`);
+    const preferred = State.currentModel || (isAzure ? 'gpt-5-mini' : 'gpt-5');
+    options.forEach(opt => {
+        const el = document.createElement('option');
+        el.value = opt.value;
+        el.textContent = opt.text;
+        if (opt.value === preferred) {
+            el.selected = true;
+            State.currentModel = opt.value;
+        }
+        DOM.modelSelect.appendChild(el);
+    });
 }
 
-/**
- * Update current model when selection changes
- */
 function updateCurrentModel() {
     if (DOM.modelSelect && DOM.modelSelect.value) {
-        const previousModel = State.currentModel;
         State.currentModel = DOM.modelSelect.value;
-        console.log(`[MODEL] Selected model: ${State.currentModel}`);
-        console.log(`🔄 [FRONTEND] Model Changed: ${previousModel} → ${State.currentModel}`);
-        console.log(`🔧 [FRONTEND] Current System: ${State.currentModelProvider.toUpperCase()}`);
-        console.log(`🤖 [FRONTEND] Current Model: ${State.currentModel}`);
+        console.log('[MODEL] Selected:', State.currentModel);
     }
 }
 
-/**
- * Sync frontend configuration with backend
- */
 async function syncWithBackendConfig() {
     try {
-        console.log('[CONFIG] Syncing with backend configuration...');
+        const response = await fetch('/api/v1/config');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const cfg = await response.json();
 
-        const response = await fetch('/api/v1/config', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const config = await response.json();
-        console.log('[CONFIG] Backend configuration:', config);
-
-        // Update provider selection
-        if (config.use_azure) {
+        if (cfg.use_azure) {
             if (DOM.azureProvider) DOM.azureProvider.checked = true;
             if (DOM.personalProvider) DOM.personalProvider.checked = false;
             State.currentModelProvider = 'azure';
@@ -599,25 +757,10 @@ async function syncWithBackendConfig() {
             if (DOM.personalProvider) DOM.personalProvider.checked = true;
             State.currentModelProvider = 'personal';
         }
-
-        // Update model selection
-        State.currentModel = config.current_model;
-
-        // Refresh model selection UI
+        State.currentModel = cfg.current_model;
         updateModelSelection();
-
-        // Set the correct model in the dropdown
-        if (DOM.modelSelect) {
-            DOM.modelSelect.value = State.currentModel;
-        }
-
-        console.log(`[CONFIG] Synced - Provider: ${State.currentModelProvider}, Model: ${State.currentModel}`);
-        console.log(`✅ [FRONTEND] Configuration Synced with Backend`);
-        console.log(`🔧 [FRONTEND] System: ${State.currentModelProvider.toUpperCase()}`);
-        console.log(`🤖 [FRONTEND] Model: ${State.currentModel}`);
-
-    } catch (error) {
-        console.warn('[CONFIG] Failed to sync with backend, using defaults:', error);
-        // Continue with default configuration
+        if (DOM.modelSelect) DOM.modelSelect.value = State.currentModel;
+    } catch (e) {
+        console.warn('[CONFIG] Sync failed, using defaults:', e);
     }
 }

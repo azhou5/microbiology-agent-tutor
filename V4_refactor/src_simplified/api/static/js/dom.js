@@ -1,44 +1,63 @@
 /**
- * DOM element references for MicroTutor V4
- * Centralized DOM element access
+ * Centralised DOM element references for MicroTutor V4.
  */
 
 const DOM = {
-    // Chat elements
+    // Chat
     chatbox: null,
     userInput: null,
     sendBtn: null,
     finishBtn: null,
     statusMessage: null,
 
-    // Case setup elements
+    // Case setup
     startCaseBtn: null,
     organismSelect: null,
 
-    // Modal elements
+    // Module checkboxes
+    modHistory: null,
+    modDdx: null,
+    modTx: null,
+    modPathophys: null,
+    modMcqs: null,
+
+    // EMR Panel
+    emrPanel: null,
+    emrSections: null,
+    emrRefreshBtn: null,
+    emrSpinner: null,
+    emrPatientInfoContent: null,
+    emrExaminationContent: null,
+    emrObservationsContent: null,
+    historyExamBar: null,
+    historyExamCount: null,
+    investigationsBar: null,
+    investigationsBarCount: null,
+
+    // Modal
     feedbackModal: null,
     closeFeedbackBtn: null,
     submitFeedbackBtn: null,
     correctOrganismSpan: null,
 
-    // Voice elements
+    // Voice (compat)
     voiceBtn: null,
     voiceStatus: null,
     responseAudio: null,
 
-    // Guidelines elements
+    // Guidelines
     guidelinesToggle: null,
     guidelinesResults: null,
     guidelinesStatus: null,
     guidelinesCount: null,
     guidelinesContent: null,
 
-    // Feedback control elements
+    // Feedback controls
     feedbackToggle: null,
     thresholdSlider: null,
     thresholdValue: null,
 
-    // Dashboard elements
+    // Dashboard
     messageFeedbackCount: null,
     caseFeedbackCount: null,
     avgRating: null,
@@ -46,30 +65,27 @@ const DOM = {
     refreshStatsBtn: null,
     autoRefreshToggle: null,
 
-    // Chart elements
+    // Chart
     trendsCanvas: null,
     toggleChartBtn: null,
 
-    // Trend elements
+    // Trends
     messageTrend: null,
     caseTrend: null,
     ratingTrend: null,
     updateTrend: null,
 
-    // FAISS status elements
+    // FAISS
     faissStatus: null,
     faissTrend: null,
     faissIcon: null,
     faissLoading: null,
 
-    // Model selection elements
+    // Model selection (legacy — kept for backward compat, no longer in UI)
     azureProvider: null,
     personalProvider: null,
     modelSelect: null,
 
-    /**
-     * Initialize all DOM element references
-     */
     init() {
         this.chatbox = document.getElementById('chatbox');
         this.userInput = document.getElementById('user-input');
@@ -78,8 +94,25 @@ const DOM = {
         this.statusMessage = document.getElementById('status-message');
 
         this.startCaseBtn = document.getElementById('start-case-btn');
-        this.startRandomCaseBtn = document.getElementById('start-random-case-btn');
         this.organismSelect = document.getElementById('organism-select');
+
+        this.modHistory = document.getElementById('mod-history');
+        this.modDdx = document.getElementById('mod-ddx');
+        this.modTx = document.getElementById('mod-tx');
+        this.modPathophys = document.getElementById('mod-pathophys');
+        this.modMcqs = document.getElementById('mod-mcqs');
+
+        this.emrPanel = document.getElementById('emr-panel');
+        this.emrRefreshBtn = document.getElementById('emr-refresh-btn');
+        this.emrSpinner = document.getElementById('emr-spinner');
+        this.emrSections = document.getElementById('emr-sections');
+        this.emrPatientInfoContent = document.getElementById('emr-patient-info-content');
+        this.emrExaminationContent = document.getElementById('emr-examination-content');
+        this.emrObservationsContent = document.getElementById('emr-observations-content');
+        this.historyExamBar = document.getElementById('history-exam-bar');
+        this.historyExamCount = document.getElementById('history-exam-count');
+        this.investigationsBar = document.getElementById('investigations-bar');
+        this.investigationsBarCount = document.getElementById('investigations-bar-count');
 
         this.feedbackModal = document.getElementById('feedback-modal');
         this.closeFeedbackBtn = document.getElementById('close-feedback-btn');
@@ -123,5 +156,5 @@ const DOM = {
         this.azureProvider = document.getElementById('azure-provider');
         this.personalProvider = document.getElementById('personal-provider');
         this.modelSelect = document.getElementById('model-select');
-    }
+    },
 };

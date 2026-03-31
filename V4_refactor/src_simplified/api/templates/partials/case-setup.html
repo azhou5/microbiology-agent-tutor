@@ -1,45 +1,129 @@
 <!-- Case Setup Section -->
 <!-- Related JS modules: api.js, dom.js -->
 <div class="case-setup">
-    <!-- Primary Setup Row - Organism Selection -->
+    <!-- Primary Setup Row - Case Selection -->
     <div class="setup-row setup-row-primary">
         <div class="setup-group organism-group">
             <label for="organism-select">Select a Case:</label>
             <select id="organism-select">
                 <option value="">-- Choose a curated case --</option>
+                <option value="random">Random</option>
                 <optgroup label="Curated Cases">
-                    <option value="Case_07011" selected>Case 07011 (Staphylococcus aureus)</option>
+                    <option value="Case_07011">Case 07011 (Staphylococcus aureus)</option>
                 </optgroup>
             </select>
         </div>
+    </div>
 
-        <div class="setup-actions">
-            <button id="start-case-btn" class="btn btn-primary btn-large">🚀 Start New Case</button>
-            <button id="start-random-case-btn" class="btn btn-secondary btn-large">🎲 Start Random Case</button>
-        </div>
+    <!-- Module Selection - Vertical cards -->
+    <fieldset class="module-selection">
+        <legend>Choose Modules</legend>
+
+        <label class="module-card">
+            <input type="checkbox" id="mod-history" name="selected_modules" value="history_taking">
+            <div class="module-card-body">
+                <span class="module-card-icon">🏥</span>
+                <div class="module-card-text">
+                    <span class="module-card-title">History Taking</span>
+                    <span class="module-card-desc">Interview the patient directly &mdash; gather HPI, exam findings, and investigation results to build your clinical picture.</span>
+                </div>
+            </div>
+        </label>
+
+        <label class="module-card">
+            <input type="checkbox" id="mod-ddx" name="selected_modules" value="ddx_deep_dive">
+            <div class="module-card-body">
+                <span class="module-card-icon">🔍</span>
+                <div class="module-card-text">
+                    <span class="module-card-title">DDx Deep Dive</span>
+                    <span class="module-card-desc">Build a systematic differential from the presenting complaint &mdash; layered clinical reasoning, step by step.</span>
+                </div>
+            </div>
+        </label>
+
+        <label class="module-card">
+            <input type="checkbox" id="mod-tx" name="selected_modules" value="tx_deep_dive">
+            <div class="module-card-body">
+                <span class="module-card-icon">💊</span>
+                <div class="module-card-text">
+                    <span class="module-card-title">Management Deep Dive</span>
+                    <span class="module-card-desc">Walk through the full management &mdash; stabilisation, empiric therapy, targeted treatment, monitoring, escalation, and discharge.</span>
+                </div>
+            </div>
+        </label>
+
+        <label class="module-card">
+            <input type="checkbox" id="mod-pathophys" name="selected_modules" value="pathophys_epi">
+            <div class="module-card-body">
+                <span class="module-card-icon">🧬</span>
+                <div class="module-card-text">
+                    <span class="module-card-title">Pathophys &amp; Epi</span>
+                    <span class="module-card-desc">Understand WHY this disease presents the way it does &mdash; mechanisms, virulence factors, and look-alike challenges.</span>
+                </div>
+            </div>
+        </label>
+    </fieldset>
+
+    <!-- MCQ toggle (on by default, separate from module cards) -->
+    <label class="mcq-toggle-row">
+        <input type="checkbox" id="mod-mcqs" name="enable_mcqs" value="true" checked>
+        <span class="mcq-toggle-label">Generate MCQs after each deep-dive module</span>
+    </label>
+
+    <!-- Start button -->
+    <div class="setup-actions">
+        <button id="start-case-btn" class="btn btn-primary btn-large">Start New Case</button>
     </div>
 
     <!-- Advanced Settings (Collapsible) -->
     <details class="advanced-settings">
-        <summary>⚙️ Advanced Settings</summary>
+        <summary>Advanced Settings</summary>
         <div class="advanced-settings-content">
-            <div class="setup-group">
-                <label for="model-provider">Model Provider:</label>
-                <div class="model-provider-toggle">
-                    <input type="radio" id="azure-provider" name="model-provider" value="azure" checked>
-                    <label for="azure-provider">Azure</label>
-                    <input type="radio" id="personal-provider" name="model-provider" value="personal">
-                    <label for="personal-provider">Personal</label>
+            <div class="module-models-section">
+                <label class="module-models-label">Per-Module Model Overrides</label>
+                <div class="module-models-grid">
+                    <div class="module-model-item">
+                        <span class="module-model-name">🏥 History Taking</span>
+                        <select class="module-model-select" data-module="history_taking">
+                            <option value="">default</option>
+                            <option value="gpt-5-mini">gpt-5-mini</option>
+                            <option value="gpt-4.1">gpt-4.1</option>
+                            <option value="gpt-5">gpt-5</option>
+                            <option value="o4-mini-2025-04-16">o4-mini</option>
+                        </select>
+                    </div>
+                    <div class="module-model-item">
+                        <span class="module-model-name">🔍 DDx Deep Dive</span>
+                        <select class="module-model-select" data-module="ddx_deep_dive">
+                            <option value="">default</option>
+                            <option value="gpt-4.1">gpt-4.1</option>
+                            <option value="gpt-5-mini">gpt-5-mini</option>
+                            <option value="gpt-5">gpt-5</option>
+                            <option value="o4-mini-2025-04-16">o4-mini</option>
+                        </select>
+                    </div>
+                    <div class="module-model-item">
+                        <span class="module-model-name">💊 Management</span>
+                        <select class="module-model-select" data-module="tx_deep_dive">
+                            <option value="">default</option>
+                            <option value="gpt-4.1">gpt-4.1</option>
+                            <option value="gpt-5-mini">gpt-5-mini</option>
+                            <option value="gpt-5">gpt-5</option>
+                            <option value="o4-mini-2025-04-16">o4-mini</option>
+                        </select>
+                    </div>
+                    <div class="module-model-item">
+                        <span class="module-model-name">🧬 Pathophys &amp; Epi</span>
+                        <select class="module-model-select" data-module="pathophys_epi">
+                            <option value="">default</option>
+                            <option value="gpt-4.1">gpt-4.1</option>
+                            <option value="gpt-5-mini">gpt-5-mini</option>
+                            <option value="gpt-5">gpt-5</option>
+                            <option value="o4-mini-2025-04-16">o4-mini</option>
+                        </select>
+                    </div>
                 </div>
             </div>
-
-            <div class="setup-group">
-                <label for="model-select">Select Model:</label>
-                <select id="model-select">
-                    <!-- Options will be dynamically populated based on provider selection -->
-                </select>
-            </div>
-
         </div>
     </details>
 </div>

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import json
@@ -99,9 +100,14 @@ class Message(BaseModel):
 class StartCaseRequest(BaseModel):
     organism: str
     case_id: str
+    selected_modules: Optional[List[str]] = None
+    enable_mcqs: Optional[bool] = False
     model_name: Optional[str] = None
     model_provider: Optional[str] = None
     enable_guidelines: Optional[bool] = False
+    enable_emr_notes: Optional[bool] = True
+    enable_checklist: Optional[bool] = True
+    module_models: Optional[Dict[str, str]] = None
 
 class ChatRequest(BaseModel):
     message: str
@@ -112,7 +118,7 @@ class ChatRequest(BaseModel):
     model_provider: Optional[str] = None
     feedback_enabled: Optional[bool] = None
     feedback_threshold: Optional[float] = None
-    current_phase: Optional[str] = None
+    current_module: Optional[str] = None
     enable_guidelines: Optional[bool] = False
 
 class FeedbackRequest(BaseModel):
@@ -136,6 +142,7 @@ class ClarifyRequest(BaseModel):
     message: str
     history: Optional[List[Dict[str, Any]]] = []
 
+
 # --- Routes ---
 
 @app.get("/", response_class=HTMLResponse)
@@ -157,25 +164,74 @@ async def get_available_organisms():
 @app.post("/api/v1/start_case")
 async def start_case(request: StartCaseRequest):
     try:
-        orchestrator = Orchestrator(request.organism)
+        import random as _rand
+
+        organism = request.organism
+        display_organism = organism
+
+        # Random case selection
+        if organism.lower() == "random":
+            loader = CaseLoader()
+            available = loader.list_available_organisms()
+            if not available:
+                raise HTTPException(status_code=400, detail="No cases available")
+            organism = _rand.choice(available)
+            display_organism = "Random"
+
+        orchestrator = Orchestrator(
+            organism_name=organism,
+            selected_modules=request.selected_modules,
+            enable_mcqs=request.enable_mcqs or False,
+            enable_emr_notes=request.enable_emr_notes if request.enable_emr_notes is not None else True,
+            enable_checklist=request.enable_checklist if request.enable_checklist is not None else True,
+            module_models=request.module_models,
+        )
         sessions[request.case_id] = orchestrator
-        
-        first_message = orchestrator.get_first_message()
-        
-        # Format response to match frontend expectation
+
+        first_module = orchestrator.module_queue[0] if orchestrator.module_queue else "history_taking"
+        first_msg = orchestrator.get_first_message()
+        speaker = first_msg["speaker"]
+        message_text = first_msg["message"]
+
+        welcome = message_text
+
+        # Build image URLs for the case presentation panel
+        case_image_urls = []
+        if orchestrator.case_id and orchestrator.images:
+            case_image_urls = [
+                f"/images/{orchestrator.case_id}/{img}" for img in orchestrator.images
+            ]
+
+        # For non-history modules, generate a concise rounds-style summary
+        # instead of dumping the full case text.
+        if first_module == "history_taking":
+            case_text_for_panel = ""
+        else:
+            case_text_for_panel = orchestrator.generate_case_summary()
+
         return {
-            "initial_message": f"Welcome to today's case.\n\n{first_message}\n\nBegin by asking specific questions.",
-            "history": [
-                {"role": "assistant", "content": f"Welcome to today's case.\n\n{first_message}\n\nBegin by asking specific questions."}
-            ],
+            "initial_message": welcome,
+            "initial_speaker": speaker,
+            "history": [{"role": "assistant", "content": welcome}],
             "case_id": request.case_id,
-            "organism": request.organism,
+            "organism": organism,
+            "display_organism": display_organism,
+            "case_text": case_text_for_panel,
+            "case_images": case_image_urls,
+            "first_module": first_module,
+            "findings_checklist": orchestrator._get_findings_snapshot(),
+            "emr_notes": orchestrator._get_emr_notes_snapshot(),
             "metadata": {
                 "case_id": request.case_id,
-                "organism": request.organism,
-                "current_phase": orchestrator.current_state
-            }
+                "organism": organism,
+                "display_organism": display_organism,
+                "current_module": orchestrator.current_module,
+                "module_queue": orchestrator.module_queue,
+                "enable_mcqs": orchestrator.enable_mcqs,
+            },
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to start case: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -184,74 +240,92 @@ async def start_case(request: StartCaseRequest):
 async def chat(request: ChatRequest):
     case_id = request.case_id
     if case_id not in sessions:
-        # Try to recover session if organism is provided
         if request.organism_key:
-             try:
-                 orchestrator = Orchestrator(request.organism_key)
-                 sessions[case_id] = orchestrator
-                 # Restore history if provided
-                 if request.history:
-                     orchestrator.conversation_history = request.history
-             except Exception:
-                 raise HTTPException(status_code=404, detail="Session expired. Please start a new case.")
+            try:
+                orchestrator = Orchestrator(request.organism_key)
+                sessions[case_id] = orchestrator
+                if request.history:
+                    orchestrator.conversation_history = request.history
+            except Exception:
+                raise HTTPException(status_code=404, detail="Session expired. Please start a new case.")
         else:
             raise HTTPException(status_code=404, detail="Session expired. Please start a new case.")
-    
+
     orchestrator = sessions[case_id]
-    
-    # Sync state if provided and different
-    if request.current_phase and request.current_phase != orchestrator.current_state:
-        # We could update the orchestrator state here if we trust the frontend
-        # For now, we'll log it
-        logger.info(f"Frontend phase: {request.current_phase}, Backend phase: {orchestrator.current_state}")
+
+    if request.current_module and request.current_module != orchestrator.current_module:
+        logger.info(
+            f"Frontend module: {request.current_module}, "
+            f"Backend module: {orchestrator.current_module}"
+        )
 
     result = orchestrator.process_message(request.message)
-    
-    if isinstance(result, dict):
-        response_text = result.get("response", "")
-        subagent_response = result.get("subagent_response", response_text)
-        orchestrator_message = result.get("orchestrator_message")
-        subagent_name = result.get("subagent_name", orchestrator.current_state)
-        image_url = result.get("image_url")
-    else:
-        response_text = result
-        subagent_response = result
-        orchestrator_message = None
-        subagent_name = orchestrator.current_state
-        image_url = None
-    
-    # Determine tools used based on state
+
+    response_text = result.get("response", "")
+    subagent_response = result.get("subagent_response", response_text)
+    subagent_name = result.get("subagent_name", orchestrator.current_module)
+    image_url = result.get("image_url")
+    pinned_images = result.get("pinned_images", [])
+    findings_checklist = result.get("findings_checklist")
+    emr_notes = result.get("emr_notes", [])
+    result_meta = result.get("metadata", {})
+
     tool_map = {
-        "information_gathering": "patient",
-        "differential_diagnosis": "maintutor_differential",
-        "tests_management": "tests_management",
-        "deeper_dive": "deeper_dive_tutor",
+        "history_taking": "patient",
+        "ddx_deep_dive": "ddx_tutor",
+        "tx_deep_dive": "tx_tutor",
+        "pathophys_epi": "pathophys_epi_tutor",
         "feedback": "feedback",
-        "post_case_mcq": "post_case_assessment"
+        "synthesis": "tutor",
     }
-    tool_used = tool_map.get(orchestrator.current_state, "tutor")
+    tool_used = tool_map.get(subagent_name, "tutor")
+
+    reported_module = result_meta.get("current_module", orchestrator.current_module)
 
     return {
         "response": response_text,
-        "orchestrator_message": orchestrator_message,
         "subagent_response": subagent_response,
-        "main_speaker": "maintutor",
         "subagent_speaker": tool_used,
         "subagent_name": subagent_name,
         "image_url": image_url,
+        "pinned_images": pinned_images,
+        "findings_checklist": findings_checklist,
+        "emr_notes": emr_notes,
         "history": orchestrator.conversation_history,
         "tools_used": [tool_used],
         "metadata": {
-            "current_phase": orchestrator.current_state,
+            "current_module": reported_module,
+            "module_queue": result_meta.get("module_queue", orchestrator.module_queue),
+            "module_index": result_meta.get("module_index", orchestrator.current_module_idx),
+            "modules_remaining": result_meta.get("modules_remaining", []),
+            "enable_mcqs": result_meta.get("enable_mcqs", orchestrator.enable_mcqs),
             "organism": orchestrator.organism_name,
             "case_id": case_id,
-            "state": orchestrator.current_state, # For compatibility
-            "image_url": image_url, # Pass image URL to frontend
-            "main_speaker": "maintutor",
-            "subagent_speaker": tool_used,
-            "subagent_name": subagent_name
         },
-        "feedback_examples": [] # Placeholder for feedback examples
+    }
+
+@app.get("/api/v1/emr_notes/{case_id}")
+async def get_emr_notes(case_id: str):
+    """Lightweight poll endpoint — returns the current EMR notes snapshot."""
+    if case_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    orchestrator = sessions[case_id]
+    return {
+        "emr_notes": orchestrator._get_emr_notes_snapshot(),
+        "findings_checklist": orchestrator._get_findings_snapshot(),
+        "emr_busy": orchestrator.is_emr_busy(),
+    }
+
+@app.post("/api/v1/emr_refresh/{case_id}")
+async def emr_refresh(case_id: str):
+    """Full re-extract all EMR notes from the entire conversation."""
+    if case_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    orchestrator = sessions[case_id]
+    notes = await asyncio.to_thread(orchestrator.rebuild_emr_notes)
+    return {
+        "emr_notes": notes,
+        "findings_checklist": orchestrator._get_findings_snapshot(),
     }
 
 @app.post("/api/v1/feedback")

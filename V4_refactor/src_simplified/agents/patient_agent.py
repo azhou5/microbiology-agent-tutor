@@ -3,8 +3,8 @@ from ..prompts import PATIENT_SYSTEM_PROMPT, FIRST_SENTENCE_GENERATION_PROMPT
 from ..utils.llm import chat_complete
 
 class PatientAgent(BaseAgent):
-    def __init__(self, case_data: str):
-        super().__init__("patient")
+    def __init__(self, case_data: str, model: str | None = None):
+        super().__init__("patient", model=model)
         self.case_data = case_data
         self.system_prompt = PATIENT_SYSTEM_PROMPT.format(case=self.case_data)
         self.first_sentence = self._generate_first_sentence()

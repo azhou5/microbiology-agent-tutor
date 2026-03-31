@@ -1,20 +1,28 @@
 <!-- Chat Container -->
-<!-- Related JS modules: chat.js, voice.js, mcq.js -->
+<!-- Related JS modules: chat.js, api.js, mcq.js -->
 <div class="chat-container">
-    <!-- Sticky Case Summary - shows the initial case presentation -->
+    <!-- Case Presentation Panel (full case text + images for non-history modules) -->
+    <div id="case-presentation" class="case-presentation" style="display: none;">
+        <div class="case-presentation-header">
+            <h4 id="case-presentation-title">Case Presentation</h4>
+            <button id="toggle-case-presentation" class="toggle-case-presentation" title="Collapse/Expand">&#x25BC;</button>
+        </div>
+        <div id="case-presentation-text" class="case-presentation-text"></div>
+        <div id="case-presentation-images" class="case-presentation-images"></div>
+    </div>
+
+    <!-- Sticky one-liner for history-taking mode -->
     <div id="case-summary-header" class="case-summary-header" style="display: none;">
         <div class="case-summary-content">
-            <span class="case-summary-icon">📋</span>
             <span id="case-one-liner" class="case-one-liner-text">Loading case...</span>
         </div>
-        <button id="toggle-case-summary" class="toggle-case-summary" title="Collapse/Expand">▼</button>
+        <button id="toggle-case-summary" class="toggle-case-summary" title="Collapse/Expand">&#x25BC;</button>
     </div>
 
     <div id="chatbox" class="chatbox">
         <div class="welcome-message">
-            <p>👋 Welcome to MicroTutor V4!</p>
-            <p>Select an organism above and click "Start New Case" to begin your interactive microbiology case study.
-            </p>
+            <p>Welcome to MicroTutor V4!</p>
+            <p>Select a case and modules above, then click "Start New Case" to begin.</p>
         </div>
     </div>
 
