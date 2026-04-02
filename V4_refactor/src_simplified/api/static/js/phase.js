@@ -1,182 +1,110 @@
 /**
- * Phase management for MicroTutor V4
+ * Module progress management for MicroTutor V4.
+ *
+ * Dynamically builds the sidebar progress buttons based on the modules
+ * the user selected at case-setup time.
  */
 
-/**
- * Show phase progression UI
- */
 function showPhaseProgression() {
-    const phaseProgression = document.getElementById('phase-progression');
-    if (phaseProgression) {
-        phaseProgression.style.display = 'block';
-    }
+    const el = document.getElementById('phase-progression');
+    if (el) el.style.display = 'block';
 }
 
-/**
- * Normalize backend/internal phase names to visible UI sections.
- * @param {string} phase - Raw phase name
- * @returns {string}
- */
-function normalizePhaseForUI(phase) {
-    const mapping = {
-        post_case_mcq: 'assessment'
-    };
-    return mapping[phase] || phase;
-}
-
-/**
- * Hide phase progression UI
- */
 function hidePhaseProgression() {
-    const phaseProgression = document.getElementById('phase-progression');
-    if (phaseProgression) {
-        phaseProgression.style.display = 'none';
-    }
+    const el = document.getElementById('phase-progression');
+    if (el) el.style.display = 'none';
 }
 
 /**
- * Reset phase to information gathering
+ * Build (or rebuild) the module progress buttons from the module queue
+ * returned by the backend.
+ * @param {string[]} moduleQueue - ordered list of module IDs
  */
-function resetPhaseToInformationGathering() {
-    State.currentPhase = 'information_gathering';
-    updatePhaseUI();
-    console.log('[PHASE] Reset to Information Gathering');
+function buildModuleProgressUI(moduleQueue) {
+    const container = document.getElementById('module-buttons');
+    if (!container) return;
+    container.innerHTML = '';
+
+    (moduleQueue || []).forEach(modId => {
+        const def = MODULE_DEFINITIONS[modId];
+        if (!def) return;
+
+        const btn = document.createElement('button');
+        btn.className = 'phase-btn';
+        btn.dataset.module = modId;
+        btn.innerHTML =
+            `<span class="phase-icon">${def.icon}</span>` +
+            `<span class="phase-text">${def.name}</span>`;
+        container.appendChild(btn);
+    });
+
+    updateModuleUI();
 }
 
 /**
- * Update phase UI based on current state
+ * Highlight the active module and mark completed ones.
  */
-function updatePhaseUI() {
-    const uiPhase = normalizePhaseForUI(State.currentPhase);
-    const phaseButtons = document.querySelectorAll('.phase-btn');
+function updateModuleUI() {
+    const buttons = document.querySelectorAll('.phase-btn');
     const guidanceText = document.getElementById('phase-guidance-text');
 
-    if (!phaseButtons.length || !guidanceText) return;
-
-    // Reset all buttons
-    phaseButtons.forEach(btn => {
+    buttons.forEach(btn => {
         btn.classList.remove('active', 'completed');
-        btn.disabled = false; // Make all buttons clickable
+        btn.disabled = false;
     });
 
-    // Set active phase
-    phaseButtons.forEach(btn => {
-        const phase = btn.dataset.phase;
+    const activeIdx = State.moduleQueue.indexOf(State.currentModule);
 
-        if (phase === uiPhase) {
+    buttons.forEach((btn, idx) => {
+        const modId = btn.dataset.module;
+        if (modId === State.currentModule) {
             btn.classList.add('active');
+        } else if (idx < activeIdx) {
+            btn.classList.add('completed');
         }
     });
 
-    // Update guidance text
-    const phaseDef = PHASE_DEFINITIONS[uiPhase] || PHASE_DEFINITIONS[State.currentPhase];
-    if (phaseDef) {
-        guidanceText.textContent = phaseDef.guidance;
+    const def = MODULE_DEFINITIONS[State.currentModule];
+    if (def && guidanceText) {
+        guidanceText.textContent = def.guidance;
     }
 }
 
 /**
- * Transition to a new phase
- * @param {string} newPhase - New phase identifier
+ * Transition to a different module (user clicks a progress button).
+ * Goes directly — no intermediate questions. Feedback lives at the end.
  */
-function transitionToPhase(newPhase) {
-    const normalizedPhase = normalizePhaseForUI(newPhase);
-    // Special handling for assessment phase - always available
-    if (normalizedPhase === 'assessment') {
-        if (typeof showAssessmentSection === 'function') {
-            showAssessmentSection(false); // false = show generate button (not auto-generating)
-        }
-        return;
-    }
-
+function transitionToModule(targetModule) {
     if (!State.currentCaseId || !State.currentOrganismKey) {
         setStatus('Please start a case first', true);
         return;
     }
 
-    const phaseDef = PHASE_DEFINITIONS[normalizedPhase];
-    if (!phaseDef) {
-        console.error('[PHASE] Unknown phase:', newPhase);
+    const def = MODULE_DEFINITIONS[targetModule];
+    if (!def) {
+        console.error('[MODULE] Unknown module:', targetModule);
         return;
     }
 
-    // Update UI state
-    State.currentPhase = normalizedPhase;
-    updatePhaseUI();
+    State.currentModule = targetModule;
+    updateModuleUI();
     saveConversationState();
 
-    // Simply write the phase message to the input textbox and trigger send
-    const transitionMessage = `Let's move onto phase: ${phaseDef.name}`;
-    if (DOM.userInput) {
-        DOM.userInput.value = transitionMessage;
-    }
-
-    // Trigger the normal send flow
+    const msg = `Let's move onto module: ${def.name}`;
+    if (DOM.userInput) DOM.userInput.value = msg;
     handleSendMessage();
 }
 
-/**
- * Update phase locking state
- * @param {boolean} isLocked - Whether phase is locked
- */
-function updatePhaseLocking(isLocked) {
-    const phaseButtons = document.querySelectorAll('.phase-btn');
-    phaseButtons.forEach(btn => {
-        if (isLocked) {
-            btn.classList.add('locked');
-            btn.title = 'Phase is locked - complete current phase first';
-        } else {
-            btn.classList.remove('locked');
-            btn.title = '';
-        }
-    });
-}
-
-/**
- * Update phase progress indicator
- * @param {number} progress - Progress value (0-1)
- */
-function updatePhaseProgress(progress) {
-    const activeBtn = document.querySelector('.phase-btn.active');
-    if (activeBtn) {
-        // Add progress bar or visual indicator
-        let progressBar = activeBtn.querySelector('.progress-bar');
-        if (!progressBar) {
-            progressBar = document.createElement('div');
-            progressBar.className = 'progress-bar';
-            activeBtn.appendChild(progressBar);
-        }
-        progressBar.style.width = `${progress * 100}%`;
+function resetModuleToFirst() {
+    if (State.moduleQueue && State.moduleQueue.length > 0) {
+        State.currentModule = State.moduleQueue[0];
+    } else {
+        State.currentModule = 'history_taking';
     }
+    updateModuleUI();
 }
 
-/**
- * Update phase guidance text
- * @param {string} guidance - Guidance text
- */
 function updatePhaseGuidance(guidance) {
-    const guidanceText = document.getElementById('phase-guidance-text');
-    if (guidanceText && guidance) {
-        guidanceText.textContent = guidance;
-    }
-}
-
-/**
- * Update completion criteria
- * @param {Array<string>} criteria - Array of completion criteria strings
- */
-function updateCompletionCriteria(criteria) {
-    const guidanceDiv = document.querySelector('.phase-guidance');
-    if (guidanceDiv && criteria && criteria.length > 0) {
-        let criteriaDiv = guidanceDiv.querySelector('.completion-criteria');
-        if (!criteriaDiv) {
-            criteriaDiv = document.createElement('div');
-            criteriaDiv.className = 'completion-criteria';
-            criteriaDiv.innerHTML = '<strong>Completion Criteria:</strong><ul></ul>';
-            guidanceDiv.appendChild(criteriaDiv);
-        }
-
-        const criteriaList = criteriaDiv.querySelector('ul');
-        criteriaList.innerHTML = criteria.map(c => `<li>${c}</li>`).join('');
-    }
+    const el = document.getElementById('phase-guidance-text');
+    if (el && guidance) el.textContent = guidance;
 }

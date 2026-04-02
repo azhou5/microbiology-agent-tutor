@@ -11,20 +11,98 @@
 <body>
     <div class="container">
         {% include 'partials/header.html' %}
-        {% include 'partials/instructions.html' %}
-        {% include 'partials/case-setup.html' %}
-        {% include 'partials/case-history.html' %}
 
-        <!-- Main Content Area with Clarify Sidebar -->
-        <div class="main-content-wrapper">
+        <!-- Case Flow + Case History side by side -->
+        <div class="top-panels">
+            {% include 'partials/instructions.html' %}
+            {% include 'partials/case-history.html' %}
+        </div>
+
+        {% include 'partials/case-setup.html' %}
+
+        <!-- Utility bar: Module Progress + Quick Help side by side -->
+        <div class="utility-bar">
+            {% include 'partials/phase-progression.html' %}
             {% include 'partials/clarify-sidebar.html' %}
-            <div class="main-content">
-                {% include 'partials/chat-container.html' %}
-                {% include 'partials/phase-progression.html' %}
+        </div>
+
+        <!-- Main Content Area: Chat (50%) | EMR (50%) -->
+        <div class="main-content">
+            {% include 'partials/chat-container.html' %}
+
+            <div id="emr-panel" class="emr-panel">
+                <div class="emr-title-row">
+                    <h3 class="emr-heading">Electronic Medical Record</h3>
+                    <div class="emr-title-actions">
+                        <span id="emr-spinner" class="emr-spinner" title="Updating..."></span>
+                        <button id="emr-refresh-btn" class="btn-emr-refresh" title="Rebuild EMR from full conversation">
+                            &#x21bb;
+                        </button>
+                    </div>
+                </div>
+                <div class="emr-progress-bars">
+                    <div class="emr-bar-group">
+                        <span class="emr-bar-label">History &amp; Exam</span>
+                        <div class="emr-bar-track">
+                            <div id="history-exam-bar" class="emr-bar-fill" style="width: 0%"></div>
+                        </div>
+                        <span id="history-exam-count" class="emr-bar-count">0/0</span>
+                    </div>
+                    <div class="emr-bar-group">
+                        <span class="emr-bar-label">Investigations</span>
+                        <div class="emr-bar-track">
+                            <div id="investigations-bar" class="emr-bar-fill" style="width: 0%"></div>
+                        </div>
+                        <span id="investigations-bar-count" class="emr-bar-count">0/0</span>
+                    </div>
+                </div>
+                <div id="emr-sections" class="emr-sections">
+                    <div class="emr-section" id="emr-patient-info">
+                        <h4 class="emr-section-header">Patient Information</h4>
+                        <div class="emr-section-content" id="emr-patient-info-content">
+                            <p class="emr-placeholder">Gather history from the patient...</p>
+                        </div>
+                    </div>
+                    <div class="emr-section" id="emr-examination">
+                        <h4 class="emr-section-header">Examination Findings</h4>
+                        <div class="emr-section-content" id="emr-examination-content">
+                            <p class="emr-placeholder">No examination findings yet.</p>
+                        </div>
+                    </div>
+                    <div class="emr-section" id="emr-observations">
+                        <h4 class="emr-section-header">Observations</h4>
+                        <div class="emr-section-content" id="emr-observations-content">
+                            <p class="emr-placeholder">No observations recorded.</p>
+                        </div>
+                    </div>
+                    <div class="emr-section" id="emr-investigations">
+                        <h4 class="emr-section-header">Investigations</h4>
+                        <div class="emr-subsection" id="emr-ix-bedside">
+                            <h5 class="emr-subsection-header">Bedside</h5>
+                            <div class="emr-section-content"></div>
+                        </div>
+                        <div class="emr-subsection" id="emr-ix-bloods">
+                            <h5 class="emr-subsection-header">Bloods</h5>
+                            <div class="emr-section-content"></div>
+                        </div>
+                        <div class="emr-subsection" id="emr-ix-imaging">
+                            <h5 class="emr-subsection-header">Imaging</h5>
+                            <div class="emr-section-content"></div>
+                        </div>
+                        <div class="emr-subsection" id="emr-ix-microbiology">
+                            <h5 class="emr-subsection-header">Microbiology</h5>
+                            <div class="emr-section-content"></div>
+                        </div>
+                        <div class="emr-subsection" id="emr-ix-special">
+                            <h5 class="emr-subsection-header">Special Tests</h5>
+                            <div class="emr-section-content"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Assessment Section - Full Width Below Main Content -->
+        <!-- Assessment Section — Full Width Below -->
         {% include 'partials/assessment-section.html' %}
 
         <p id="status-message" class="status"></p>
@@ -32,6 +110,12 @@
         <footer>
             <p>Powered by FastAPI & OpenAI | Version 4.0.0</p>
         </footer>
+    </div>
+
+    <!-- Fixed overlay: must sit under <body>, not inside .container (avoids clipping / stacking issues) -->
+    <div id="case-image-lightbox" class="case-image-lightbox" aria-hidden="true">
+        <button type="button" class="case-image-lightbox-close" aria-label="Close enlarged image">&times;</button>
+        <img id="case-image-lightbox-img" class="case-image-lightbox-img" alt="" />
     </div>
 
     {% include 'partials/scripts.html' %}

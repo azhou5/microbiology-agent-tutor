@@ -346,39 +346,28 @@ function updateFeedbackControlsUI() {
 }
 
 /**
- * Finish case and automatically generate MCQs
- * Case feedback modal will show AFTER MCQs are completed
+ * Finish case: transition to the feedback module.
+ *
+ * The feedback module generates the history debrief (if history_taking
+ * was done) and MCQs from the full conversation across all modules.
  */
 function handleFinishCase() {
-    console.log('[FINISH] Finishing case - generating MCQs...');
+    console.log('[FINISH] Finishing case — transitioning to feedback module...');
 
-    // Store organism for later use in feedback modal
     if (State.currentOrganismKey && DOM.correctOrganismSpan) {
         DOM.correctOrganismSpan.textContent = State.currentOrganismKey;
     } else if (DOM.correctOrganismSpan) {
         DOM.correctOrganismSpan.textContent = "Unknown";
     }
 
-    // Mark case as complete
     State.caseComplete = true;
 
-    // Disable the finish button to prevent double-clicks
     if (DOM.finishBtn) {
         DOM.finishBtn.disabled = true;
-        DOM.finishBtn.textContent = '📝 Generating MCQs...';
+        DOM.finishBtn.textContent = '📝 Generating feedback...';
     }
 
-    // Show assessment section and auto-generate MCQs
-    if (typeof showAssessmentSection === 'function') {
-        showAssessmentSection();
-    }
-
-    // Automatically trigger MCQ generation
-    setTimeout(() => {
-        if (typeof handleGenerateAssessment === 'function') {
-            handleGenerateAssessment();
-        }
-    }, 500); // Small delay to let UI update
+    transitionToModule('feedback');
 }
 
 /**

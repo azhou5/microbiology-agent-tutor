@@ -1,80 +1,67 @@
 /**
- * Configuration constants for MicroTutor V4
+ * Configuration constants for MicroTutor V4.
  */
 
-// API Configuration
 const API_BASE = '/api/v1';
 
-// LocalStorage keys
 const STORAGE_KEYS = {
     HISTORY: 'microtutor_v4_chat_history',
     CASE_ID: 'microtutor_v4_case_id',
     ORGANISM: 'microtutor_v4_organism',
     SEEN_ORGANISMS: 'microtutor_v4_seen_organisms',
-    PHASE: 'microtutor_v4_current_phase',
-    PHASE_HISTORY: 'microtutor_v4_phase_history',
-    ASSESSMENT_RESULTS: 'microtutor_v4_assessment_results'
+    MODULE: 'microtutor_v4_current_module',
+    MODULE_QUEUE: 'microtutor_v4_module_queue',
+    SELECTED_MODULES: 'microtutor_v4_selected_modules',
+    ENABLE_MCQS: 'microtutor_v4_enable_mcqs',
+    ASSESSMENT_RESULTS: 'microtutor_v4_assessment_results',
 };
 
-// Phase definitions and guidance
-const PHASE_DEFINITIONS = {
-    information_gathering: {
-        name: 'Information Gathering',
+// Module definitions used by the progress sidebar and guidance text.
+const MODULE_DEFINITIONS = {
+    history_taking: {
+        name: 'History Taking',
         icon: '📋',
-        guidance: 'Gather key history and examination findings from the patient. Ask about symptoms, duration, and physical exam.',
-        nextPhase: 'differential_diagnosis'
+        guidance: 'Gather key history and examination findings from the patient.',
     },
-    differential_diagnosis: {
-        name: 'Differential Diagnosis',
+    ddx_deep_dive: {
+        name: 'DDx Deep Dive',
         icon: '🔍',
-        guidance: 'Organize clinical information and develop differential diagnoses. Consider the most likely causes based on your findings.',
-        nextPhase: 'tests_management'
+        guidance: 'Work through the differential diagnosis by comparing clinical features and investigations.',
     },
-    tests_management: {
-        name: 'Tests & Management',
-        icon: '🧪',
-        guidance: 'Order relevant investigations and propose treatments. Consider what would confirm or rule out each diagnosis and develop a management plan.',
-        nextPhase: 'deeper_dive'
+    tx_deep_dive: {
+        name: 'Management Deep Dive',
+        icon: '💊',
+        guidance: 'Reason through treatment choices, guidelines, and monitoring.',
     },
-    deeper_dive: {
-        name: 'Deeper Dive',
-        icon: '🔬',
-        guidance: 'Explore mechanisms, virulence factors, and guidelines in depth.',
-        nextPhase: 'post_case_mcq'
-    },
-    post_case_mcq: {
-        name: 'Post-Case MCQ',
-        icon: '📝',
-        guidance: 'Test your understanding with targeted MCQs based on areas you struggled with during the case.',
-        nextPhase: 'feedback'
-    },
-    assessment: {
-        name: 'Assessment MCQs',
-        icon: '📝',
-        guidance: 'Complete post-case MCQs to consolidate learning before final feedback.',
-        nextPhase: 'feedback'
+    pathophys_epi: {
+        name: 'Pathophys & Epi',
+        icon: '🧬',
+        guidance: 'Connect pathophysiology to the clinical picture, investigations, treatment, and epi context.',
     },
     feedback: {
         name: 'Feedback',
         icon: '✅',
-        guidance: 'Receive feedback on the case. Review your performance and clinical reasoning.',
-        nextPhase: null
-    }
+        guidance: 'Receive feedback on your performance and clinical reasoning.',
+    },
 };
 
-// MCQ Configuration
 const MCQ_CONFIG = {
     defaultNumQuestions: 5,
     showExplanationsOnReveal: true,
-    enableScoring: true
+    enableScoring: true,
 };
 
-// Tool to Phase mapping - maps tool names to corresponding phases
-const TOOL_TO_PHASE = {
-    'patient': 'information_gathering',
-    'maintutor_differential': 'differential_diagnosis',
-    'tests_management': 'tests_management',
-    'deeper_dive_tutor': 'deeper_dive',
-    'post_case_assessment': 'post_case_mcq',
-    'feedback': 'feedback'
+// A/B-testable feature flags for background LLMs during history-taking.
+const EMR_FLAGS = {
+    enableEmrNotes: true,   // LLM that extracts structured notes for the EMR panel
+    enableChecklist: true,  // LLM that ticks off progress-bar items
+};
+
+// Maps backend tool/speaker names → module IDs for progress updates.
+const TOOL_TO_MODULE = {
+    patient: 'history_taking',
+    ddx_tutor: 'ddx_deep_dive',
+    tx_tutor: 'tx_deep_dive',
+    pathophys_epi_tutor: 'pathophys_epi',
+    feedback: 'feedback',
 };
