@@ -15,3 +15,4 @@ patient_tool_called.txt
 case.txt
 docs/
 tests/
+.DS_*
